@@ -11,7 +11,7 @@
     "@convex-dev/auth": "^0.0.80",
     "@wagmi/connectors": "^5.8.4",
     "clsx": "^2.1.1",
-    "convex": "^1.24.2",
+    "convex": "^1.24.8",
     "ethers": "^6.14.3",
     "framer-motion": "^12.16.0",
     "react": "^19.0.0",
