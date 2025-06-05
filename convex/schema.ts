@@ -25,25 +25,34 @@ const applicationTables = {
   }).index("by_address", ["address"]),
 
   usageLogs: defineTable({
+    userId: v.optional(v.id("users")),
     address: v.optional(v.string()),
     sessionId: v.optional(v.string()),
+    providerId: v.optional(v.id("providers")),
     model: v.string(),
     tokens: v.number(),
     cost: v.number(),
     timestamp: v.number(),
     responseTime: v.number(),
-  }).index("by_address", ["address"]),
+  })
+    .index("by_address", ["address"])
+    .index("by_user", ["userId"])
+    .index("by_provider", ["providerId"]),
 
   providers: defineTable({
     address: v.string(),
     name: v.string(),
+    description: v.optional(v.string()),
     veniceApiKey: v.string(),
     vcuBalance: v.number(),
     totalPrompts: v.number(),
     uptime: v.number(),
     isActive: v.boolean(),
+    registrationDate: v.optional(v.number()),
     lastHealthCheck: v.optional(v.number()),
-  }).index("by_address", ["address"]),
+  })
+    .index("by_address", ["address"])
+    .index("by_active", ["isActive"]),
 
   providerPoints: defineTable({
     providerId: v.id("providers"),
@@ -58,7 +67,7 @@ const applicationTables = {
     points: v.number(),
     totalSpent: v.number(),
     lastActivity: v.number(),
-    isActive: v.boolean(),
+    isActive: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"])
     .index("by_session", ["sessionId"])
@@ -68,8 +77,9 @@ const applicationTables = {
     userId: v.optional(v.id("users")),
     sessionId: v.optional(v.string()),
     key: v.string(),
+    name: v.optional(v.string()),
     usageCount: v.number(),
-    lastUsed: v.number(),
+    lastUsed: v.optional(v.number()),
     isActive: v.boolean(),
     createdAt: v.number(),
   })
@@ -81,8 +91,10 @@ const applicationTables = {
   healthChecks: defineTable({
     providerId: v.id("providers"),
     status: v.string(),
-    responseTime: v.number(),
-    createdAt: v.number(),
+    responseTime: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+    timestamp: v.number(),
+    createdAt: v.optional(v.number()),
   })
     .index("by_provider", ["providerId"])
     .index("by_status", ["status"])
