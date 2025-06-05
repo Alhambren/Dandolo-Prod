@@ -22,6 +22,8 @@ export function Dashboard({ sessionId, walletAddress, isWalletConnected, onWalle
   const generateApiKey = useMutation(api.developers.generateApiKey);
   const rateLimitStatus = useQuery(api.rateLimit.getRateLimitStatus, { sessionId });
   const validateVeniceKey = useAction(api.providers.validateVeniceApiKey);
+  const networkStats = useQuery(api.stats.getNetworkStats);
+  const providers = useQuery(api.providers.listActive);
 
   const handleWalletConnectionChange = (connected: boolean, walletAddress?: string) => {
     onWalletConnection(connected, walletAddress);
@@ -99,26 +101,116 @@ export function Dashboard({ sessionId, walletAddress, isWalletConnected, onWalle
     );
   }
 
+  if (!networkStats || !providers) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
+      </div>
+    );
+  }
+
+  const activeProviders = providers.filter(p => p.status === 'active').length;
+  const totalVCU = providers.reduce((sum, p) => sum + p.vcuBalance, 0);
+  const avgUptime = providers.reduce((sum, p) => sum + p.uptime, 0) / providers.length;
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-red bg-clip-text text-transparent mb-2">
-            Personal Dashboard
-          </h1>
-          <div className="flex items-center space-x-2 text-gray-300">
-            <span>Connected:</span>
-            <span className="font-mono text-gold">{walletAddress.substring(0, 8)}...{walletAddress.substring(-6)}</span>
-            <button 
-              onClick={() => navigator.clipboard.writeText(walletAddress)}
-              className="text-gold hover:text-red transition-colors"
-            >
-              📋
-            </button>
+    <div className="space-y-8">
+      <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-red bg-clip-text text-transparent">
+        Network Dashboard
+      </h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <GlassCard>
+          <div className="p-6 text-center">
+            <div className="text-3xl font-bold text-red mb-2">
+              {activeProviders}
+            </div>
+            <div className="text-gray-300">Active Providers</div>
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <div className="p-6 text-center">
+            <div className="text-3xl font-bold text-gold mb-2">
+              {totalVCU.toLocaleString()}
+            </div>
+            <div className="text-gray-300">Total VCU</div>
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <div className="p-6 text-center">
+            <div className="text-3xl font-bold text-red mb-2">
+              {networkStats.totalPrompts.toLocaleString()}
+            </div>
+            <div className="text-gray-300">Total Prompts</div>
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <div className="p-6 text-center">
+            <div className="text-3xl font-bold text-gold mb-2">
+              {avgUptime.toFixed(1)}%
+            </div>
+            <div className="text-gray-300">Avg Uptime</div>
+          </div>
+        </GlassCard>
+      </div>
+
+      <GlassCard>
+        <div className="p-8">
+          <h2 className="text-2xl font-bold text-white mb-6">Network Health</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gold mb-4">Performance Metrics</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Network Uptime</span>
+                  <span className="text-gold font-semibold">
+                    {networkStats.networkUptime.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Prompts Today</span>
+                  <span className="text-red font-semibold">
+                    {networkStats.promptsToday}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Average Response Time</span>
+                  <span className="text-gold font-semibold">
+                    {networkStats.avgResponseTime}ms
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold text-gold mb-4">Provider Distribution</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Total Providers</span>
+                  <span className="text-white font-semibold">
+                    {providers.length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Active Providers</span>
+                  <span className="text-gold font-semibold">
+                    {activeProviders}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Total VCU Pool</span>
+                  <span className="text-red font-semibold">
+                    {totalVCU.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <WalletConnection onConnectionChange={handleWalletConnectionChange} />
-      </div>
+      </GlassCard>
 
       {/* Usage Stats - MVP Display */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

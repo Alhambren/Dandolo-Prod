@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { GlassCard } from "./GlassCard";
 import { ProviderCard } from "./ProviderCard";
@@ -6,11 +6,18 @@ import { useState } from "react";
 
 export function ProvidersPage() {
   const providers = useQuery(api.providers.listActive);
-  const networkStats = useQuery(api.stats.getNetworkStats); // Use real stats
-  const initSampleData = useMutation(api.providers.initSampleData);
+  const networkStats = useQuery(api.stats.getNetworkStats);
   const [sortBy, setSortBy] = useState<'vcuBalance' | 'totalPrompts' | 'uptime'>('vcuBalance');
 
-  const sortedProviders = providers?.slice().sort((a, b) => {
+  if (!providers || !networkStats) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
+      </div>
+    );
+  }
+
+  const sortedProviders = providers.slice().sort((a, b) => {
     switch (sortBy) {
       case 'vcuBalance':
         return b.vcuBalance - a.vcuBalance;
@@ -35,12 +42,12 @@ export function ProvidersPage() {
         </p>
       </div>
 
-      {/* Network Stats - Real Data */}
+      {/* Network Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <GlassCard>
           <div className="p-6 text-center">
             <div className="text-3xl font-bold text-red mb-2">
-              {networkStats?.totalProviders || 0}
+              {networkStats.totalProviders}
             </div>
             <div className="text-gray-300">Active Providers</div>
           </div>
@@ -49,7 +56,7 @@ export function ProvidersPage() {
         <GlassCard>
           <div className="p-6 text-center">
             <div className="text-3xl font-bold text-gold mb-2">
-              {networkStats?.totalVCU?.toLocaleString() || 0}
+              {networkStats.totalVCU.toLocaleString()}
             </div>
             <div className="text-gray-300">Total VCU</div>
           </div>
@@ -58,7 +65,7 @@ export function ProvidersPage() {
         <GlassCard>
           <div className="p-6 text-center">
             <div className="text-3xl font-bold text-red mb-2">
-              {networkStats?.totalPrompts?.toLocaleString() || 0}
+              {networkStats.totalPrompts.toLocaleString()}
             </div>
             <div className="text-gray-300">Total Prompts</div>
           </div>
@@ -67,7 +74,7 @@ export function ProvidersPage() {
         <GlassCard>
           <div className="p-6 text-center">
             <div className="text-3xl font-bold text-gold mb-2">
-              {networkStats?.avgResponseTime || 0}ms
+              {networkStats.avgResponseTime}ms
             </div>
             <div className="text-gray-300">Avg Response</div>
           </div>
@@ -89,18 +96,10 @@ export function ProvidersPage() {
                 <option value="totalPrompts">Sort by Total Prompts</option>
                 <option value="uptime">Sort by Uptime</option>
               </select>
-              {providers && providers.length === 0 && (
-                <button 
-                  onClick={() => initSampleData()}
-                  className="px-4 py-2 bg-gold text-bg rounded-lg hover:bg-gold/80 transition-colors text-sm font-semibold"
-                >
-                  Initialize Demo Data
-                </button>
-              )}
             </div>
           </div>
 
-          {sortedProviders && sortedProviders.length > 0 ? (
+          {sortedProviders.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sortedProviders.map((provider, index) => (
                 <ProviderCard
@@ -122,27 +121,15 @@ export function ProvidersPage() {
               <p className="text-gray-400 mb-6">
                 Be the first to join our network and start earning rewards!
               </p>
-              <div className="space-y-4">
-                <button 
-                  className="primary-cta"
-                >
-                  Become a Provider
-                </button>
-                <div>
-                  <button 
-                    onClick={() => initSampleData()}
-                    className="secondary-cta"
-                  >
-                    Initialize Demo Data
-                  </button>
-                </div>
-              </div>
+              <button className="primary-cta">
+                Become a Provider
+              </button>
             </div>
           )}
         </div>
       </GlassCard>
 
-      {/* Network Health - Real Data */}
+      {/* Network Health */}
       <GlassCard>
         <div className="p-8">
           <h2 className="text-2xl font-bold text-white mb-6">Network Health</h2>
@@ -153,19 +140,19 @@ export function ProvidersPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Network Uptime</span>
                   <span className="text-gold font-semibold">
-                    {networkStats?.networkUptime?.toFixed(1) || 0}%
+                    {networkStats.networkUptime.toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Prompts Today</span>
                   <span className="text-red font-semibold">
-                    {networkStats?.promptsToday || 0}
+                    {networkStats.promptsToday}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Average Response Time</span>
                   <span className="text-gold font-semibold">
-                    {networkStats?.avgResponseTime || 0}ms
+                    {networkStats.avgResponseTime}ms
                   </span>
                 </div>
               </div>
@@ -177,19 +164,19 @@ export function ProvidersPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Total Providers</span>
                   <span className="text-white font-semibold">
-                    {networkStats?.totalProviders || 0}
+                    {networkStats.totalProviders}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Active Providers</span>
                   <span className="text-gold font-semibold">
-                    {networkStats?.totalProviders || 0}
+                    {networkStats.activeUsers}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-300">Total VCU Pool</span>
                   <span className="text-red font-semibold">
-                    {networkStats?.totalVCU?.toLocaleString() || 0}
+                    {networkStats.totalVCU.toLocaleString()}
                   </span>
                 </div>
               </div>
