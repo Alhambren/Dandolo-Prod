@@ -61,6 +61,23 @@ const applicationTables = {
     lastEarned: v.optional(v.number()),
   }).index("by_provider", ["providerId"]),
 
+  modelCache: defineTable({
+    models: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+    })),
+    timestamp: v.number(),
+  }),
+
+  modelHealth: defineTable({
+    modelId: v.string(),
+    lastUsed: v.number(),
+    successCount: v.number(),
+    failureCount: v.number(),
+    lastError: v.optional(v.string()),
+    isHealthy: v.boolean(),
+  }).index("by_model", ["modelId"]),
+
   userPoints: defineTable({
     userId: v.optional(v.id("users")),
     sessionId: v.optional(v.string()),
