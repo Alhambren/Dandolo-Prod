@@ -65,8 +65,10 @@ const applicationTables = {
     models: v.array(v.object({
       id: v.string(),
       name: v.string(),
+      available: v.boolean(),
+      lastUpdated: v.number()
     })),
-    timestamp: v.number(),
+    lastUpdated: v.number()
   }),
 
   modelHealth: defineTable({

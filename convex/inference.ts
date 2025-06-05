@@ -119,7 +119,7 @@ export const route = action({
     let selectedProvider;
     if (args.model && args.model !== "auto") {
       // Try to find a provider that supports the requested model
-      selectedProvider = providers.find(p => p.name.toLowerCase().includes(args.model!.toLowerCase())) 
+      selectedProvider = providers.find((p: any) => p.name.toLowerCase().includes(args.model!.toLowerCase())) 
         || providers[Math.floor(Math.random() * providers.length)];
     } else {
       // Random selection for auto mode
