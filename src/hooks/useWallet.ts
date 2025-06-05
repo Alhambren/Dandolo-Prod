@@ -1,91 +1,68 @@
-import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>;
-      on: (event: string, callback: (...args: any[]) => void) => void;
-      removeListener: (event: string, callback: (...args: any[]) => void) => void;
-    };
-  }
-}
+import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 const WALLET_STORAGE_KEY = 'dandolo_wallet_address';
 
 export function useWallet() {
-  const [address, setAddress] = useState<string | null>(null);
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Auto-reconnect on mount if previously connected
   useEffect(() => {
-    const storedAddress = localStorage.getItem(WALLET_STORAGE_KEY);
-    if (storedAddress) {
-      setAddress(storedAddress);
+    const saved = localStorage.getItem(WALLET_STORAGE_KEY);
+    if (!isConnected && saved && connectors.length > 0) {
+      connect({ connector: connectors[0] });
     }
-  }, []);
+  }, [isConnected, connect, connectors]);
 
-  const connect = async () => {
+  const connectWallet = async () => {
     setIsConnecting(true);
     setError(null);
     
     try {
-      if (!window.ethereum) {
-        throw new Error('MetaMask not installed');
+      if (connectors.length === 0) {
+        throw new Error('No wallet connectors available');
       }
 
-      // Request account access
-      const accounts = await window.ethereum.request({ 
-        method: 'eth_requestAccounts' 
-      });
-
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No accounts found');
-      }
-
-      // Get checksummed address
-      const checksummedAddress = ethers.getAddress(accounts[0]);
+      // Connect wallet
+      await connect({ connector: connectors[0] });
       
-      // Update state and storage
-      setAddress(checksummedAddress);
-      localStorage.setItem(WALLET_STORAGE_KEY, checksummedAddress);
-
-      // Listen for account changes
-      window.ethereum.on('accountsChanged', (newAccounts: string[]) => {
-        if (newAccounts.length === 0) {
-          // User disconnected
-          disconnect();
-        } else {
-          const newAddress = ethers.getAddress(newAccounts[0]);
-          setAddress(newAddress);
-          localStorage.setItem(WALLET_STORAGE_KEY, newAddress);
-        }
-      });
-
-      // Listen for chain changes
-      window.ethereum.on('chainChanged', () => {
-        window.location.reload();
-      });
-
+      // Request signature
+      if (address) {
+        await signMessageAsync({ 
+          message: 'Dandolo.ai — link wallet'
+        });
+        
+        // Store address
+        localStorage.setItem(WALLET_STORAGE_KEY, address);
+        toast.success('Wallet connected successfully');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to connect wallet';
       setError(message);
+      toast.error(message);
       throw err;
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const disconnect = () => {
-    setAddress(null);
+  const disconnectWallet = () => {
+    disconnect();
     localStorage.removeItem(WALLET_STORAGE_KEY);
+    toast.success('Wallet disconnected');
   };
 
   return {
     address,
-    connect,
-    disconnect,
+    isConnected,
+    connect: connectWallet,
+    disconnect: disconnectWallet,
     isConnecting,
     error
   };
