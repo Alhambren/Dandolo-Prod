@@ -1,6 +1,6 @@
 # Dandolo.ai MVP
   
-  This is a project built with [Chef](https://chef.convex.dev) using [Convex](https://convex.dev) as its backend.
+This is a project built with [Chef](https://chef.convex.dev) using [Convex](https://convex.dev) as its backend.
   
 This project is connected to the Convex deployment named [`accomplished-malamute-324`](https://dashboard.convex.dev/d/accomplished-malamute-324).
   
