@@ -10,45 +10,46 @@ import { query } from "./_generated/server";
 // Get real-time network statistics
 export const getNetworkStats = query({
   args: {},
+  returns: v.object({
+    totalProviders: v.number(),
+    activeProviders: v.number(),
+    totalVCU: v.number(),
+    totalPrompts: v.number(),
+    promptsToday: v.number(),
+    avgResponseTime: v.number(),
+    networkUptime: v.number(),
+    activeUsers: v.number(),
+  }),
   handler: async (ctx) => {
-    // Get active providers
-    const providers = await ctx.db.query("providers")
-      .withIndex("by_active", (q) => q.eq("isActive", true))
+    // Get all providers
+    const providers = await ctx.db.query('providers').collect();
+    const activeProviders = providers.filter(p => p.status === 'active');
+
+    // Get today's prompts
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const prompts = await ctx.db
+      .query('prompts')
+      .filter(q => q.gte(q.field('_creationTime'), today.getTime()))
       .collect();
-    
-    // Get all usage logs for calculations
-    const usageLogs = await ctx.db.query("usageLogs").collect();
-    
-    // Calculate active users in last 24h (anonymous count)
-    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const recentLogs = usageLogs.filter(log => log.timestamp >= oneDayAgo);
-    const uniqueUsers = new Set([
-      ...recentLogs.filter(log => log.userId).map(log => log.userId),
-      ...recentLogs.filter(log => log.sessionId).map(log => log.sessionId)
-    ]).size;
-    
-    // Get prompts routed today
-    const todayStart = new Date().setHours(0, 0, 0, 0);
-    const promptsToday = usageLogs.filter(log => log.timestamp >= todayStart).length;
-    
-    // Calculate total VCU available
-    const totalVCU = providers.reduce((sum, p) => sum + (p.vcuBalance || 0), 0);
-    
-    // Calculate average response time
-    const avgResponseTime = usageLogs.length > 0 
-      ? Math.round(usageLogs.reduce((sum, log) => sum + log.responseTime, 0) / usageLogs.length)
-      : 0;
-    
+
+    // Get active users in last 24h
+    const last24h = new Date();
+    last24h.setHours(last24h.getHours() - 24);
+    const activeUsers = await ctx.db
+      .query('users')
+      .filter(q => q.gte(q.field('lastActive'), last24h.getTime()))
+      .collect();
+
     return {
       totalProviders: providers.length,
-      activeUsers: uniqueUsers,
-      promptsToday,
-      totalVCU,
-      avgResponseTime,
-      totalPrompts: usageLogs.length,
-      networkUptime: providers.length > 0 
-        ? providers.reduce((sum, p) => sum + p.uptime, 0) / providers.length 
-        : 0,
+      activeProviders: activeProviders.length,
+      totalVCU: activeProviders.reduce((sum, p) => sum + p.vcuBalance, 0),
+      totalPrompts: prompts.length,
+      promptsToday: prompts.length,
+      avgResponseTime: activeProviders.reduce((sum, p) => sum + p.avgResponseTime, 0) / activeProviders.length || 0,
+      networkUptime: activeProviders.reduce((sum, p) => sum + p.uptime, 0) / activeProviders.length || 0,
+      activeUsers: activeUsers.length,
     };
   },
 });
