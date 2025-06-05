@@ -4,12 +4,8 @@ import { GlassCard } from "./GlassCard";
 import { ProviderCard } from "./ProviderCard";
 import { useState } from "react";
 
-interface ProvidersPageProps {
-  setCurrentPage: (page: 'home' | 'dashboard' | 'providers' | 'register' | 'chat' | 'developers') => void;
-}
-
-export function ProvidersPage({ setCurrentPage }: ProvidersPageProps) {
-  const providers = useQuery(api.providers.list);
+export function ProvidersPage() {
+  const providers = useQuery(api.providers.listActive);
   const networkStats = useQuery(api.stats.getNetworkStats); // Use real stats
   const initSampleData = useMutation(api.providers.initSampleData);
   const [sortBy, setSortBy] = useState<'vcuBalance' | 'totalPrompts' | 'uptime'>('vcuBalance');
@@ -78,25 +74,6 @@ export function ProvidersPage({ setCurrentPage }: ProvidersPageProps) {
         </GlassCard>
       </div>
 
-      {/* Become Provider CTA */}
-      <GlassCard>
-        <div className="p-8 text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">
-            Want to contribute your compute power?
-          </h2>
-          <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
-            Join our network of AI providers and earn rewards for your Venice.ai VCU. 
-            Connect your wallet and register your Venice API key to get started.
-          </p>
-          <button 
-            onClick={() => setCurrentPage('dashboard')}
-            className="primary-cta"
-          >
-            Become a Provider
-          </button>
-        </div>
-      </GlassCard>
-
       {/* Providers List */}
       <GlassCard>
         <div className="p-8">
@@ -147,7 +124,6 @@ export function ProvidersPage({ setCurrentPage }: ProvidersPageProps) {
               </p>
               <div className="space-y-4">
                 <button 
-                  onClick={() => setCurrentPage('dashboard')}
                   className="primary-cta"
                 >
                   Become a Provider
