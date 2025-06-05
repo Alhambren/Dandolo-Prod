@@ -1,0 +1,87 @@
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { ethers } from "ethers";
+
+export const verifyWallet = mutation({
+  args: { 
+    address: v.string(), 
+    msg: v.string(), 
+    signature: v.string() 
+  },
+  handler: async (ctx, { address, msg, signature }) => {
+    // Verify signature matches message and address
+    const recovered = ethers.verifyMessage(msg, signature);
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error('Invalid signature');
+    }
+
+    // Parse message and check nonce expiration
+    const parsed = Object.fromEntries(
+      msg.split('\n').map(line => line.split(': '))
+    );
+
+    const issuedAt = Date.parse(parsed.issuedAt);
+    if (Date.now() - issuedAt > 15 * 60_000) {
+      throw new Error('Signature expired');
+    }
+
+    // Insert wallet login record
+    await ctx.db.insert('wallet_logins', { 
+      address, 
+      msg, 
+      signature, 
+      issuedAt: parsed.issuedAt 
+    });
+
+    // Ensure points record exists
+    const existingPoints = await ctx.db
+      .query('points')
+      .withIndex('by_address', q => q.eq('address', address))
+      .unique();
+
+    if (!existingPoints) {
+      await ctx.db.insert('points', { 
+        address, 
+        total: 0,
+        totalSpent: 0,
+        lastActivity: Date.now()
+      });
+    }
+
+    return { ok: true, address };
+  },
+});
+
+export const addAddressPoints = mutation({
+  args: { 
+    address: v.string(), 
+    amount: v.number(), 
+    reason: v.string() 
+  },
+  handler: async (ctx, { address, amount, reason }) => {
+    // Update total points
+    const pointsRecord = await ctx.db
+      .query('points')
+      .withIndex('by_address', q => q.eq('address', address))
+      .unique();
+
+    if (!pointsRecord) {
+      throw new Error('No points record found for address');
+    }
+
+    await ctx.db.patch(pointsRecord._id, { 
+      total: (pointsRecord.total || 0) + amount,
+      lastActivity: Date.now()
+    });
+
+    // Log points history
+    await ctx.db.insert('points_history', { 
+      address, 
+      amount, 
+      reason, 
+      ts: Date.now() 
+    });
+
+    return pointsRecord.total + amount;
+  },
+});
