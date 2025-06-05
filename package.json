@@ -16,6 +16,7 @@
     "framer-motion": "^12.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hot-toast": "^2.5.2",
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.1.0",
     "vercel": "^42.3.0",

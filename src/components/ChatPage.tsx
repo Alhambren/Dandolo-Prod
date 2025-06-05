@@ -1,23 +1,28 @@
-import { useState } from "react";
-import { useAction, useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { useState } from "react";
+import { toast } from "react-hot-toast";
 import { GlassCard } from "./GlassCard";
-import { toast } from "sonner";
 
 interface ChatPageProps {
   sessionId: string;
   walletAddress?: string;
 }
 
+interface Model {
+  id: string;
+  name: string;
+}
+
 export function ChatPage({ sessionId, walletAddress }: ChatPageProps) {
   const [prompt, setPrompt] = useState("");
-  const [selectedModel, setSelectedModel] = useState("auto");
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState<any>(null);
-  const [routingStatus, setRoutingStatus] = useState("");
+  const [response, setResponse] = useState<string | null>(null);
 
-  const userStats = useQuery(api.points.getUserStats, { sessionId });
+  const userStats = useQuery(api.analytics.getSystemStats);
   const rateLimitStatus = useQuery(api.rateLimit.getRateLimitStatus, { sessionId });
+  const availableModels = useQuery(api.models.getAvailableModels) as Model[] | undefined;
   const routeInference = useAction(api.inference.route);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,119 +30,106 @@ export function ChatPage({ sessionId, walletAddress }: ChatPageProps) {
     if (!prompt.trim()) return;
 
     // Check daily limit
-    if ((userStats?.promptsToday || 0) >= 50) {
-      toast.error("Daily limit reached (50 prompts). Try again tomorrow!");
+    if (userStats && userStats.promptsToday >= 50) {
+      toast.error("Daily prompt limit reached (50 prompts/day)");
       return;
     }
 
     // Check rate limit
-    if (!rateLimitStatus || rateLimitStatus.remaining <= 0) {
-      const waitTime = rateLimitStatus ? Math.ceil((rateLimitStatus.resetTime - Date.now()) / 1000) : 0;
-      toast.error(`Rate limit reached. Please wait ${waitTime} seconds.`);
+    if (rateLimitStatus && rateLimitStatus.remaining <= 0) {
+      const waitTime = Math.ceil((rateLimitStatus.resetTime - Date.now()) / 1000);
+      toast.error(`Rate limited. Please wait ${waitTime} seconds`);
       return;
     }
 
     setIsLoading(true);
-    setRoutingStatus("Finding best provider...");
-    
     try {
       const result = await routeInference({
         prompt,
-        sessionId,
+        model: selectedModel,
         walletAddress,
-        model: selectedModel === "auto" ? undefined : selectedModel,
+        sessionId,
       });
-      setResponse(result);
-      setPrompt("");
-      setRoutingStatus("");
-      
-      toast.success(`Response from ${result.provider} • Model: ${result.model || selectedModel}`);
+
+      setResponse(result.response);
+      toast.success("Response received!");
     } catch (error) {
-      setRoutingStatus("");
-      toast.error(error instanceof Error ? error.message : "Failed to process prompt");
+      console.error("Error:", error);
+      toast.error("Failed to get response. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto p-4">
-      {/* User Stats */}
-      <GlassCard className="p-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-semibold">Today's Usage</h3>
-            <p className="text-sm text-gray-300">
-              {userStats?.promptsToday || 0} / 50 prompts used
-            </p>
-          </div>
-          {walletAddress && (
-            <div className="text-right">
-              <h3 className="text-lg font-semibold">Wallet Balance</h3>
-              <p className="text-sm text-gray-300">
-                {userStats?.points || 0} points
-              </p>
-            </div>
-          )}
-        </div>
-      </GlassCard>
-
-      {/* Chat Interface */}
-      <GlassCard className="p-6">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex gap-4">
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="bg-black/20 text-white border border-gray-700 rounded-lg px-4 py-2"
-              disabled={isLoading}
-            >
-              <option value="auto">Auto-select Model</option>
-              <option value="gpt-4">GPT-4</option>
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="claude-3-opus">Claude 3 Opus</option>
-              <option value="claude-3-sonnet">Claude 3 Sonnet</option>
-            </select>
-          </div>
-
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Enter your prompt..."
-            className="w-full h-32 bg-black/20 text-white border border-gray-700 rounded-lg p-4 resize-none"
-            disabled={isLoading}
-          />
-
-          <button
-            type="submit"
-            disabled={isLoading || !prompt.trim()}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? "Processing..." : "Submit"}
-          </button>
-        </form>
-
-        {routingStatus && (
-          <div className="mt-4 text-center text-gray-300">
-            {routingStatus}
-          </div>
-        )}
-      </GlassCard>
-
-      {/* Response Display */}
-      {response && (
+    <div className="container mx-auto px-4 py-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* User Stats */}
         <GlassCard className="p-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center text-sm text-gray-400">
-              <span>Provider: {response.provider}</span>
-              <span>Model: {response.model || selectedModel}</span>
-            </div>
-            <div className="prose prose-invert max-w-none">
-              {response.content}
-            </div>
+          <h2 className="text-2xl font-bold mb-4">Your Stats</h2>
+          <div className="space-y-2">
+            <p>Daily Prompts: {userStats?.promptsToday || 0}/50</p>
+            {walletAddress && (
+              <p>Wallet Balance: {userStats?.totalVCU || 0} VCU</p>
+            )}
           </div>
         </GlassCard>
-      )}
+
+        {/* Chat Interface */}
+        <GlassCard className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="model" className="block text-sm font-medium mb-2">
+                Select Model
+              </label>
+              <select
+                id="model"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="w-full p-2 rounded bg-white/10 border border-white/20"
+                required
+              >
+                <option value="">Select a model...</option>
+                {availableModels?.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="prompt" className="block text-sm font-medium mb-2">
+                Your Prompt
+              </label>
+              <textarea
+                id="prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="w-full p-2 rounded bg-white/10 border border-white/20 min-h-[100px]"
+                placeholder="Enter your prompt here..."
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+            >
+              {isLoading ? "Processing..." : "Submit"}
+            </button>
+          </form>
+        </GlassCard>
+
+        {/* Response Display */}
+        {response && (
+          <GlassCard className="p-6 md:col-span-2">
+            <h2 className="text-2xl font-bold mb-4">Response</h2>
+            <div className="whitespace-pre-wrap">{response}</div>
+          </GlassCard>
+        )}
+      </div>
     </div>
   );
 }

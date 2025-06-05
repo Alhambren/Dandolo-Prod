@@ -52,15 +52,12 @@ function mapToVeniceModel(model?: string): string {
   const modelMap: Record<string, string> = {
     "gpt-4": "gpt-4",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
-    "claude-3": "claude-3-sonnet-20240229",
+    "claude-3-sonnet": "claude-3-sonnet-20240229",
     "claude-3-haiku": "claude-3-haiku-20240307",
-    "claude-3-opus": "claude-3-opus-20240229",
-    "codellama": "codellama/CodeLlama-34b-Instruct-hf",
     "llama-3": "meta-llama/Llama-2-70b-chat-hf",
     "mixtral": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    "deepseek-coder": "deepseek-ai/deepseek-coder-33b-instruct",
-    "dall-e-3": "dall-e-3",
-    "stable-diffusion": "stabilityai/stable-diffusion-xl-base-1.0",
+    "codellama": "codellama/CodeLlama-34b-Instruct-hf",
+    "deepseek-coder": "deepseek-ai/deepseek-coder-33b-instruct"
   };
   
   return modelMap[model || "gpt-3.5-turbo"] || "gpt-3.5-turbo";
@@ -74,13 +71,10 @@ function calculateCost(tokens: number, model: string): number {
     "gpt-3.5-turbo": 0.002,
     "claude-3-sonnet-20240229": 0.015,
     "claude-3-haiku-20240307": 0.0025,
-    "claude-3-opus-20240229": 0.075,
-    "codellama/CodeLlama-34b-Instruct-hf": 0.01,
     "meta-llama/Llama-2-70b-chat-hf": 0.01,
     "mistralai/Mixtral-8x7B-Instruct-v0.1": 0.007,
-    "deepseek-ai/deepseek-coder-33b-instruct": 0.008,
-    "dall-e-3": 0.04,
-    "stabilityai/stable-diffusion-xl-base-1.0": 0.02,
+    "codellama/CodeLlama-34b-Instruct-hf": 0.01,
+    "deepseek-ai/deepseek-coder-33b-instruct": 0.008
   };
   
   const rate = pricing[model] || 0.002;
@@ -134,42 +128,65 @@ export const route = action({
 
     // Call Venice.ai API through selected provider
     const startTime = Date.now();
-    const veniceResponse = await callVeniceAI(args.prompt, selectedProvider.veniceApiKey, args.model);
-    const responseTime = Date.now() - startTime;
+    let success = false;
+    let errorMessage: string | undefined;
 
-    // Award points to user (1 point per prompt, but free during MVP)
-    const pointsAwarded: number = await ctx.runMutation(api.wallets.addAddressPoints, {
-      address: args.walletAddress || 'anonymous', // Fallback for non-wallet users
-      amount: 1,
-      reason: 'PROMPT_COMPLETION',
-    });
+    try {
+      const veniceResponse = await callVeniceAI(args.prompt, selectedProvider.veniceApiKey, args.model);
+      const responseTime = Date.now() - startTime;
+      success = true;
 
-    // Increment provider prompt count
-    await ctx.runMutation(api.providers.incrementPromptCount, {
-      providerId: selectedProvider._id,
-    });
+      // Award points to user (1 point per prompt, but free during MVP)
+      const pointsAwarded: number = await ctx.runMutation(api.wallets.addAddressPoints, {
+        address: args.walletAddress || 'anonymous', // Fallback for non-wallet users
+        amount: 1,
+        reason: 'PROMPT_COMPLETION',
+      });
 
-    // Log ONLY anonymous usage metrics - NEVER prompt content
-    await ctx.runMutation(api.inference.logUsage, {
-      address: args.walletAddress,
-      sessionId: args.sessionId,
-      // PRIVACY: Only log metadata, NEVER prompt/response content
-      model: args.model || veniceResponse.model,
-      tokens: veniceResponse.tokens,
-      cost: veniceResponse.cost,
-      timestamp: Date.now(),
-      responseTime,
-    });
+      // Increment provider prompt count
+      await ctx.runMutation(api.providers.incrementPromptCount, {
+        providerId: selectedProvider._id,
+      });
 
-    return {
-      response: veniceResponse.text,
-      provider: selectedProvider.name,
-      tokens: veniceResponse.tokens,
-      cost: veniceResponse.cost,
-      responseTime,
-      pointsAwarded,
-      model: args.model || veniceResponse.model,
-    };
+      // Log ONLY anonymous usage metrics - NEVER prompt content
+      await ctx.runMutation(api.inference.logUsage, {
+        address: args.walletAddress,
+        sessionId: args.sessionId,
+        // PRIVACY: Only log metadata, NEVER prompt/response content
+        model: args.model || veniceResponse.model,
+        tokens: veniceResponse.tokens,
+        cost: veniceResponse.cost,
+        timestamp: Date.now(),
+        responseTime,
+      });
+
+      // Track successful model usage
+      await ctx.runMutation(api.models.trackModelHealth, {
+        modelId: args.model || veniceResponse.model,
+        success: true,
+      });
+
+      return {
+        response: veniceResponse.text,
+        provider: selectedProvider.name,
+        tokens: veniceResponse.tokens,
+        cost: veniceResponse.cost,
+        responseTime,
+        pointsAwarded,
+        model: args.model || veniceResponse.model,
+      };
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Track failed model usage
+      await ctx.runMutation(api.models.trackModelHealth, {
+        modelId: args.model || "unknown",
+        success: false,
+        error: errorMessage,
+      });
+
+      throw error;
+    }
   },
 });
 
