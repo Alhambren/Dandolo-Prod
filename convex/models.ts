@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 // Fallback model list if API fails
 const FALLBACK_MODELS = [
@@ -17,61 +18,107 @@ const FALLBACK_MODELS = [
 // Cache TTL in milliseconds (5 minutes)
 const CACHE_TTL = 5 * 60 * 1000;
 
-// Get available models from Venice.ai API
+interface Model {
+  id: string;
+  name: string;
+}
+
+interface Provider {
+  _id: Id<"providers">;
+  name: string;
+  veniceApiKey: string;
+}
+
+// Query to get cached models (read-only)
 export const getAvailableModels = query({
   args: {},
+  returns: v.array(v.object({
+    id: v.string(),
+    name: v.string(),
+    available: v.boolean(),
+    lastUpdated: v.number()
+  })),
   handler: async (ctx) => {
-    // Check cache first
-    const cached = await ctx.db
-      .query("modelCache")
-      .first();
-
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    // Get cached models from database
+    const cached = await ctx.db.query("modelCache").first();
+    
+    if (cached && Date.now() - cached.lastUpdated < 5 * 60 * 1000) {
       return cached.models;
     }
+    
+    // Return fallback models if cache is stale/empty
+    return [
+      { id: "gpt-4", name: "GPT-4", available: true, lastUpdated: Date.now() },
+      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", available: true, lastUpdated: Date.now() },
+      { id: "claude-3-sonnet", name: "Claude 3 Sonnet", available: true, lastUpdated: Date.now() }
+    ];
+  }
+});
 
-    // Get active providers
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-    if (providers.length === 0) {
-      return FALLBACK_MODELS;
-    }
-
-    // Try each provider until we get a successful response
+// Action to refresh model cache (can call mutations)
+export const refreshModelCache = action({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    
     for (const provider of providers) {
       try {
-        const response = await fetch("https://api.venice.ai/api/v1/models", {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${provider.veniceApiKey}`,
-          },
+        const response: Response = await fetch("https://api.venice.ai/api/v1/models", {
+          headers: { "Authorization": `Bearer ${provider.veniceApiKey}` }
         });
-
-        if (!response.ok) {
-          continue; // Try next provider
+        
+        if (response.ok) {
+          const data: any = await response.json();
+          const models = data.data.map((model: any) => ({
+            id: model.id,
+            name: model.id,
+            available: true,
+            lastUpdated: Date.now()
+          }));
+          
+          await ctx.runMutation(api.models.updateModelCache, {
+            models,
+            timestamp: Date.now()
+          });
+          return null;
         }
-
-        const data = await response.json();
-        const models = data.data.map((model: any) => ({
-          id: model.id,
-          name: model.name || model.id.split("/").pop() || model.id,
-        }));
-
-        // Update cache
-        await ctx.runMutation(internal.models.updateModelCache, {
-          models,
-          timestamp: Date.now(),
-        });
-
-        return models;
       } catch (error) {
-        console.error("Failed to fetch models from provider:", provider.name, error);
-        continue; // Try next provider
+        continue;
       }
     }
+    return null;
+  }
+});
 
-    // If all providers fail, return fallback list
-    return FALLBACK_MODELS;
+// Internal mutation to update cache
+export const updateModelCache = mutation({
+  args: {
+    models: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      available: v.boolean(),
+      lastUpdated: v.number()
+    })),
+    timestamp: v.number()
   },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("modelCache").first();
+    
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        models: args.models,
+        lastUpdated: args.timestamp
+      });
+    } else {
+      await ctx.db.insert("modelCache", {
+        models: args.models,
+        lastUpdated: args.timestamp
+      });
+    }
+    return null;
+  }
 });
 
 // Track model health
@@ -81,7 +128,8 @@ export const trackModelHealth = mutation({
     success: v.boolean(),
     error: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
     const now = Date.now();
     const modelHealth = await ctx.db
       .query("modelHealth")
@@ -108,33 +156,6 @@ export const trackModelHealth = mutation({
         isHealthy: true,
       });
     }
-  },
-});
-
-// Internal function to update model cache
-export const updateModelCache = mutation({
-  args: {
-    models: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-    })),
-    timestamp: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("modelCache")
-      .first();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        models: args.models,
-        timestamp: args.timestamp,
-      });
-    } else {
-      await ctx.db.insert("modelCache", {
-        models: args.models,
-        timestamp: args.timestamp,
-      });
-    }
+    return null;
   },
 }); 

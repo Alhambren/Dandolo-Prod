@@ -1,7 +1,7 @@
 import { useQuery, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useState } from "react";
-import { toast } from "react-hot-toast";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { GlassCard } from "./GlassCard";
 
 interface ChatPageProps {
@@ -12,6 +12,8 @@ interface ChatPageProps {
 interface Model {
   id: string;
   name: string;
+  available: boolean;
+  lastUpdated: number;
 }
 
 export function ChatPage({ sessionId, walletAddress }: ChatPageProps) {
@@ -22,8 +24,30 @@ export function ChatPage({ sessionId, walletAddress }: ChatPageProps) {
 
   const userStats = useQuery(api.analytics.getSystemStats);
   const rateLimitStatus = useQuery(api.rateLimit.getRateLimitStatus, { sessionId });
-  const availableModels = useQuery(api.models.getAvailableModels) as Model[] | undefined;
+  const models = useQuery(api.models.getAvailableModels);
+  const refreshModels = useAction(api.models.refreshModelCache);
   const routeInference = useAction(api.inference.route);
+
+  // Refresh models on mount
+  useEffect(() => {
+    const refreshModelList = async () => {
+      try {
+        await refreshModels();
+        console.log("Models refreshed successfully");
+      } catch (error) {
+        console.error("Failed to refresh models:", error);
+        toast.error("Failed to refresh available models");
+      }
+    };
+    refreshModelList();
+  }, [refreshModels]);
+
+  // Debug log models
+  useEffect(() => {
+    if (models) {
+      console.log("Available models:", models);
+    }
+  }, [models]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,74 +86,91 @@ export function ChatPage({ sessionId, walletAddress }: ChatPageProps) {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* User Stats */}
-        <GlassCard className="p-6">
-          <h2 className="text-2xl font-bold mb-4">Your Stats</h2>
-          <div className="space-y-2">
-            <p>Daily Prompts: {userStats?.promptsToday || 0}/50</p>
-            {walletAddress && (
-              <p>Wallet Balance: {userStats?.totalVCU || 0} VCU</p>
-            )}
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-red bg-clip-text text-transparent mb-4">
+          AI Chat Interface
+        </h1>
+        <p className="text-gray-300">Your prompts are routed through our decentralized Venice.ai network</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Stats Card */}
+        <GlassCard>
+          <div className="p-6">
+            <h2 className="text-2xl font-bold text-white mb-4">Your Stats</h2>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-gray-300">Daily Prompts:</span>
+                <span className="text-gold">{rateLimitStatus?.current || 0}/50</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-300">Remaining:</span>
+                <span className="text-red">{rateLimitStatus?.remaining || 50}</span>
+              </div>
+            </div>
           </div>
         </GlassCard>
 
         {/* Chat Interface */}
-        <GlassCard className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <GlassCard>
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
-              <label htmlFor="model" className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Select Model
               </label>
               <select
-                id="model"
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full p-2 rounded bg-white/10 border border-white/20"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red"
                 required
               >
                 <option value="">Select a model...</option>
-                {availableModels?.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
+                {models?.map((model) => (
+                  <option key={model.id} value={model.id} disabled={!model.available}>
+                    {model.name} {model.available ? "" : "(Unavailable)"}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label htmlFor="prompt" className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Your Prompt
               </label>
               <textarea
-                id="prompt"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                className="w-full p-2 rounded bg-white/10 border border-white/20 min-h-[100px]"
+                rows={6}
                 placeholder="Enter your prompt here..."
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red resize-none"
                 required
               />
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+              disabled={isLoading || !prompt.trim() || !selectedModel}
+              className="w-full primary-cta disabled:opacity-50"
             >
-              {isLoading ? "Processing..." : "Submit"}
+              {isLoading ? "Processing..." : "Submit Prompt"}
             </button>
           </form>
         </GlassCard>
-
-        {/* Response Display */}
-        {response && (
-          <GlassCard className="p-6 md:col-span-2">
-            <h2 className="text-2xl font-bold mb-4">Response</h2>
-            <div className="whitespace-pre-wrap">{response}</div>
-          </GlassCard>
-        )}
       </div>
+
+      {/* Response Display */}
+      {response && (
+        <GlassCard>
+          <div className="p-6">
+            <h3 className="text-xl font-bold text-white mb-4">Response</h3>
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <p className="text-gray-200 whitespace-pre-wrap">{response}</p>
+            </div>
+          </div>
+        </GlassCard>
+      )}
     </div>
   );
 }
