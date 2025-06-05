@@ -50,9 +50,15 @@ const applicationTables = {
     isActive: v.boolean(),
     registrationDate: v.optional(v.number()),
     lastHealthCheck: v.optional(v.number()),
+    avgResponseTime: v.number(),
+    status: v.union(v.literal('active'), v.literal('inactive'), v.literal('pending')),
+    vcuEarned7d: v.optional(v.number()),
+    region: v.optional(v.string()),
+    gpuType: v.optional(v.string()),
   })
     .index("by_address", ["address"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_status", ["status"]),
 
   providerPoints: defineTable({
     providerId: v.id("providers"),
@@ -118,6 +124,15 @@ const applicationTables = {
     .index("by_provider", ["providerId"])
     .index("by_status", ["status"])
     .index("by_created", ["createdAt"]),
+
+  prompts: defineTable({
+    providerId: v.id("providers"),
+    userId: v.optional(v.id("users")),
+    content: v.string(),
+    response: v.string(),
+    responseTime: v.number(),
+    vcuCost: v.number(),
+  }).index("by_provider", ["providerId"]),
 };
 
 export default defineSchema({

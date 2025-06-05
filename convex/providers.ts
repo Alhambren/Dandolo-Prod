@@ -397,3 +397,52 @@ export const runHealthChecks = internalAction({
     }
   },
 });
+
+export const getTopProviders = query({
+  args: {
+    limit: v.number(),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id('providers'),
+      name: v.string(),
+      prompts24h: v.number(),
+      vcuEarned7d: v.number(),
+      region: v.optional(v.string()),
+      gpuType: v.optional(v.string()),
+    })
+  ),
+  handler: async (ctx, args) => {
+    // Get providers sorted by 7-day VCU earned
+    const providers = await ctx.db
+      .query('providers')
+      .withIndex('by_status', q => q.eq('status', 'active'))
+      .order('desc')
+      .take(args.limit);
+
+    // Get prompts from last 24h for each provider
+    const last24h = new Date();
+    last24h.setHours(last24h.getHours() - 24);
+
+    const providersWithStats = await Promise.all(
+      providers.map(async (provider) => {
+        const prompts24h = await ctx.db
+          .query('prompts')
+          .withIndex('by_provider', q => q.eq('providerId', provider._id))
+          .filter(q => q.gte(q.field('_creationTime'), last24h.getTime()))
+          .collect();
+
+        return {
+          _id: provider._id,
+          name: provider.name,
+          prompts24h: prompts24h.length,
+          vcuEarned7d: provider.vcuEarned7d || 0,
+          region: provider.region,
+          gpuType: provider.gpuType,
+        };
+      })
+    );
+
+    return providersWithStats.sort((a, b) => b.vcuEarned7d - a.vcuEarned7d);
+  },
+});
