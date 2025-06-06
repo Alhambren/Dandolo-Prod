@@ -47,7 +47,7 @@ export const validateVeniceApiKey = action({
 });
 
 // Register a new provider
-export const register = mutation({
+export const registerProvider = mutation({
   args: {
     address: v.string(),
     name: v.string(),
@@ -55,42 +55,28 @@ export const register = mutation({
     veniceApiKey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Check if provider already exists
-    const existing = await ctx.db
-      .query("providers")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
-      .first();
-
-    if (existing) {
-      throw new Error("Provider already registered with this address");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
     }
 
-    // TODO: Encrypt the API key in production
-    const encryptedApiKey = args.veniceApiKey; // Placeholder for encryption
+    const userId = await ctx.db.insert("users", {
+      name: args.name,
+    });
 
     const providerId = await ctx.db.insert("providers", {
+      userId,
       address: args.address,
       name: args.name,
       description: args.description,
-      veniceApiKey: encryptedApiKey,
-      vcuBalance: 0, // Will be updated after Venice API check
+      veniceApiKey: args.veniceApiKey,
+      vcuBalance: 0,
       isActive: true,
       uptime: 100,
       totalPrompts: 0,
       registrationDate: Date.now(),
-    });
-
-    // Initialize provider points
-    await ctx.db.insert("providerPoints", {
-      providerId,
-      points: 0,
-      totalPrompts: 0,
-      lastEarned: Date.now(),
-    });
-
-    // Schedule initial health check
-    await ctx.scheduler.runAfter(0, api.providers.performHealthCheck, {
-      providerId,
+      avgResponseTime: 0,
+      status: 'pending' as const,
     });
 
     return providerId;
@@ -345,6 +331,8 @@ export const initSampleData = mutation({
         totalPrompts: 2847,
         registrationDate: Date.now() - 30 * 24 * 60 * 60 * 1000,
         lastHealthCheck: Date.now() - 5 * 60 * 1000,
+        avgResponseTime: 250,
+        status: 'active' as const,
       },
       {
         address: "0x2345678901234567890123456789012345678901",
@@ -357,6 +345,8 @@ export const initSampleData = mutation({
         totalPrompts: 1923,
         registrationDate: Date.now() - 20 * 24 * 60 * 60 * 1000,
         lastHealthCheck: Date.now() - 2 * 60 * 1000,
+        avgResponseTime: 300,
+        status: 'active' as const,
       },
       {
         address: "0x3456789012345678901234567890123456789012",
@@ -369,6 +359,8 @@ export const initSampleData = mutation({
         totalPrompts: 1456,
         registrationDate: Date.now() - 15 * 24 * 60 * 60 * 1000,
         lastHealthCheck: Date.now() - 1 * 60 * 1000,
+        avgResponseTime: 275,
+        status: 'active' as const,
       }
     ];
 
@@ -444,5 +436,33 @@ export const getTopProviders = query({
     );
 
     return providersWithStats.sort((a, b) => b.vcuEarned7d - a.vcuEarned7d);
+  },
+});
+
+export const remove = mutation({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    // Remove provider
+    await ctx.db.delete(args.providerId);
+    
+    // Remove associated points record
+    const points = await ctx.db
+      .query("providerPoints")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .first();
+    
+    if (points) {
+      await ctx.db.delete(points._id);
+    }
+    
+    // Remove health checks
+    const healthChecks = await ctx.db
+      .query("healthChecks")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .collect();
+    
+    for (const check of healthChecks) {
+      await ctx.db.delete(check._id);
+    }
   },
 });

@@ -5,9 +5,11 @@ import { authTables } from "@convex-dev/auth/server";
 const applicationTables = {
   wallet_logins: defineTable({
     address: v.string(),
-    msg: v.string(),
-    signature: v.string(),
-    issuedAt: v.string(),
+    msg: v.optional(v.string()),
+    signature: v.optional(v.string()),
+    verified: v.optional(v.boolean()),
+    createdAt: v.optional(v.number()),
+    issuedAt: v.optional(v.string()),
   }).index("by_address", ["address"]),
 
   points: defineTable({
@@ -25,19 +27,18 @@ const applicationTables = {
   }).index("by_address", ["address"]),
 
   usageLogs: defineTable({
-    userId: v.optional(v.id("users")),
-    address: v.optional(v.string()),
-    sessionId: v.optional(v.string()),
-    providerId: v.optional(v.id("providers")),
+    userId: v.id("users"),
+    providerId: v.id("providers"),
     model: v.string(),
-    tokens: v.number(),
-    cost: v.number(),
-    timestamp: v.number(),
-    responseTime: v.number(),
+    promptTokens: v.number(),
+    completionTokens: v.number(),
+    latencyMs: v.number(),
+    createdAt: v.number(),
+    sessionId: v.optional(v.string()),
   })
-    .index("by_address", ["address"])
+    .index("by_provider", ["providerId"])
     .index("by_user", ["userId"])
-    .index("by_provider", ["providerId"]),
+    .index("by_session", ["sessionId"]),
 
   providers: defineTable({
     address: v.string(),
@@ -48,23 +49,25 @@ const applicationTables = {
     totalPrompts: v.number(),
     uptime: v.number(),
     isActive: v.boolean(),
+    userId: v.optional(v.id("users")),
     registrationDate: v.optional(v.number()),
     lastHealthCheck: v.optional(v.number()),
-    avgResponseTime: v.number(),
-    status: v.union(v.literal('active'), v.literal('inactive'), v.literal('pending')),
+    avgResponseTime: v.optional(v.number()),
+    status: v.optional(v.union(v.literal("active"), v.literal("inactive"), v.literal("pending"))),
     vcuEarned7d: v.optional(v.number()),
     region: v.optional(v.string()),
     gpuType: v.optional(v.string()),
   })
     .index("by_address", ["address"])
     .index("by_active", ["isActive"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_user", ["userId"]),
 
   providerPoints: defineTable({
     providerId: v.id("providers"),
     points: v.number(),
     totalPrompts: v.number(),
-    lastEarned: v.optional(v.number()),
+    lastEarned: v.number(),
   }).index("by_provider", ["providerId"]),
 
   modelCache: defineTable({
@@ -115,15 +118,11 @@ const applicationTables = {
 
   healthChecks: defineTable({
     providerId: v.id("providers"),
-    status: v.string(),
+    timestamp: v.number(),
+    status: v.union(v.literal("success"), v.literal("failure")),
     responseTime: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
-    timestamp: v.number(),
-    createdAt: v.optional(v.number()),
-  })
-    .index("by_provider", ["providerId"])
-    .index("by_status", ["status"])
-    .index("by_created", ["createdAt"]),
+  }).index("by_provider", ["providerId"]),
 
   prompts: defineTable({
     providerId: v.id("providers"),
@@ -133,6 +132,27 @@ const applicationTables = {
     responseTime: v.number(),
     vcuCost: v.number(),
   }).index("by_provider", ["providerId"]),
+
+  users: defineTable({
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    image: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    points: v.optional(v.number()),
+  }),
+
+  pointTransactions: defineTable({
+    userId: v.optional(v.id("users")),
+    sessionId: v.optional(v.string()),
+    amount: v.number(),
+    source: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_session", ["sessionId"]),
 };
 
 export default defineSchema({

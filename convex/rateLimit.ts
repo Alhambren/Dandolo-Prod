@@ -17,8 +17,8 @@ export const checkRateLimit = mutation({
     if (args.userId) {
       usageToday = await ctx.db
         .query("usageLogs")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .filter((q) => q.gte(q.field("timestamp"), todayTimestamp))
+        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
+        .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
         .collect();
     } else if (args.sessionId) {
       usageToday = await ctx.db
@@ -26,7 +26,7 @@ export const checkRateLimit = mutation({
         .filter((q) => 
           q.and(
             q.eq(q.field("sessionId"), args.sessionId),
-            q.gte(q.field("timestamp"), todayTimestamp)
+            q.gte(q.field("createdAt"), todayTimestamp)
           )
         )
         .collect();
@@ -61,8 +61,8 @@ export const getRateLimitStatus = query({
     if (args.userId) {
       usageToday = await ctx.db
         .query("usageLogs")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .filter((q) => q.gte(q.field("timestamp"), todayTimestamp))
+        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
+        .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
         .collect();
     } else if (args.sessionId) {
       usageToday = await ctx.db
@@ -70,7 +70,7 @@ export const getRateLimitStatus = query({
         .filter((q) => 
           q.and(
             q.eq(q.field("sessionId"), args.sessionId),
-            q.gte(q.field("timestamp"), todayTimestamp)
+            q.gte(q.field("createdAt"), todayTimestamp)
           )
         )
         .collect();

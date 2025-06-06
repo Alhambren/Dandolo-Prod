@@ -1,4 +1,4 @@
-import { GlassCard } from "./GlassCard";
+import GlassCard from "./GlassCard";
 import { motion } from "framer-motion";
 
 interface Provider {
