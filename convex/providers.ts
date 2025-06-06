@@ -306,71 +306,6 @@ export const getLeaderboard = query({
   },
 });
 
-// Initialize sample data - make it public so it can be called from UI
-export const initSampleData = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const existing = await ctx.db.query("providers").collect();
-    if (existing.length > 0) return;
-
-    // Create multiple sample providers
-    const sampleProviders = [
-      {
-        address: "0x1234567890123456789012345678901234567890",
-        name: "AI Provider Alpha",
-        description: "High-performance AI inference with 99.9% uptime",
-        veniceApiKey: "venice_key_1",
-        vcuBalance: 1500,
-        isActive: true,
-        uptime: 99.2,
-        totalPrompts: 2847,
-        registrationDate: Date.now() - 30 * 24 * 60 * 60 * 1000,
-        lastHealthCheck: Date.now() - 5 * 60 * 1000,
-        avgResponseTime: 250,
-        status: 'active' as const,
-      },
-      {
-        address: "0x2345678901234567890123456789012345678901",
-        name: "Neural Networks Inc",
-        description: "Specialized in large language models",
-        veniceApiKey: "venice_key_2",
-        vcuBalance: 2200,
-        isActive: true,
-        uptime: 97.8,
-        totalPrompts: 1923,
-        registrationDate: Date.now() - 20 * 24 * 60 * 60 * 1000,
-        lastHealthCheck: Date.now() - 2 * 60 * 1000,
-        avgResponseTime: 300,
-        status: 'active' as const,
-      },
-      {
-        address: "0x3456789012345678901234567890123456789012",
-        name: "DeepMind Proxy",
-        description: "Fast inference with global CDN",
-        veniceApiKey: "venice_key_3",
-        vcuBalance: 890,
-        isActive: true,
-        uptime: 95.5,
-        totalPrompts: 1456,
-        registrationDate: Date.now() - 15 * 24 * 60 * 60 * 1000,
-        lastHealthCheck: Date.now() - 1 * 60 * 1000,
-        avgResponseTime: 275,
-        status: 'active' as const,
-      }
-    ];
-
-    for (const provider of sampleProviders) {
-      const id = await ctx.db.insert("providers", provider);
-      await ctx.db.insert("providerPoints", {
-        providerId: id,
-        points: provider.vcuBalance * 10, // Award 10x VCU as initial points
-        totalPrompts: provider.totalPrompts,
-        lastEarned: Date.now(),
-      });
-    }
-  },
-});
-
 // Run health checks for all providers
 export const runHealthChecks = internalAction({
   args: {},
@@ -414,18 +349,23 @@ export const getTopProviders = query({
     const providersWithStats = await Promise.all(
       providers.map(async (provider) => {
         const prompts24h = await ctx.db
-          .query('prompts')
-          .withIndex('by_provider', q => q.eq('providerId', provider._id))
-          .filter(q => q.gte(q.field('_creationTime'), last24h.getTime()))
+          .query("usageLogs")
+          .withIndex("by_provider", q => q.eq("providerId", provider._id))
+          .filter(q => q.gte(q.field("createdAt"), last24h.getTime()))
           .collect();
 
         return {
           _id: provider._id,
           name: provider.name,
           prompts24h: prompts24h.length,
-          vcuEarned7d: provider.vcuEarned7d || 0,
+          vcuEarned7d: 0,
           region: provider.region,
           gpuType: provider.gpuType,
+          status: provider.status,
+          uptime: provider.uptime,
+          avgResponseTime: provider.avgResponseTime,
+          vcuBalance: provider.vcuBalance,
+          totalPrompts: provider.totalPrompts,
         };
       })
     );

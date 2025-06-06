@@ -3,6 +3,31 @@ import { query, mutation, internalMutation, internalAction } from "./_generated/
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
+interface Points {
+  _id: Id<"points">;
+  address: string;
+  points: number;
+  promptsToday: number;
+  pointsToday: number;
+  lastEarned: number;
+}
+
+interface PointsHistory {
+  _id: Id<"points_history">;
+  address: string;
+  amount: number;
+  reason: string;
+  ts: number;
+}
+
+interface ProviderPoints {
+  _id: Id<"providerPoints">;
+  providerId: Id<"providers">;
+  points: number;
+  totalPrompts: number;
+  lastEarned: number;
+}
+
 // Get user's total points
 export const getUserPoints = query({
   args: { 
@@ -14,7 +39,7 @@ export const getUserPoints = query({
       .query("points")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
-    return points?.total || 0;
+    return points?.points || 0;
   },
 });
 
@@ -25,8 +50,6 @@ export const getUserStats = query({
   },
   returns: v.object({
     points: v.number(),
-    totalSpent: v.number(),
-    lastActivity: v.optional(v.number()),
     promptsToday: v.number(),
     promptsRemaining: v.number(),
     pointsToday: v.number(),
@@ -38,11 +61,6 @@ export const getUserStats = query({
     })),
   }),
   handler: async (ctx, args) => {
-    let points = 0;
-    let totalSpent = 0;
-    let lastActivity: number | undefined;
-    let todayUsage = 0;
-    
     // Get today's start timestamp
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -54,11 +72,9 @@ export const getUserStats = query({
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
     
-    if (pointsRecord) {
-      points = pointsRecord.total;
-      totalSpent = pointsRecord.totalSpent || 0;
-      lastActivity = pointsRecord.lastActivity;
-    }
+    const points = pointsRecord?.points || 0;
+    const promptsToday = pointsRecord?.promptsToday || 0;
+    const pointsToday = pointsRecord?.pointsToday || 0;
 
     // Get today's usage from points_history
     const todayUsageArr = await ctx.db
@@ -67,17 +83,17 @@ export const getUserStats = query({
       .filter((q) => q.gte(q.field("ts"), todayStart))
       .collect();
 
-    todayUsage = todayUsageArr.length;
-
     return {
       points,
-      totalSpent,
-      lastActivity,
-      promptsToday: todayUsage,
-      promptsRemaining: Math.max(0, 50 - todayUsage),
-      pointsToday: todayUsage,
+      promptsToday,
+      promptsRemaining: Math.max(0, 50 - promptsToday),
+      pointsToday,
       pointsThisWeek: points,
-      pointsHistory: [],
+      pointsHistory: todayUsageArr.map(entry => ({
+        date: new Date(entry.ts).toISOString().split('T')[0],
+        points: entry.amount,
+        source: entry.reason
+      })),
     };
   },
 });
@@ -96,17 +112,23 @@ export const addUserPoints = internalMutation({
       .first();
     
     if (points) {
-      const newTotal = (points.total || 0) + args.amount;
+      const newPoints = points.points + args.amount;
+      const newPromptsToday = points.promptsToday + (args.source === "prompt" ? 1 : 0);
+      const newPointsToday = points.pointsToday + args.amount;
+      
       await ctx.db.patch(points._id, { 
-        total: newTotal,
-        lastActivity: Date.now()
+        points: newPoints,
+        promptsToday: newPromptsToday,
+        pointsToday: newPointsToday,
+        lastEarned: Date.now()
       });
     } else {
       await ctx.db.insert("points", {
         address: args.address,
-        total: args.amount,
-        totalSpent: 0,
-        lastActivity: Date.now()
+        points: args.amount,
+        promptsToday: args.source === "prompt" ? 1 : 0,
+        pointsToday: args.amount,
+        lastEarned: Date.now()
       });
     }
     
@@ -122,11 +144,12 @@ export const addUserPoints = internalMutation({
 // Get provider points
 export const getProviderPoints = query({
   args: { providerId: v.id("providers") },
+  returns: v.number(),
   handler: async (ctx, args) => {
     const providerPoints = await ctx.db
       .query("providerPoints")
       .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
-      .first();
+      .first() as ProviderPoints | null;
 
     return providerPoints?.points || 0;
   },
@@ -169,23 +192,28 @@ export const awardProviderPointsInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
-    if (!provider || !provider.userId) return;
+    if (!provider) return;
     
     // Award points equal to VCU balance
     const pointsToAward = Math.floor(args.vcuBalance);
     
-    await ctx.db.insert("pointTransactions", {
-      userId: provider.userId,
-      amount: pointsToAward,
-      source: "daily_vcu",
-      timestamp: Date.now(),
-    });
+    // Update provider points
+    const providerPoints = await ctx.db
+      .query("providerPoints")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .first();
     
-    // Update user's total points
-    const user = await ctx.db.get(provider.userId);
-    if (user) {
-      await ctx.db.patch(provider.userId, {
-        points: (user.points || 0) + pointsToAward,
+    if (providerPoints) {
+      await ctx.db.patch(providerPoints._id, {
+        points: providerPoints.points + pointsToAward,
+        lastEarned: Date.now()
+      });
+    } else {
+      await ctx.db.insert("providerPoints", {
+        providerId: args.providerId,
+        points: pointsToAward,
+        totalPrompts: 0,
+        lastEarned: Date.now()
       });
     }
   },
@@ -238,5 +266,100 @@ export const getPointsLeaderboard = query({
     return leaderboard
       .sort((a, b) => b.points - a.points)
       .slice(0, 10);
+  },
+});
+
+export const addPoints = mutation({
+  args: {
+    address: v.string(),
+    amount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const pointsRecord = await ctx.db
+      .query("points")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+
+    if (pointsRecord) {
+      await ctx.db.patch(pointsRecord._id, {
+        points: pointsRecord.points + args.amount,
+        pointsToday: pointsRecord.pointsToday + args.amount,
+        lastEarned: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("points", {
+        address: args.address,
+        points: args.amount,
+        promptsToday: 0,
+        pointsToday: args.amount,
+        lastEarned: Date.now(),
+      });
+    }
+  },
+});
+
+export const getPoints = query({
+  args: {
+    address: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const pointsRecord = await ctx.db
+      .query("points")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+
+    return pointsRecord || {
+      address: args.address,
+      points: 0,
+      promptsToday: 0,
+      pointsToday: 0,
+      lastEarned: Date.now(),
+    };
+  },
+});
+
+export const getPointsHistory = query({
+  args: {
+    address: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const history = await ctx.db
+      .query("points_history")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .order("desc")
+      .take(10);
+
+    return history;
+  },
+});
+
+export const awardProviderPoints = mutation({
+  args: {
+    providerId: v.id("providers"),
+    points: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) return;
+
+    const providerPoints = await ctx.db
+      .query("providerPoints")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .first();
+
+    if (providerPoints) {
+      await ctx.db.patch(providerPoints._id, {
+        points: providerPoints.points + args.points,
+        totalPrompts: providerPoints.totalPrompts + 1,
+        lastEarned: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("providerPoints", {
+        providerId: args.providerId,
+        points: args.points,
+        totalPrompts: 1,
+        lastEarned: Date.now(),
+      });
+    }
   },
 });

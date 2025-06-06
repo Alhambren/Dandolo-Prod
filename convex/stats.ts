@@ -1,11 +1,48 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 
 /**
  * PRIVACY NOTICE: 
  * All stats are anonymous and aggregate only.
  * NO individual user data is exposed.
  */
+
+interface Provider {
+  _id: Id<"providers">;
+  isActive: boolean;
+  vcuBalance: number;
+  totalPrompts: number;
+  uptime: number;
+  name: string;
+  veniceApiKey?: string;
+  avgResponseTime: number;
+  status: "pending" | "active" | "inactive";
+  region?: string;
+  gpuType?: string;
+  description?: string;
+  lastHealthCheck?: number;
+  registrationDate: number;
+}
+
+interface UsageLog {
+  _id: Id<"usageLogs">;
+  _creationTime: number;
+  address: string;
+  providerId?: Id<"providers">;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  latencyMs: number;
+  createdAt: number;
+}
+
+interface ProviderPoints {
+  _id: Id<"providerPoints">;
+  providerId: Id<"providers">;
+  points: number;
+  totalPrompts: number;
+}
 
 // Get real-time network statistics
 export const getNetworkStats = query({
@@ -21,41 +58,38 @@ export const getNetworkStats = query({
     activeUsers: v.number(),
   }),
   handler: async (ctx) => {
-    // Get real provider data
-    const providers = await ctx.db.query("providers").collect();
-    const activeProviders = providers.filter(p => p.isActive === true);
-    
-    // Get real usage data
-    const usageLogs = await ctx.db.query("usageLogs").collect();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayUsage = usageLogs.filter(log => log.createdAt >= today.getTime());
-    
-    // Calculate real metrics
-    const totalVCU = activeProviders.reduce((sum, p) => sum + (p.vcuBalance || 0), 0);
-    const totalPrompts = usageLogs.length;
-    const avgResponseTime = usageLogs.length > 0 
-      ? Math.round(usageLogs.reduce((sum, log) => sum + (log.latencyMs || 0), 0) / usageLogs.length)
-      : 0;
-    
-    // Get unique users from last 24h
-    const last24h = Date.now() - 24 * 60 * 60 * 1000;
-    const recentLogs = usageLogs.filter(log => log.createdAt >= last24h);
-    const activeUsers = new Set([
-      ...recentLogs.filter(log => log.userId).map(log => log.userId),
-      ...recentLogs.filter(log => log.sessionId).map(log => log.sessionId)
-    ]).size;
+    const providers = await ctx.db
+      .query("providers")
+      .collect();
 
+    const activeProviders = providers.filter(p => p.isActive);
+    const totalVCU = providers.reduce((sum, p) => sum + p.vcuBalance, 0);
+    const totalPrompts = providers.reduce((sum, p) => sum + p.totalPrompts, 0);
     const networkUptime = activeProviders.length > 0 
-      ? Math.round(activeProviders.reduce((sum, p) => sum + (p.uptime || 0), 0) / activeProviders.length)
+      ? activeProviders.reduce((sum, p) => sum + p.uptime, 0) / activeProviders.length 
       : 0;
+
+    const recentLogs = await ctx.db
+      .query("usageLogs")
+      .order("desc")
+      .take(100);
+
+    const avgResponseTime = recentLogs.length > 0
+      ? recentLogs.reduce((sum, log) => sum + log.latencyMs, 0) / recentLogs.length
+      : 0;
+
+    const activeUsers = new Set([
+      ...recentLogs.map(log => log.address)
+    ]).size;
 
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
       totalVCU,
       totalPrompts,
-      promptsToday: todayUsage.length,
+      promptsToday: recentLogs.filter(log => 
+        log.createdAt > Date.now() - 24 * 60 * 60 * 1000
+      ).length,
       avgResponseTime,
       networkUptime,
       activeUsers,
@@ -63,36 +97,67 @@ export const getNetworkStats = query({
   },
 });
 
-// Get provider leaderboard with real data
+// Get provider leaderboard
 export const getProviderLeaderboard = query({
   args: {},
+  returns: v.array(v.object({
+    _id: v.id("providers"),
+    name: v.string(),
+    isActive: v.boolean(),
+    vcuBalance: v.number(),
+    totalPrompts: v.number(),
+    uptime: v.number(),
+    avgResponseTime: v.number(),
+    status: v.union(v.literal("pending"), v.literal("active"), v.literal("inactive")),
+    region: v.optional(v.string()),
+    gpuType: v.optional(v.string()),
+    description: v.optional(v.string()),
+    lastHealthCheck: v.optional(v.number()),
+    registrationDate: v.number(),
+    points: v.number(),
+  })),
   handler: async (ctx) => {
-    // Only return providers that have real Venice.ai API keys
-    const providers = await ctx.db.query("providers")
-      .filter((q) => q.and(
-        q.eq(q.field("isActive"), true),
-        q.neq(q.field("veniceApiKey"), "venice_key_1"), // Exclude sample data
-        q.neq(q.field("veniceApiKey"), "venice_key_2"),
-        q.neq(q.field("veniceApiKey"), "venice_key_3")
-      ))
-      .collect();
-    
-    return providers
-      .sort((a, b) => (b.vcuBalance || 0) - (a.vcuBalance || 0))
-      .slice(0, 10)
-      .map((provider, index) => ({
-        ...provider,
-        rank: index + 1,
-        veniceApiKey: undefined, // Don't expose API keys
-      }));
+    const providers = await ctx.db
+      .query("providers")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect() as Provider[];
+
+    const providerStats = await Promise.all(
+      providers.map(async (provider) => {
+        const points = await ctx.db
+          .query("providerPoints")
+          .withIndex("by_provider", (q) => q.eq("providerId", provider._id))
+          .first() as ProviderPoints | null;
+
+        return {
+          ...provider,
+          veniceApiKey: undefined,
+          points: points?.points || 0,
+          totalPrompts: points?.totalPrompts || 0,
+        };
+      })
+    );
+
+    return providerStats
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 10);
   },
 });
 
 // Get real-time usage metrics
 export const getUsageMetrics = query({
   args: {},
+  returns: v.object({
+    totalPrompts: v.number(),
+    promptsLast24h: v.number(),
+    promptsLast7days: v.number(),
+    totalTokens: v.number(),
+    avgResponseTime: v.number(),
+    modelUsage: v.record(v.string(), v.number()),
+    activeProviders: v.number(),
+  }),
   handler: async (ctx) => {
-    const usageLogs = await ctx.db.query("usageLogs").collect();
+    const usageLogs = await ctx.db.query("usageLogs").collect() as UsageLog[];
     
     // Last 24 hours
     const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
@@ -111,7 +176,7 @@ export const getUsageMetrics = query({
     const recentLogs = await ctx.db
       .query("usageLogs")
       .filter((q) => q.gte(q.field("createdAt"), oneDayAgo))
-      .collect();
+      .collect() as UsageLog[];
     
     const avgLatency = recentLogs.length > 0
       ? recentLogs.reduce((sum, log) => sum + log.latencyMs, 0) / recentLogs.length
@@ -124,7 +189,7 @@ export const getUsageMetrics = query({
       totalTokens: usageLogs.reduce((sum, log) => sum + log.promptTokens + log.completionTokens, 0),
       avgResponseTime: avgLatency,
       modelUsage,
-      activeProviders: new Set(usageLogs.map(log => log.providerId)).size,
+      activeProviders: new Set(usageLogs.map(log => log.providerId).filter(Boolean)).size,
     };
   },
 });

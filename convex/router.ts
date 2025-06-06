@@ -2,6 +2,8 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 import { v } from "convex/values";
+import { action } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 
@@ -23,9 +25,9 @@ http.route({
       }
       
       const apiKey = authHeader.substring(7);
-      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
+      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { address: apiKey });
       
-      if (!keyValidation || !keyValidation.userId) {
+      if (!keyValidation || !keyValidation.address) {
         return new Response(JSON.stringify({ error: "Invalid API key" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
@@ -37,8 +39,17 @@ http.route({
       const result = await ctx.runAction(api.inference.route, {
         prompt: message,
         model,
-        userId: keyValidation.userId,
-        sessionId: keyValidation.sessionId,
+        address: keyValidation.address,
+      });
+      
+      // Log usage metrics
+      await ctx.runMutation(api.analytics.logUsage, {
+        address: keyValidation.address,
+        model: result.model,
+        promptTokens: result.promptTokens ?? 0,
+        completionTokens: result.completionTokens ?? 0,
+        createdAt: Date.now(),
+        latencyMs: result.responseTime,
       });
       
       return new Response(JSON.stringify({
@@ -78,9 +89,9 @@ http.route({
       }
       
       const apiKey = authHeader.substring(7);
-      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
+      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { address: apiKey });
       
-      if (!keyValidation || !keyValidation.userId) {
+      if (!keyValidation || !keyValidation.address) {
         return new Response(JSON.stringify({ error: "Invalid API key" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
@@ -88,16 +99,15 @@ http.route({
       }
       
       const stats = await ctx.runQuery(api.points.getUserStats, {
-        userId: keyValidation.userId,
-        sessionId: keyValidation.sessionId,
+        address: keyValidation.address,
       });
       
       return new Response(JSON.stringify({
         balance: stats.points,
-        total_spent: stats.totalSpent,
-        last_activity: stats.lastActivity ? new Date(stats.lastActivity).toISOString() : null,
         prompts_today: stats.promptsToday,
         prompts_remaining: stats.promptsRemaining,
+        points_today: stats.pointsToday,
+        points_this_week: stats.pointsThisWeek,
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -117,12 +127,11 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     const url = new URL(request.url);
-    const userId = url.searchParams.get("userId");
-    const sessionId = url.searchParams.get("sessionId");
+    const address = url.searchParams.get("address");
 
-    if (!userId && !sessionId) {
+    if (!address) {
       return new Response(
-        JSON.stringify({ error: "Either userId or sessionId is required" }),
+        JSON.stringify({ error: "Address is required" }),
         {
           status: 400,
           headers: { "Content-Type": "application/json" },
@@ -131,15 +140,12 @@ http.route({
     }
 
     const stats = await ctx.runQuery(api.points.getUserStats, {
-      userId: userId as any, // Type assertion since we know it's a valid ID
-      sessionId: sessionId || undefined,
+      address,
     });
 
     return new Response(
       JSON.stringify({
         balance: stats.points,
-        total_spent: stats.totalSpent,
-        last_activity: stats.lastActivity ? new Date(stats.lastActivity).toISOString() : null,
         prompts_today: stats.promptsToday,
         prompts_remaining: stats.promptsRemaining,
         points_today: stats.pointsToday,
@@ -152,6 +158,85 @@ http.route({
       }
     );
   }),
+});
+
+interface Provider {
+  _id: Id<"providers">;
+  totalPrompts: number;
+  uptime: number;
+  name: string;
+  veniceApiKey?: string;
+  isActive: boolean;
+  vcuBalance: number;
+  avgResponseTime: number;
+  status: "pending" | "active" | "inactive";
+  region?: string;
+  gpuType?: string;
+  description?: string;
+  lastHealthCheck?: number;
+  registrationDate: number;
+}
+
+interface VeniceResponse {
+  response: string;
+  provider: string;
+  tokens: number;
+  cost: number;
+  responseTime: number;
+  pointsAwarded: number;
+  model: string;
+}
+
+// Route requests to appropriate provider
+export const route = action({
+  args: {
+    address: v.string(),
+    model: v.optional(v.string()),
+    prompt: v.string(),
+  },
+  handler: async (ctx, args): Promise<VeniceResponse> => {
+    // Check rate limit
+    const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+      address: args.address,
+    });
+
+    if (!rateLimit.allowed) {
+      throw new Error(`Rate limit exceeded. Resets at ${new Date(rateLimit.resetTime).toISOString()}`);
+    }
+
+    // Get active providers
+    const providers = await ctx.runQuery(api.providers.listActive) as Provider[];
+
+    if (!providers || providers.length === 0) {
+      throw new Error("No active providers available");
+    }
+
+    // Select provider with lowest load
+    const selectedProvider = providers.reduce((best: Provider, current: Provider) => {
+      const bestLoad = best.totalPrompts / (best.uptime || 1);
+      const currentLoad = current.totalPrompts / (current.uptime || 1);
+      return currentLoad < bestLoad ? current : best;
+    });
+
+    // Call Venice AI
+    const response = await ctx.runAction(api.inference.route, {
+      prompt: args.prompt,
+      model: args.model,
+      address: args.address,
+    }) as VeniceResponse;
+
+    // Log usage
+    await ctx.runMutation(api.inference.logUsage, {
+      address: args.address,
+      providerId: selectedProvider._id,
+      model: args.model || "default",
+      tokens: response.tokens,
+      createdAt: Date.now(),
+      latencyMs: response.responseTime,
+    });
+
+    return response;
+  },
 });
 
 export default http;

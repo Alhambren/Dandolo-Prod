@@ -1,6 +1,34 @@
-import { mutation } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ethers } from "ethers";
+import { Id } from "./_generated/dataModel";
+
+interface Provider {
+  _id: Id<"providers">;
+  address: string;
+  name: string;
+  description?: string;
+  veniceApiKey: string;
+  vcuBalance: number;
+  isActive: boolean;
+  uptime: number;
+  totalPrompts: number;
+  registrationDate: number;
+  lastHealthCheck?: number;
+  avgResponseTime: number;
+  status: "pending" | "active" | "inactive";
+  region?: string;
+  gpuType?: string;
+}
+
+interface Points {
+  _id: Id<"points">;
+  address: string;
+  points: number;
+  promptsToday: number;
+  pointsToday: number;
+  lastEarned: number;
+}
 
 export const verifyWallet = mutation({
   args: { 
@@ -25,22 +53,6 @@ export const verifyWallet = mutation({
       throw new Error('Signature expired');
     }
 
-    // Insert wallet login record
-    const login = await ctx.db.insert('wallet_logins', { 
-      address, 
-      msg, 
-      signature, 
-      verified: false,
-      createdAt: Date.now()
-    });
-
-    // Clear sensitive data after verification
-    await ctx.db.patch(login, {
-      verified: true,
-      msg: undefined,
-      signature: undefined,
-    });
-
     // Ensure points record exists
     const existingPoints = await ctx.db
       .query('points')
@@ -50,9 +62,10 @@ export const verifyWallet = mutation({
     if (!existingPoints) {
       await ctx.db.insert('points', { 
         address, 
-        total: 0,
-        totalSpent: 0,
-        lastActivity: Date.now()
+        points: 0,
+        promptsToday: 0,
+        pointsToday: 0,
+        lastEarned: Date.now()
       });
     }
 
@@ -78,9 +91,10 @@ export const addAddressPoints = mutation({
       if (address === 'anonymous') {
         const newRecord = await ctx.db.insert('points', { 
           address, 
-          total: amount,
-          totalSpent: 0,
-          lastActivity: Date.now()
+          points: amount,
+          promptsToday: 0,
+          pointsToday: amount,
+          lastEarned: Date.now()
         });
         return amount;
       }
@@ -88,8 +102,8 @@ export const addAddressPoints = mutation({
     }
 
     await ctx.db.patch(pointsRecord._id, { 
-      total: (pointsRecord.total || 0) + amount,
-      lastActivity: Date.now()
+      points: pointsRecord.points + amount,
+      lastEarned: Date.now()
     });
 
     // Log points history
@@ -100,22 +114,132 @@ export const addAddressPoints = mutation({
       ts: Date.now() 
     });
 
-    return pointsRecord.total + amount;
+    return pointsRecord.points + amount;
   },
 });
 
-/**
- * Delete un-verified wallet_logins older than 24 h.
- * Used by cron job to clean up stale records.
- */
-export const cleanupWalletLogins = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1_000; // 24 h
-    const stale = await ctx.db.query("wallet_logins")
+// Get points for a wallet address
+export const getPoints = query({
+  args: { address: v.string() },
+  returns: v.object({
+    points: v.number(),
+    promptsToday: v.number(),
+    pointsToday: v.number(),
+    lastEarned: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const pointsRecord = await ctx.db
+      .query("points")
+      .withIndex("by_address", q => q.eq("address", args.address))
+      .first();
+
+    if (!pointsRecord) {
+      return {
+        points: 0,
+        promptsToday: 0,
+        pointsToday: 0,
+        lastEarned: 0,
+      };
+    }
+
+    return {
+      points: pointsRecord.points,
+      promptsToday: pointsRecord.promptsToday,
+      pointsToday: pointsRecord.pointsToday,
+      lastEarned: pointsRecord.lastEarned,
+    };
+  },
+});
+
+// Get wallet balance
+export const getWalletBalance = query({
+  args: { address: v.string() },
+  returns: v.object({
+    balance: v.number(),
+    prompts_today: v.number(),
+    points_today: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const usageLogs = await ctx.db
+      .query("usageLogs")
+      .filter((q) => q.eq(q.field("address"), args.address))
       .collect();
-    await Promise.all(stale
-      .filter(l => (l.createdAt ?? 0) < cutoff && l.verified !== true)
-      .map(l => ctx.db.delete(l._id)));
+
+    const pointsRecord = await ctx.db
+      .query("points")
+      .withIndex("by_address", q => q.eq("address", args.address))
+      .first();
+
+    return {
+      balance: pointsRecord?.points ?? 0,
+      prompts_today: usageLogs.filter(log => log.createdAt >= today.getTime()).length,
+      points_today: pointsRecord?.pointsToday ?? 0,
+    };
+  },
+});
+
+// Add points to wallet
+export const addPoints = mutation({
+  args: {
+    address: v.string(),
+    points: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const points = await ctx.db
+      .query("points")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first() as Points | null;
+
+    if (!points) {
+      // Create new points record
+      await ctx.db.insert("points", {
+        address: args.address,
+        points: args.points,
+        promptsToday: 0,
+        pointsToday: args.points,
+        lastEarned: Date.now(),
+      });
+    } else {
+      // Update existing points record
+      await ctx.db.patch(points._id, {
+        points: (points.points || 0) + args.points,
+        pointsToday: points.pointsToday + args.points,
+        lastEarned: Date.now(),
+      });
+    }
+
+    // Add to history
+    await ctx.db.insert("points_history", {
+      address: args.address,
+      amount: args.points,
+      reason: "Manual addition",
+      ts: Date.now(),
+    });
+  },
+});
+
+// Clean up old points history
+export const cleanupPointsHistory = internalMutation({
+  args: {},
+  returns: v.object({
+    deleted: v.number(),
+  }),
+  handler: async (ctx) => {
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    
+    const oldRecords = await ctx.db
+      .query("points_history")
+      .filter((q) => q.lt(q.field("ts"), thirtyDaysAgo))
+      .collect();
+
+    // Delete old records in batches
+    for (const record of oldRecords) {
+      await ctx.db.delete(record._id);
+    }
+
+    return { deleted: oldRecords.length };
   },
 });
