@@ -3,12 +3,8 @@ import { api } from "../../convex/_generated/api";
 import GlassCard from "./GlassCard";
 import { Id } from "../../convex/_generated/dataModel";
 
-interface ProviderProfileProps {
-  providerId: Id<"providers">;
-}
-
-export function ProviderProfile({ providerId }: ProviderProfileProps) {
-  const provider = useQuery(api.providers.getStats, { providerId });
+const ProviderProfile: React.FC<{ providerId: Id<"providers"> }> = ({ providerId }) => {
+  const provider = useQuery(api.providers.getStats, providerId ? { providerId } : "skip");
 
   if (!provider) {
     return (
@@ -97,3 +93,5 @@ export function ProviderProfile({ providerId }: ProviderProfileProps) {
     </div>
   );
 }
+
+export default ProviderProfile;
