@@ -157,7 +157,7 @@ export const getUsageMetrics = query({
     activeProviders: v.number(),
   }),
   handler: async (ctx) => {
-    const usageLogs = await ctx.db.query("usageLogs").collect() as UsageLog[];
+    const usageLogs = await ctx.db.query("usageLogs").collect();
     
     // Last 24 hours
     const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
@@ -176,7 +176,7 @@ export const getUsageMetrics = query({
     const recentLogs = await ctx.db
       .query("usageLogs")
       .filter((q) => q.gte(q.field("createdAt"), oneDayAgo))
-      .collect() as UsageLog[];
+      .collect();
     
     const avgLatency = recentLogs.length > 0
       ? recentLogs.reduce((sum, log) => sum + log.latencyMs, 0) / recentLogs.length

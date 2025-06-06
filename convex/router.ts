@@ -46,9 +46,8 @@ http.route({
       await ctx.runMutation(api.analytics.logUsage, {
         address: keyValidation.address,
         model: result.model,
-        promptTokens: result.promptTokens ?? 0,
-        completionTokens: result.completionTokens ?? 0,
-        createdAt: Date.now(),
+        promptTokens: result.tokens,
+        completionTokens: result.tokens,
         latencyMs: result.responseTime,
       });
       
