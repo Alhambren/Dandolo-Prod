@@ -26,11 +26,19 @@ export const verifyWallet = mutation({
     }
 
     // Insert wallet login record
-    await ctx.db.insert('wallet_logins', { 
+    const login = await ctx.db.insert('wallet_logins', { 
       address, 
       msg, 
       signature, 
-      issuedAt: parsed.issuedAt 
+      verified: false,
+      createdAt: Date.now()
+    });
+
+    // Clear sensitive data after verification
+    await ctx.db.patch(login, {
+      verified: true,
+      msg: undefined,
+      signature: undefined,
     });
 
     // Ensure points record exists
@@ -83,5 +91,21 @@ export const addAddressPoints = mutation({
     });
 
     return pointsRecord.total + amount;
+  },
+});
+
+/**
+ * Delete un-verified wallet_logins older than 24 h.
+ * Used by cron job to clean up stale records.
+ */
+export const cleanupWalletLogins = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1_000; // 24 h
+    const stale = await ctx.db.query("wallet_logins")
+      .collect();
+    await Promise.all(stale
+      .filter(l => (l.createdAt ?? 0) < cutoff && l.verified !== true)
+      .map(l => ctx.db.delete(l._id)));
   },
 });

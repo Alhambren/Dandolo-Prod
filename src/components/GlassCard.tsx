@@ -1,14 +1,19 @@
-import { ReactNode } from "react";
+import React from 'react';
 
 interface GlassCardProps {
-  children: ReactNode;
+  children: React.ReactNode;
   className?: string;
 }
 
-export function GlassCard({ children, className = "" }: GlassCardProps) {
+const GlassCard: React.FC<GlassCardProps> = ({ children, className = '' }) => {
   return (
-    <div className={`glass-card ${className}`}>
+    <div
+      className={`bg-white/10 backdrop-blur-lg border border-white/20 rounded-lg ${className}`}
+      data-testid="glass-card"
+    >
       {children}
     </div>
   );
-}
+};
+
+export default GlassCard;

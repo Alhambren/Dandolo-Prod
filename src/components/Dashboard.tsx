@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { GlassCard } from "./GlassCard";
-import { WalletConnection } from "./WalletConnection";
+import GlassCard from "./GlassCard";
+import { WalletConnectButton } from "./WalletConnectButton";
 import { useState } from "react";
 import { toast } from "sonner";
+import { StatCard, EmptyState } from "./ZeroState";
 
 interface DashboardProps {
   sessionId: string;
@@ -94,7 +95,7 @@ export function Dashboard({ sessionId, walletAddress, isWalletConnected, onWalle
             <p className="text-gray-300 mb-8 max-w-md mx-auto">
               Connect your wallet to access your personal dashboard and register as a provider.
             </p>
-            <WalletConnection onConnectionChange={handleWalletConnectionChange} />
+            <WalletConnectButton />
           </div>
         </GlassCard>
       </div>
@@ -103,8 +104,8 @@ export function Dashboard({ sessionId, walletAddress, isWalletConnected, onWalle
 
   if (!networkStats || !providers) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-500 border-t-neutral-200"></div>
       </div>
     );
   }
@@ -115,102 +116,128 @@ export function Dashboard({ sessionId, walletAddress, isWalletConnected, onWalle
 
   return (
     <div className="space-y-8">
-      <h1 className="text-4xl font-bold bg-gradient-to-r from-gold to-red bg-clip-text text-transparent">
-        Network Dashboard
-      </h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <GlassCard>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-red mb-2">
-              {activeProviders}
-            </div>
-            <div className="text-gray-300">Active Providers</div>
-          </div>
-        </GlassCard>
-
-        <GlassCard>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-gold mb-2">
-              {totalVCU.toLocaleString()}
-            </div>
-            <div className="text-gray-300">Total VCU</div>
-          </div>
-        </GlassCard>
-
-        <GlassCard>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-red mb-2">
-              {networkStats.totalPrompts.toLocaleString()}
-            </div>
-            <div className="text-gray-300">Total Prompts</div>
-          </div>
-        </GlassCard>
-
-        <GlassCard>
-          <div className="p-6 text-center">
-            <div className="text-3xl font-bold text-gold mb-2">
-              {avgUptime.toFixed(1)}%
-            </div>
-            <div className="text-gray-300">Avg Uptime</div>
-          </div>
-        </GlassCard>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          value={networkStats.activeProviders}
+          label="Active Providers"
+          subtitle="Online compute nodes"
+          accentClass="text-green-400"
+          tooltip="The network is not live yet; these numbers will update automatically as providers join."
+        />
+        <StatCard
+          value={networkStats.totalVCU}
+          label="Total VCU"
+          subtitle="Network compute units"
+          accentClass="text-blue-400"
+          tooltip="The network is not live yet; these numbers will update automatically as providers join."
+        />
+        <StatCard
+          value={networkStats.totalPrompts}
+          label="Total Prompts"
+          subtitle="Requests processed"
+          accentClass="text-purple-400"
+          tooltip="The network is not live yet; these numbers will update automatically as providers join."
+        />
+        <StatCard
+          value={networkStats.networkUptime}
+          label="Network Uptime"
+          subtitle="Average availability"
+          accentClass="text-yellow-400"
+          tooltip="The network is not live yet; these numbers will update automatically as providers join."
+        />
       </div>
 
-      <GlassCard>
-        <div className="p-8">
-          <h2 className="text-2xl font-bold text-white mb-6">Network Health</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold text-gold mb-4">Performance Metrics</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Network Uptime</span>
-                  <span className="text-gold font-semibold">
-                    {networkStats.networkUptime.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Prompts Today</span>
-                  <span className="text-red font-semibold">
-                    {networkStats.promptsToday}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Average Response Time</span>
-                  <span className="text-gold font-semibold">
-                    {networkStats.avgResponseTime}ms
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold text-gold mb-4">Provider Distribution</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Total Providers</span>
-                  <span className="text-white font-semibold">
-                    {providers.length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Active Providers</span>
-                  <span className="text-gold font-semibold">
-                    {activeProviders}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Total VCU Pool</span>
-                  <span className="text-red font-semibold">
-                    {totalVCU.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <GlassCard>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Top Providers</h2>
+            <a
+              href="/providers"
+              className={`text-sm text-neutral-400 transition-colors hover:text-neutral-200 ${
+                providers.length === 0 ? "pointer-events-none opacity-40" : ""
+              }`}
+            >
+              View All →
+            </a>
           </div>
-        </div>
-      </GlassCard>
+          {providers.length === 0 ? (
+            <p className="py-12 text-center text-sm text-neutral-500">
+              No providers yet — you could be the first!
+            </p>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {providers.slice(0, 5).map((provider) => (
+                <div
+                  key={provider._id}
+                  className="flex items-center justify-between rounded-lg bg-neutral-900/60 p-4"
+                >
+                  <div>
+                    <h3 className="font-medium">{provider.name}</h3>
+                    <p className="text-sm text-neutral-400">
+                      {provider.totalPrompts} prompts
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-green-400">
+                      {provider.vcuBalance} VCU
+                    </p>
+                    <p className="text-sm text-neutral-400">
+                      {provider.uptime}% uptime
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
+        <GlassCard>
+          <h2 className="text-xl font-semibold">Network Health</h2>
+          {providers.length === 0 ? (
+            <EmptyState
+              title="No providers online"
+              subtitle="Register a Venice.ai worker to appear here."
+            />
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg bg-neutral-900/60 p-4">
+                <h3 className="font-medium">Performance</h3>
+                <div className="mt-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-neutral-400">Avg Response Time</p>
+                    <p className="text-lg font-medium">
+                      {networkStats.avgResponseTime}ms
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-neutral-400">Network Uptime</p>
+                    <p className="text-lg font-medium">
+                      {networkStats.networkUptime}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg bg-neutral-900/60 p-4">
+                <h3 className="font-medium">Provider Distribution</h3>
+                <div className="mt-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-neutral-400">Active</p>
+                    <p className="text-lg font-medium">
+                      {networkStats.activeProviders}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-neutral-400">Total</p>
+                    <p className="text-lg font-medium">
+                      {networkStats.totalProviders}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </GlassCard>
+      </div>
 
       {/* Usage Stats - MVP Display */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

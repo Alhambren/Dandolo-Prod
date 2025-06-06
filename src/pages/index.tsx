@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GlassCard } from '../components/GlassCard';
+import GlassCard from '../components/GlassCard';
 import { useStats } from '../hooks/useStats';
 import { useCountdown } from '../hooks/useCountdown';
 import { Tooltip } from '../components/Tooltip';

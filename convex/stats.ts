@@ -21,35 +21,44 @@ export const getNetworkStats = query({
     activeUsers: v.number(),
   }),
   handler: async (ctx) => {
-    // Get all providers
-    const providers = await ctx.db.query('providers').collect();
-    const activeProviders = providers.filter(p => p.status === 'active');
-
-    // Get today's prompts
+    // Get real provider data
+    const providers = await ctx.db.query("providers").collect();
+    const activeProviders = providers.filter(p => p.isActive === true);
+    
+    // Get real usage data
+    const usageLogs = await ctx.db.query("usageLogs").collect();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const prompts = await ctx.db
-      .query('prompts')
-      .filter(q => q.gte(q.field('_creationTime'), today.getTime()))
-      .collect();
+    const todayUsage = usageLogs.filter(log => log.createdAt >= today.getTime());
+    
+    // Calculate real metrics
+    const totalVCU = activeProviders.reduce((sum, p) => sum + (p.vcuBalance || 0), 0);
+    const totalPrompts = usageLogs.length;
+    const avgResponseTime = usageLogs.length > 0 
+      ? Math.round(usageLogs.reduce((sum, log) => sum + (log.latencyMs || 0), 0) / usageLogs.length)
+      : 0;
+    
+    // Get unique users from last 24h
+    const last24h = Date.now() - 24 * 60 * 60 * 1000;
+    const recentLogs = usageLogs.filter(log => log.createdAt >= last24h);
+    const activeUsers = new Set([
+      ...recentLogs.filter(log => log.userId).map(log => log.userId),
+      ...recentLogs.filter(log => log.sessionId).map(log => log.sessionId)
+    ]).size;
 
-    // Get active users in last 24h
-    const last24h = new Date();
-    last24h.setHours(last24h.getHours() - 24);
-    const activeUsers = await ctx.db
-      .query('users')
-      .filter(q => q.gte(q.field('lastActive'), last24h.getTime()))
-      .collect();
+    const networkUptime = activeProviders.length > 0 
+      ? Math.round(activeProviders.reduce((sum, p) => sum + (p.uptime || 0), 0) / activeProviders.length)
+      : 0;
 
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
-      totalVCU: activeProviders.reduce((sum, p) => sum + p.vcuBalance, 0),
-      totalPrompts: prompts.length,
-      promptsToday: prompts.length,
-      avgResponseTime: activeProviders.reduce((sum, p) => sum + p.avgResponseTime, 0) / activeProviders.length || 0,
-      networkUptime: activeProviders.reduce((sum, p) => sum + p.uptime, 0) / activeProviders.length || 0,
-      activeUsers: activeUsers.length,
+      totalVCU,
+      totalPrompts,
+      promptsToday: todayUsage.length,
+      avgResponseTime,
+      networkUptime,
+      activeUsers,
     };
   },
 });
@@ -58,21 +67,24 @@ export const getNetworkStats = query({
 export const getProviderLeaderboard = query({
   args: {},
   handler: async (ctx) => {
+    // Only return providers that have real Venice.ai API keys
     const providers = await ctx.db.query("providers")
-      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .filter((q) => q.and(
+        q.eq(q.field("isActive"), true),
+        q.neq(q.field("veniceApiKey"), "venice_key_1"), // Exclude sample data
+        q.neq(q.field("veniceApiKey"), "venice_key_2"),
+        q.neq(q.field("veniceApiKey"), "venice_key_3")
+      ))
       .collect();
     
-    // Sort by VCU balance (descending)
-    const sortedProviders = providers
+    return providers
       .sort((a, b) => (b.vcuBalance || 0) - (a.vcuBalance || 0))
-      .slice(0, 10); // Top 10
-    
-    return sortedProviders.map((provider, index) => ({
-      ...provider,
-      rank: index + 1,
-      // Don't expose API key
-      veniceApiKey: undefined,
-    }));
+      .slice(0, 10)
+      .map((provider, index) => ({
+        ...provider,
+        rank: index + 1,
+        veniceApiKey: undefined, // Don't expose API keys
+      }));
   },
 });
 
@@ -84,11 +96,11 @@ export const getUsageMetrics = query({
     
     // Last 24 hours
     const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const last24h = usageLogs.filter(log => log.timestamp >= oneDayAgo);
+    const last24h = usageLogs.filter(log => Number(log.createdAt) >= oneDayAgo);
     
     // Last 7 days
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const last7days = usageLogs.filter(log => log.timestamp >= oneWeekAgo);
+    const last7days = usageLogs.filter(log => Number(log.createdAt) >= oneWeekAgo);
     
     // Model usage breakdown
     const modelUsage = usageLogs.reduce((acc, log) => {
@@ -96,14 +108,21 @@ export const getUsageMetrics = query({
       return acc;
     }, {} as Record<string, number>);
     
+    const recentLogs = await ctx.db
+      .query("usageLogs")
+      .filter((q) => q.gte(q.field("createdAt"), oneDayAgo))
+      .collect();
+    
+    const avgLatency = recentLogs.length > 0
+      ? recentLogs.reduce((sum, log) => sum + log.latencyMs, 0) / recentLogs.length
+      : 0;
+    
     return {
       totalPrompts: usageLogs.length,
       promptsLast24h: last24h.length,
       promptsLast7days: last7days.length,
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.tokens, 0),
-      avgResponseTime: usageLogs.length > 0 
-        ? Math.round(usageLogs.reduce((sum, log) => sum + log.responseTime, 0) / usageLogs.length)
-        : 0,
+      totalTokens: usageLogs.reduce((sum, log) => sum + log.promptTokens + log.completionTokens, 0),
+      avgResponseTime: avgLatency,
       modelUsage,
       activeProviders: new Set(usageLogs.map(log => log.providerId)).size,
     };

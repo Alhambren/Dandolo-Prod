@@ -17,23 +17,22 @@ export const getSystemStats = query({
     const usageLogs = await ctx.db.query("usageLogs").collect();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayUsage = usageLogs.filter(log => log.timestamp >= today.getTime());
+    const todayUsage = usageLogs.filter(log => log.createdAt >= today.getTime());
     
     const totalVCU = activeProviders.reduce((sum, p) => sum + p.vcuBalance, 0);
     const totalPrompts = providers.reduce((sum, p) => sum + p.totalPrompts, 0);
     
     // Calculate average response time
     const avgResponseTime = usageLogs.length > 0 
-      ? usageLogs.reduce((sum, log) => sum + log.responseTime, 0) / usageLogs.length 
+      ? usageLogs.reduce((sum, log) => sum + log.latencyMs, 0) / usageLogs.length 
       : 0;
 
     // Count unique active users in last 24h (anonymous count only)
     const last24h = Date.now() - 24 * 60 * 60 * 1000;
-    const recent = usageLogs.filter(log => log.timestamp >= last24h);
-    const activeUsers = new Set([
-      ...recent.filter(log => log.userId).map(log => log.userId),
-      ...recent.filter(log => log.sessionId).map(log => log.sessionId)
-    ]).size;
+    const recent = usageLogs.filter(log => log.createdAt >= last24h);
+    const activeUsers = new Set(
+      recent.filter(log => log.userId).map(log => log.userId)
+    ).size;
 
     return {
       totalProviders: providers.length,
@@ -63,10 +62,10 @@ export const getProviderAnalytics = query({
       .collect();
 
     const last24h = Date.now() - 24 * 60 * 60 * 1000;
-    const recentUsage = usageLogs.filter(log => log.timestamp >= last24h);
+    const recentUsage = usageLogs.filter(log => log.createdAt >= last24h);
 
     const avgResponseTime = usageLogs.length > 0
-      ? usageLogs.reduce((sum, log) => sum + log.responseTime, 0) / usageLogs.length
+      ? usageLogs.reduce((sum, log) => sum + log.latencyMs, 0) / usageLogs.length
       : 0;
 
     return {
@@ -75,7 +74,7 @@ export const getProviderAnalytics = query({
       totalPrompts: usageLogs.length,
       promptsLast24h: recentUsage.length,
       avgResponseTime: Math.round(avgResponseTime),
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.tokens, 0),
+      totalTokens: usageLogs.reduce((sum, log) => sum + log.promptTokens + log.completionTokens, 0),
     };
   },
 });
@@ -88,7 +87,7 @@ export const cleanupOldLogs = internalMutation({
     
     const oldLogs = await ctx.db
       .query("usageLogs")
-      .filter((q) => q.lt(q.field("timestamp"), thirtyDaysAgo))
+      .filter((q) => q.lt(q.field("createdAt"), thirtyDaysAgo))
       .collect();
 
     // Delete old logs in batches
@@ -103,21 +102,22 @@ export const cleanupOldLogs = internalMutation({
 // Log ONLY anonymous usage metrics
 export const logUsage = mutation({
   args: {
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()),
+    userId: v.id("users"),
     providerId: v.id("providers"),
-    // PRIVACY: Only metadata, NEVER content
     model: v.string(),
-    tokens: v.number(),
-    cost: v.number(),
-    responseTime: v.number(),
+    promptTokens: v.optional(v.number()),
+    completionTokens: v.optional(v.number()),
+    latencyMs: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // PRIVACY: Only store anonymous metrics
     await ctx.db.insert("usageLogs", {
-      ...args,
-      timestamp: Date.now(),
-      // NO prompt or response content stored
+      userId: args.userId,
+      providerId: args.providerId,
+      model: args.model,
+      promptTokens: args.promptTokens ?? 0,
+      completionTokens: args.completionTokens ?? 0,
+      latencyMs: args.latencyMs ?? 0,
+      createdAt: Date.now(),
     });
   },
 });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { GlassCard } from "./GlassCard";
+import GlassCard from "./GlassCard";
 import { toast } from "sonner";
 
 export function ProviderRegistration() {

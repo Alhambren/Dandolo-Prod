@@ -1,15 +1,29 @@
+import { useState } from "react";
+
 interface TooltipProps {
-  text: string;
+  content: string;
+  children: React.ReactNode;
 }
 
-export function Tooltip({ text }: TooltipProps) {
+export const Tooltip = ({ content, children }: TooltipProps) => {
+  const [isVisible, setIsVisible] = useState(false);
+
   return (
-    <div className="group relative inline-block">
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1 bg-black/90 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-        {text}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-black/90" />
+    <div className="relative inline-block">
+      <div
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+      >
+        {children}
       </div>
-      <div className="w-4 h-4 text-gray-400 cursor-help">?</div>
+      {isVisible && (
+        <div className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 transform">
+          <div className="rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-200 shadow-lg">
+            {content}
+            <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 transform rotate-45 bg-neutral-800"></div>
+          </div>
+        </div>
+      )}
     </div>
   );
-} 
+}; 

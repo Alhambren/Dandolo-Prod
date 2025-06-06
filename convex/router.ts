@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
+import { v } from "convex/values";
 
 const http = httpRouter();
 
@@ -13,30 +14,26 @@ http.route({
       const body = await request.json();
       const { message, model } = body;
       
-      // Get API key from Authorization header
       const authHeader = request.headers.get("Authorization");
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
       }
       
       const apiKey = authHeader.substring(7);
-      
-      // Validate API key
       const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
-      if (!keyValidation) {
+      
+      if (!keyValidation || !keyValidation.userId) {
         return new Response(JSON.stringify({ error: "Invalid API key" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
       }
       
-      // Update API key usage
       await ctx.runMutation(api.developers.updateApiKeyUsage, { apiKey });
       
-      // Route the inference
       const result = await ctx.runAction(api.inference.route, {
         prompt: message,
         model,
@@ -58,9 +55,7 @@ http.route({
       });
       
     } catch (error) {
-      return new Response(JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Internal server error" 
-      }), {
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
@@ -74,27 +69,24 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     try {
-      // Get API key from Authorization header
       const authHeader = request.headers.get("Authorization");
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+        return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
       }
       
       const apiKey = authHeader.substring(7);
-      
-      // Validate API key
       const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
-      if (!keyValidation) {
+      
+      if (!keyValidation || !keyValidation.userId) {
         return new Response(JSON.stringify({ error: "Invalid API key" }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
       }
       
-      // Get user stats
       const stats = await ctx.runQuery(api.points.getUserStats, {
         userId: keyValidation.userId,
         sessionId: keyValidation.sessionId,
@@ -112,13 +104,53 @@ http.route({
       });
       
     } catch (error) {
-      return new Response(JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Internal server error" 
-      }), {
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
     }
+  }),
+});
+
+http.route({
+  path: "/api/stats",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const userId = url.searchParams.get("userId");
+    const sessionId = url.searchParams.get("sessionId");
+
+    if (!userId && !sessionId) {
+      return new Response(
+        JSON.stringify({ error: "Either userId or sessionId is required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const stats = await ctx.runQuery(api.points.getUserStats, {
+      userId: userId as any, // Type assertion since we know it's a valid ID
+      sessionId: sessionId || undefined,
+    });
+
+    return new Response(
+      JSON.stringify({
+        balance: stats.points,
+        total_spent: stats.totalSpent,
+        last_activity: stats.lastActivity ? new Date(stats.lastActivity).toISOString() : null,
+        prompts_today: stats.promptsToday,
+        prompts_remaining: stats.promptsRemaining,
+        points_today: stats.pointsToday,
+        points_this_week: stats.pointsThisWeek,
+        points_history: stats.pointsHistory,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }),
 });
 

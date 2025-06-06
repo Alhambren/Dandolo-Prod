@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { GlassCard } from "./GlassCard";
+import GlassCard from "./GlassCard";
 import { toast } from "sonner";
 
 interface InferenceInterfaceProps {

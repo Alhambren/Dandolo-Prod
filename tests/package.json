@@ -1,0 +1,12 @@
+{
+  "name": "dandolo-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive test suite for Dandolo.ai",
+  "type": "module",
+  "scripts": {
+    "test": "node comprehensive-test.js"
+  },
+  "dependencies": {
+    "convex": "^1.17.4"
+  }
+} 

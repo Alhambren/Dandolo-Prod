@@ -85,9 +85,8 @@ export const route = action({
   args: {
     prompt: v.string(),
     sessionId: v.optional(v.string()),
-    userId: v.optional(v.id("users")),
+    userId: v.id("users"),
     model: v.optional(v.string()),
-    walletAddress: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{
     response: string;
@@ -138,7 +137,7 @@ export const route = action({
 
       // Award points to user (1 point per prompt, but free during MVP)
       const pointsAwarded: number = await ctx.runMutation(api.wallets.addAddressPoints, {
-        address: args.walletAddress || 'anonymous', // Fallback for non-wallet users
+        address: 'anonymous', // Fallback for non-wallet users
         amount: 1,
         reason: 'PROMPT_COMPLETION',
       });
@@ -150,14 +149,13 @@ export const route = action({
 
       // Log ONLY anonymous usage metrics - NEVER prompt content
       await ctx.runMutation(api.inference.logUsage, {
-        address: args.walletAddress,
-        sessionId: args.sessionId,
-        // PRIVACY: Only log metadata, NEVER prompt/response content
+        userId: args.userId,
+        providerId: selectedProvider._id,
         model: args.model || veniceResponse.model,
         tokens: veniceResponse.tokens,
-        cost: veniceResponse.cost,
-        timestamp: Date.now(),
-        responseTime,
+        createdAt: Date.now(),
+        latencyMs: responseTime,
+        sessionId: args.sessionId,
       });
 
       // Track successful model usage
@@ -192,25 +190,25 @@ export const route = action({
 
 export const logUsage = mutation({
   args: {
-    address: v.optional(v.string()),
-    sessionId: v.optional(v.string()),
+    userId: v.id("users"),
+    providerId: v.id("providers"),
     model: v.string(),
     tokens: v.number(),
-    cost: v.number(),
-    timestamp: v.number(),
-    responseTime: v.number(),
+    createdAt: v.number(),
+    latencyMs: v.number(),
+    sessionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // PRIVACY: Only store anonymous metrics, never content
     await ctx.db.insert("usageLogs", {
-      address: args.address,
-      sessionId: args.sessionId,
-      // NO prompt or response content stored
+      userId: args.userId,
+      providerId: args.providerId,
       model: args.model,
-      tokens: args.tokens,
-      cost: args.cost,
-      timestamp: args.timestamp,
-      responseTime: args.responseTime,
+      promptTokens: args.tokens,
+      completionTokens: args.tokens,
+      createdAt: args.createdAt,
+      latencyMs: args.latencyMs,
+      sessionId: args.sessionId,
     });
   },
 });

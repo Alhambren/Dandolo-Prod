@@ -11,11 +11,11 @@ crons.interval(
   {}
 );
 
-// Calculate daily provider points based on VCU contribution
+// Daily VCU check and point allocation for providers
 crons.interval(
-  "calculate provider points",
+  "daily VCU check",
   { hours: 24 },
-  internal.points.calculateDailyProviderPoints,
+  internal.points.dailyVCUCheck,
   {}
 );
 
@@ -25,6 +25,16 @@ crons.interval(
   { hours: 24 * 7 }, // Weekly cleanup
   internal.analytics.cleanupOldLogs,
   {}
+);
+
+/**
+ * Delete un-verified wallet_logins older than 24 h.
+ * Runs every 6 hours.
+ */
+crons.interval(
+  "cleanup wallet logins",
+  { hours: 6 },
+  internal.cleanup.cleanupWalletLogins
 );
 
 export default crons;

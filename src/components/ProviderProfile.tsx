@@ -1,6 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { GlassCard } from "./GlassCard";
+import GlassCard from "./GlassCard";
 import { Id } from "../../convex/_generated/dataModel";
 
 interface ProviderProfileProps {
