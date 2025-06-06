@@ -31,7 +31,7 @@ export const getSystemStats = query({
     const last24h = Date.now() - 24 * 60 * 60 * 1000;
     const recent = usageLogs.filter(log => log.createdAt >= last24h);
     const activeUsers = new Set(
-      recent.filter(log => log.userId).map(log => log.userId)
+      recent.filter(log => log.address).map(log => log.address)
     ).size;
 
     return {
@@ -102,7 +102,7 @@ export const cleanupOldLogs = internalMutation({
 // Log ONLY anonymous usage metrics
 export const logUsage = mutation({
   args: {
-    userId: v.id("users"),
+    address: v.optional(v.string()),
     providerId: v.id("providers"),
     model: v.string(),
     promptTokens: v.optional(v.number()),
@@ -111,7 +111,7 @@ export const logUsage = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("usageLogs", {
-      userId: args.userId,
+      address: args.address,
       providerId: args.providerId,
       model: args.model,
       promptTokens: args.promptTokens ?? 0,

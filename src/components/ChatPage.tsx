@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { useAccount } from 'wagmi';
 import GlassCard from './GlassCard';
 
 const ChatPage: React.FC = () => {
+  const { address } = useAccount();
   const [message, setMessage] = useState('');
-  const userStats = useQuery(api.points.getUserStats, { userId: undefined, sessionId: 'test-session' });
+  
+  // Queries
+  const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -13,8 +13,6 @@ export function WalletConnectButton() {
   const verifyWallet = useMutation(api.wallets.verifyWallet)
   const [isVerified, setIsVerified] = useState(false)
 
-  console.log('WalletConnectButton state:', { address, isVerified })
-
   useEffect(() => {
     const verifyConnection = async () => {
       if (address && !isVerified) {
@@ -32,10 +30,8 @@ export function WalletConnectButton() {
           })
           
           setIsVerified(true)
-          console.log('Wallet verified successfully!')
           toast.success("Wallet verified!")
         } catch (error) {
-          console.error('Verification error:', error)
           toast.error("Wallet verification failed")
           disconnect()
         }
@@ -43,7 +39,7 @@ export function WalletConnectButton() {
     }
     
     verifyConnection()
-  }, [address]) // Trigger when address changes
+  }, [address, isVerified, signMessageAsync, verifyWallet, disconnect])
 
   if (address) {
     return (

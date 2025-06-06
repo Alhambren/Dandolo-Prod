@@ -5,19 +5,23 @@ import { Id } from "./_generated/dataModel";
 
 // Get user's total points
 export const getUserPoints = query({
-  args: { userId: v.id("users") },
+  args: { 
+    address: v.string()
+  },
   returns: v.number(),
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    return user?.points || 0;
+    const points = await ctx.db
+      .query("points")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+    return points?.total || 0;
   },
 });
 
 // Get user's stats including points history
 export const getUserStats = query({
   args: { 
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()) 
+    address: v.string()
   },
   returns: v.object({
     points: v.number(),
@@ -34,64 +38,46 @@ export const getUserStats = query({
     })),
   }),
   handler: async (ctx, args) => {
-    let userPoints;
+    let points = 0;
+    let totalSpent = 0;
+    let lastActivity: number | undefined;
+    let todayUsage = 0;
     
-    if (args.userId) {
-      userPoints = await ctx.db
-        .query("userPoints")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
-        .first();
-    } else if (args.sessionId) {
-      userPoints = await ctx.db
-        .query("userPoints")
-        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId!))
-        .first();
-    }
-
-    // Get today's usage
+    // Get today's start timestamp
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStart = today.getTime();
-    const todayEnd = todayStart + 24 * 60 * 60 * 1000;
-
-    let todayUsage = 0;
-    if (args.userId) {
-      const logs = await ctx.db
-        .query("usageLogs")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
-        .filter((q) => q.and(
-          q.gte(q.field("createdAt"), todayStart),
-          q.lt(q.field("createdAt"), todayEnd)
-        ))
-        .collect();
-      todayUsage = logs.length;
-    } else if (args.sessionId) {
-      const logs = await ctx.db
-        .query("usageLogs")
-        .filter((q) => q.and(
-          q.eq(q.field("sessionId"), args.sessionId!),
-          q.gte(q.field("createdAt"), todayStart),
-          q.lt(q.field("createdAt"), todayEnd)
-        ))
-        .collect();
-      todayUsage = logs.length;
+    
+    // Get points from points table
+    const pointsRecord = await ctx.db
+      .query("points")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+    
+    if (pointsRecord) {
+      points = pointsRecord.total;
+      totalSpent = pointsRecord.totalSpent || 0;
+      lastActivity = pointsRecord.lastActivity;
     }
 
-    // Get points history
-    const pointsHistory: Array<{date: string, points: number, source: string}> = [];
+    // Get today's usage from points_history
+    const todayUsageArr = await ctx.db
+      .query("points_history")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .filter((q) => q.gte(q.field("ts"), todayStart))
+      .collect();
 
-    const points = userPoints?.points || 0;
-    const totalSpent = userPoints?.totalSpent || 0;
-    
+    todayUsage = todayUsageArr.length;
+
     return {
       points,
       totalSpent,
-      lastActivity: userPoints?.lastActivity,
+      lastActivity,
       promptsToday: todayUsage,
       promptsRemaining: Math.max(0, 50 - todayUsage),
-      pointsToday: todayUsage, // Points earned today
-      pointsThisWeek: points, // For now, same as total
-      pointsHistory,
+      pointsToday: todayUsage,
+      pointsThisWeek: points,
+      pointsHistory: [],
     };
   },
 });
@@ -99,22 +85,36 @@ export const getUserStats = query({
 // Add points to a user
 export const addUserPoints = internalMutation({
   args: {
-    userId: v.id("users"),
+    address: v.string(),
     amount: v.number(),
     source: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return;
+    const points = await ctx.db
+      .query("points")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
     
-    const newPoints = (user.points || 0) + args.amount;
-    await ctx.db.patch(args.userId, { points: newPoints });
+    if (points) {
+      const newTotal = (points.total || 0) + args.amount;
+      await ctx.db.patch(points._id, { 
+        total: newTotal,
+        lastActivity: Date.now()
+      });
+    } else {
+      await ctx.db.insert("points", {
+        address: args.address,
+        total: args.amount,
+        totalSpent: 0,
+        lastActivity: Date.now()
+      });
+    }
     
-    await ctx.db.insert("pointTransactions", {
-      userId: args.userId,
+    await ctx.db.insert("points_history", {
+      address: args.address,
       amount: args.amount,
-      source: args.source,
-      timestamp: Date.now(),
+      reason: args.source,
+      ts: Date.now()
     });
   },
 });

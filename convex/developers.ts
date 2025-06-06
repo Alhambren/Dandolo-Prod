@@ -4,8 +4,7 @@ import { query, mutation } from "./_generated/server";
 // Generate API key for developers
 export const generateApiKey = mutation({
   args: {
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()),
+    address: v.string(),
     name: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -14,8 +13,7 @@ export const generateApiKey = mutation({
     
     // Store API key in database
     await ctx.db.insert("apiKeys", {
-      userId: args.userId,
-      sessionId: args.sessionId,
+      address: args.address,
       key: apiKey,
       name: args.name || "Default API Key",
       isActive: true,
@@ -31,27 +29,16 @@ export const generateApiKey = mutation({
 // Get user's API keys
 export const getUserApiKeys = query({
   args: {
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()),
+    address: v.string(),
   },
   handler: async (ctx, args) => {
-    let apiKeys;
-    
-    if (args.userId) {
-      apiKeys = await ctx.db
-        .query("apiKeys")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .collect();
-    } else if (args.sessionId) {
-      apiKeys = await ctx.db
-        .query("apiKeys")
-        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-        .collect();
-    }
-
+    const apiKeys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .collect();
     return apiKeys?.map(keyRecord => ({
       ...keyRecord,
-      apiKey: keyRecord.key.substring(0, 8) + "..." + keyRecord.key.substring(-4), // Mask the key
+      apiKey: keyRecord.key.substring(0, 8) + "..." + keyRecord.key.substring(keyRecord.key.length - 4), // Mask the key
     })) || [];
   },
 });
@@ -70,8 +57,7 @@ export const validateApiKey = query({
     }
 
     return {
-      userId: keyRecord.userId,
-      sessionId: keyRecord.sessionId,
+      address: keyRecord.address,
       name: keyRecord.name,
     };
   },

@@ -84,8 +84,7 @@ function calculateCost(tokens: number, model: string): number {
 export const route = action({
   args: {
     prompt: v.string(),
-    sessionId: v.optional(v.string()),
-    userId: v.id("users"),
+    address: v.optional(v.string()),
     model: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{
@@ -99,8 +98,7 @@ export const route = action({
   }> => {
     // Check rate limit first (50 prompts/day during MVP)
     const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
-      userId: args.userId,
-      sessionId: args.sessionId,
+      address: args.address,
     });
 
     if (!rateLimitCheck.allowed) {
@@ -137,7 +135,7 @@ export const route = action({
 
       // Award points to user (1 point per prompt, but free during MVP)
       const pointsAwarded: number = await ctx.runMutation(api.wallets.addAddressPoints, {
-        address: 'anonymous', // Fallback for non-wallet users
+        address: args.address || 'anonymous', // Fallback for non-wallet users
         amount: 1,
         reason: 'PROMPT_COMPLETION',
       });
@@ -149,13 +147,12 @@ export const route = action({
 
       // Log ONLY anonymous usage metrics - NEVER prompt content
       await ctx.runMutation(api.inference.logUsage, {
-        userId: args.userId,
+        address: args.address,
         providerId: selectedProvider._id,
         model: args.model || veniceResponse.model,
         tokens: veniceResponse.tokens,
         createdAt: Date.now(),
         latencyMs: responseTime,
-        sessionId: args.sessionId,
       });
 
       // Track successful model usage
@@ -190,25 +187,22 @@ export const route = action({
 
 export const logUsage = mutation({
   args: {
-    userId: v.id("users"),
-    providerId: v.id("providers"),
+    address: v.string(),
+    providerId: v.optional(v.id("providers")),
     model: v.string(),
     tokens: v.number(),
     createdAt: v.number(),
     latencyMs: v.number(),
-    sessionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // PRIVACY: Only store anonymous metrics, never content
     await ctx.db.insert("usageLogs", {
-      userId: args.userId,
+      address: args.address,
       providerId: args.providerId,
       model: args.model,
       promptTokens: args.tokens,
-      completionTokens: args.tokens,
-      createdAt: args.createdAt,
+      completionTokens: 0,
       latencyMs: args.latencyMs,
-      sessionId: args.sessionId,
+      createdAt: args.createdAt,
     });
   },
 });

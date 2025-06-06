@@ -60,12 +60,7 @@ export const registerProvider = mutation({
       throw new Error("Not authenticated");
     }
 
-    const userId = await ctx.db.insert("users", {
-      name: args.name,
-    });
-
     const providerId = await ctx.db.insert("providers", {
-      userId,
       address: args.address,
       name: args.name,
       description: args.description,

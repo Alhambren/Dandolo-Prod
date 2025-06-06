@@ -74,6 +74,16 @@ export const addAddressPoints = mutation({
       .unique();
 
     if (!pointsRecord) {
+      // Create new points record for anonymous users
+      if (address === 'anonymous') {
+        const newRecord = await ctx.db.insert('points', { 
+          address, 
+          total: amount,
+          totalSpent: 0,
+          lastActivity: Date.now()
+        });
+        return amount;
+      }
       throw new Error('No points record found for address');
     }
 

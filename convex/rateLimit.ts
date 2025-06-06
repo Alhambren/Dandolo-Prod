@@ -4,8 +4,7 @@ import { query, mutation } from "./_generated/server";
 // Check if user has exceeded rate limits
 export const checkRateLimit = mutation({
   args: {
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()),
+    address: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const today = new Date();
@@ -14,21 +13,11 @@ export const checkRateLimit = mutation({
 
     // Get user's usage today
     let usageToday;
-    if (args.userId) {
+    if (args.address) {
       usageToday = await ctx.db
         .query("usageLogs")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
+        .withIndex("by_address", (q) => q.eq("address", args.address!))
         .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
-        .collect();
-    } else if (args.sessionId) {
-      usageToday = await ctx.db
-        .query("usageLogs")
-        .filter((q) => 
-          q.and(
-            q.eq(q.field("sessionId"), args.sessionId),
-            q.gte(q.field("createdAt"), todayTimestamp)
-          )
-        )
         .collect();
     } else {
       return { allowed: false, remaining: 0, resetTime: todayTimestamp + 24 * 60 * 60 * 1000 };
@@ -49,8 +38,7 @@ export const checkRateLimit = mutation({
 // Get current rate limit status
 export const getRateLimitStatus = query({
   args: {
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()),
+    address: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const today = new Date();
@@ -58,21 +46,11 @@ export const getRateLimitStatus = query({
     const todayTimestamp = today.getTime();
 
     let usageToday;
-    if (args.userId) {
+    if (args.address) {
       usageToday = await ctx.db
         .query("usageLogs")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
+        .withIndex("by_address", (q) => q.eq("address", args.address!))
         .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
-        .collect();
-    } else if (args.sessionId) {
-      usageToday = await ctx.db
-        .query("usageLogs")
-        .filter((q) => 
-          q.and(
-            q.eq(q.field("sessionId"), args.sessionId),
-            q.gte(q.field("createdAt"), todayTimestamp)
-          )
-        )
         .collect();
     } else {
       return { current: 0, remaining: 50, resetTime: todayTimestamp + 24 * 60 * 60 * 1000 };

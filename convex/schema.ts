@@ -27,18 +27,16 @@ const applicationTables = {
   }).index("by_address", ["address"]),
 
   usageLogs: defineTable({
-    userId: v.id("users"),
-    providerId: v.id("providers"),
+    address: v.string(),
+    providerId: v.optional(v.id("providers")),
     model: v.string(),
     promptTokens: v.number(),
     completionTokens: v.number(),
     latencyMs: v.number(),
     createdAt: v.number(),
-    sessionId: v.optional(v.string()),
   })
     .index("by_provider", ["providerId"])
-    .index("by_user", ["userId"])
-    .index("by_session", ["sessionId"]),
+    .index("by_address", ["address"]),
 
   providers: defineTable({
     address: v.string(),
@@ -102,8 +100,7 @@ const applicationTables = {
     .index("by_active", ["isActive"]),
 
   apiKeys: defineTable({
-    userId: v.optional(v.id("users")),
-    sessionId: v.optional(v.string()),
+    address: v.string(),
     key: v.string(),
     name: v.optional(v.string()),
     usageCount: v.number(),
@@ -111,8 +108,7 @@ const applicationTables = {
     isActive: v.boolean(),
     createdAt: v.number(),
   })
-    .index("by_user", ["userId"])
-    .index("by_session", ["sessionId"])
+    .index("by_address", ["address"])
     .index("by_active", ["isActive"])
     .index("by_key", ["key"]),
 
