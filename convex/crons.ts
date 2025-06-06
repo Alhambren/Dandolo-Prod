@@ -27,14 +27,4 @@ crons.interval(
   {}
 );
 
-/**
- * Delete un-verified wallet_logins older than 24 h.
- * Runs every 6 hours.
- */
-crons.interval(
-  "cleanup wallet logins",
-  { hours: 6 },
-  internal.cleanup.cleanupWalletLogins
-);
-
 export default crons;

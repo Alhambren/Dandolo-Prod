@@ -16,7 +16,6 @@ import type {
 import type * as analytics from "../analytics.js";
 import type * as api_ from "../api.js";
 import type * as auth from "../auth.js";
-import type * as cleanup from "../cleanup.js";
 import type * as crons from "../crons.js";
 import type * as developers from "../developers.js";
 import type * as http from "../http.js";
@@ -41,7 +40,6 @@ declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   api: typeof api_;
   auth: typeof auth;
-  cleanup: typeof cleanup;
   crons: typeof crons;
   developers: typeof developers;
   http: typeof http;

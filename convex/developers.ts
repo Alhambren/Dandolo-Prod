@@ -19,7 +19,7 @@ export const generateApiKey = mutation({
       isActive: true,
       createdAt: Date.now(),
       lastUsed: undefined,
-      usageCount: 0,
+      totalUsage: 0,
     });
 
     return apiKey;
@@ -38,18 +38,20 @@ export const getUserApiKeys = query({
       .collect();
     return apiKeys?.map(keyRecord => ({
       ...keyRecord,
-      apiKey: keyRecord.key.substring(0, 8) + "..." + keyRecord.key.substring(keyRecord.key.length - 4), // Mask the key
+      key: keyRecord.key.substring(0, 8) + "..." + keyRecord.key.substring(keyRecord.key.length - 4), // Mask the key
     })) || [];
   },
 });
 
 // Validate API key (for API requests)
 export const validateApiKey = query({
-  args: { apiKey: v.string() },
+  args: { 
+    address: v.string(),
+  },
   handler: async (ctx, args) => {
     const keyRecord = await ctx.db
       .query("apiKeys")
-      .withIndex("by_key", (q) => q.eq("key", args.apiKey))
+      .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
     if (!keyRecord || !keyRecord.isActive) {
@@ -75,7 +77,7 @@ export const updateApiKeyUsage = mutation({
     if (keyRecord) {
       await ctx.db.patch(keyRecord._id, {
         lastUsed: Date.now(),
-        usageCount: keyRecord.usageCount + 1,
+        totalUsage: keyRecord.totalUsage + 1,
       });
     }
   },
@@ -97,7 +99,7 @@ export const getSdkStats = query({
   handler: async (ctx) => {
     const apiKeys = await ctx.db.query("apiKeys").collect();
     const activeKeys = apiKeys.filter(key => key.isActive);
-    const totalUsage = apiKeys.reduce((sum, key) => sum + key.usageCount, 0);
+    const totalUsage = apiKeys.reduce((sum, key) => sum + key.totalUsage, 0);
     
     const last30Days = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const recentKeys = apiKeys.filter(key => key.createdAt > last30Days);

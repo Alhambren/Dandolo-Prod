@@ -187,8 +187,8 @@ export const route = action({
 
 export const logUsage = mutation({
   args: {
-    address: v.string(),
-    providerId: v.optional(v.id("providers")),
+    address: v.optional(v.string()),
+    providerId: v.id("providers"),
     model: v.string(),
     tokens: v.number(),
     createdAt: v.number(),
