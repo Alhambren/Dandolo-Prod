@@ -35,6 +35,7 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     veniceApiKey: v.string(),
+    apiKeyHash: v.string(),
     vcuBalance: v.number(),
     isActive: v.boolean(),
     uptime: v.number(),
@@ -47,7 +48,8 @@ export default defineSchema({
     gpuType: v.optional(v.string()),
   })
     .index("by_active", ["isActive"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_api_key_hash", ["apiKeyHash"]),
 
   providerPoints: defineTable({
     providerId: v.id("providers"),
