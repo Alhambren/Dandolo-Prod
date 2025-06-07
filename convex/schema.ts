@@ -47,4 +47,12 @@ export default defineSchema({
     pointsToday: v.number(),
     lastEarned: v.number(),
   }).index("by_address", ["address"]),
+
+  healthChecks: defineTable({
+    providerId: v.id("providers"),
+    timestamp: v.number(),
+    status: v.union(v.literal("success"), v.literal("failure")),
+    responseTime: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  }).index("by_provider", ["providerId"]),
 });
