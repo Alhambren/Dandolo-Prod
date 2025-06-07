@@ -148,7 +148,8 @@ export const route = action({
 
       // Log ONLY anonymous usage metrics - NEVER prompt content
       await ctx.runMutation(api.inference.logUsage, {
-        address: args.address,
+        // If the caller didn't provide an address, record usage as anonymous
+        address: args.address || 'anonymous',
         providerId: selectedProvider._id,
         model: args.model || veniceResponse.model,
         tokens: veniceResponse.tokens,
