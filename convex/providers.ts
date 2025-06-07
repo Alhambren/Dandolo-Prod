@@ -21,60 +21,11 @@ export const validateVeniceApiKey = action({
   handler: async (ctx, args) => {
     console.log("Starting Venice.ai API key validation...");
     
-    // List of possible Venice.ai endpoints to try
-    const endpoints = [
-      "https://api.venice.ai/v1/models",
-      "https://api.venice.ai/api/v1/models",
-      "https://api.venice.ai/models",
-      "https://api.venice.ai/v1/account",
-      "https://api.venice.ai/api/v1/account",
-      "https://api.venice.ai/v1/account/balance",
-      "https://api.venice.ai/api/v1/account/balance",
-    ];
-
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying endpoint: ${endpoint}`);
-        const response = await fetch(endpoint, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${args.apiKey}`,
-            "Accept": "application/json",
-          },
-        });
-
-        console.log(`Response status for ${endpoint}: ${response.status}`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`Success! Response from ${endpoint}:`, data);
-          
-          // Extract balance if available
-          let balance = 1000; // Default
-          if (data.balance !== undefined) {
-            balance = data.balance;
-          } else if (data.credits !== undefined) {
-            balance = data.credits;
-          } else if (data.vcu !== undefined) {
-            balance = data.vcu;
-          }
-          
-          return {
-            isValid: true,
-            balance: balance,
-            currency: data.currency || "VCU",
-          };
-        }
-      } catch (error) {
-        console.log(`Failed for ${endpoint}:`, error);
-        continue;
-      }
-    }
-
-    // If all endpoints fail, try a chat completion as final validation
+    // The working endpoint from inference.ts is https://api.venice.ai/api/v1/chat/completions
+    // Use this for validation with a minimal test request
     try {
-      console.log("Trying chat completion endpoint for validation...");
-      const response = await fetch("https://api.venice.ai/v1/chat/completions", {
+      console.log("Validating API key with chat completion endpoint...");
+      const response = await fetch("https://api.venice.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${args.apiKey}`,
@@ -89,28 +40,43 @@ export const validateVeniceApiKey = action({
         }),
       });
 
-      console.log(`Chat completion response status: ${response.status}`);
+      console.log(`Response status: ${response.status}`);
       
       if (response.ok) {
         const data = await response.json();
-        console.log("Chat completion successful:", data);
+        console.log("Validation successful!");
         
-        // Extract usage info if available
-        const tokensUsed = data.usage?.total_tokens || 0;
-        console.log(`Tokens used in test: ${tokensUsed}`);
+        // Venice.ai doesn't expose balance via API, so we estimate
+        // Default to 1000 VCU for new providers
+        const estimatedBalance = 1000;
         
         return {
           isValid: true,
-          balance: 1000, // Default VCU since we can't get actual balance
+          balance: estimatedBalance,
+          currency: "VCU",
+        };
+      } else if (response.status === 401) {
+        return {
+          isValid: false,
+          error: "Invalid API key - please check your Venice.ai API key",
+        };
+      } else if (response.status === 429) {
+        // Rate limited but key is valid
+        return {
+          isValid: true,
+          balance: 100, // Lower balance assumption if rate limited
           currency: "VCU",
         };
       } else {
         const errorText = await response.text();
-        console.error("Chat completion failed:", errorText);
-        throw new Error(`API validation failed: ${response.status}`);
+        console.error("Validation failed:", errorText);
+        return {
+          isValid: false,
+          error: `Venice.ai API error: ${response.status}`,
+        };
       }
     } catch (error) {
-      console.error("Final validation attempt failed:", error);
+      console.error("Validation error:", error);
       return {
         isValid: false,
         error: error instanceof Error ? error.message : "Failed to validate API key",
