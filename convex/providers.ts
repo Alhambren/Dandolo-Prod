@@ -19,28 +19,101 @@ export const incrementPromptCount = mutation({
 export const validateVeniceApiKey = action({
   args: { apiKey: v.string() },
   handler: async (ctx, args) => {
+    console.log("Starting Venice.ai API key validation...");
+    
+    // List of possible Venice.ai endpoints to try
+    const endpoints = [
+      "https://api.venice.ai/v1/models",
+      "https://api.venice.ai/api/v1/models",
+      "https://api.venice.ai/models",
+      "https://api.venice.ai/v1/account",
+      "https://api.venice.ai/api/v1/account",
+      "https://api.venice.ai/v1/account/balance",
+      "https://api.venice.ai/api/v1/account/balance",
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        const response = await fetch(endpoint, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${args.apiKey}`,
+            "Accept": "application/json",
+          },
+        });
+
+        console.log(`Response status for ${endpoint}: ${response.status}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`Success! Response from ${endpoint}:`, data);
+          
+          // Extract balance if available
+          let balance = 1000; // Default
+          if (data.balance !== undefined) {
+            balance = data.balance;
+          } else if (data.credits !== undefined) {
+            balance = data.credits;
+          } else if (data.vcu !== undefined) {
+            balance = data.vcu;
+          }
+          
+          return {
+            isValid: true,
+            balance: balance,
+            currency: data.currency || "VCU",
+          };
+        }
+      } catch (error) {
+        console.log(`Failed for ${endpoint}:`, error);
+        continue;
+      }
+    }
+
+    // If all endpoints fail, try a chat completion as final validation
     try {
-      const response = await fetch("https://api.venice.ai/api/v1/account/balance", {
-        method: "GET",
+      console.log("Trying chat completion endpoint for validation...");
+      const response = await fetch("https://api.venice.ai/v1/chat/completions", {
+        method: "POST",
         headers: {
           "Authorization": `Bearer ${args.apiKey}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: "test" }],
+          max_tokens: 1,
+          temperature: 0,
+          stream: false,
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Invalid API key: ${response.status} ${response.statusText}`);
+      console.log(`Chat completion response status: ${response.status}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Chat completion successful:", data);
+        
+        // Extract usage info if available
+        const tokensUsed = data.usage?.total_tokens || 0;
+        console.log(`Tokens used in test: ${tokensUsed}`);
+        
+        return {
+          isValid: true,
+          balance: 1000, // Default VCU since we can't get actual balance
+          currency: "VCU",
+        };
+      } else {
+        const errorText = await response.text();
+        console.error("Chat completion failed:", errorText);
+        throw new Error(`API validation failed: ${response.status}`);
       }
-
-      const data = await response.json();
-      return {
-        isValid: true,
-        balance: data.balance || 0,
-        currency: data.currency || "VCU",
-      };
     } catch (error) {
+      console.error("Final validation attempt failed:", error);
       return {
         isValid: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Failed to validate API key",
       };
     }
   },

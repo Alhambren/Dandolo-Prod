@@ -14,6 +14,8 @@ const DashboardPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [displayPoints, setDisplayPoints] = useState(0);
   const animationFrameRef = useRef<number>();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Queries
   const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
@@ -94,40 +96,44 @@ const DashboardPage: React.FC = () => {
   };
 
   const handleProviderRegistration = async () => {
-    if (!address) {
-      toast.error("Please connect your wallet first");
+    if (!providerName.trim()) {
+      setError("Please enter a provider name");
       return;
     }
 
     if (!veniceApiKey.trim()) {
-      toast.error("Please enter your Venice.ai API key");
+      setError("Please enter your Venice.ai API key");
       return;
     }
 
     setIsRegistering(true);
+    setError(null);
     
     try {
-      // Validate API key
+      console.log("Starting provider registration...");
+      console.log("API Key format:", veniceApiKey.substring(0, 5) + "...");
+      
       const validation = await validateVeniceApiKey({ apiKey: veniceApiKey });
+      console.log("Validation complete:", validation);
       
       if (!validation.isValid) {
+        console.error("Validation failed:", validation.error);
         throw new Error(validation.error || "Invalid API key");
       }
       
-      // Register provider
+      console.log("Proceeding with registration...");
       await registerProvider({
-        address,
-        name: providerName || "Anonymous Provider",
+        name: providerName,
         veniceApiKey,
+        initialBalance: validation.balance,
       });
 
-      toast.success(`Provider registered! ${validation.balance} VCU connected to network`);
-      triggerConfetti();
-      setVeniceApiKey("");
       setProviderName("");
-      
+      setVeniceApiKey("");
+      setSuccess("Provider registered successfully!");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to register provider");
+      console.error("Full registration error:", error);
+      setError(error instanceof Error ? error.message : "Failed to register provider");
     } finally {
       setIsRegistering(false);
     }
