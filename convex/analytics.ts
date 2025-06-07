@@ -74,7 +74,7 @@ export const getProviderAnalytics = query({
       totalPrompts: usageLogs.length,
       promptsLast24h: recentUsage.length,
       avgResponseTime: Math.round(avgResponseTime),
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.promptTokens + log.completionTokens, 0),
+      totalTokens: usageLogs.reduce((sum, log) => sum + log.tokens, 0),
     };
   },
 });
@@ -105,8 +105,7 @@ export const logUsage = mutation({
     address: v.optional(v.string()),
     providerId: v.id("providers"),
     model: v.string(),
-    promptTokens: v.optional(v.number()),
-    completionTokens: v.optional(v.number()),
+    tokens: v.optional(v.number()),
     latencyMs: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -114,8 +113,7 @@ export const logUsage = mutation({
       address: args.address,
       providerId: args.providerId,
       model: args.model,
-      promptTokens: args.promptTokens ?? 0,
-      completionTokens: args.completionTokens ?? 0,
+      tokens: args.tokens ?? 0,
       latencyMs: args.latencyMs ?? 0,
       createdAt: Date.now(),
     });

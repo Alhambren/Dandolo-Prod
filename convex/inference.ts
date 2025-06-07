@@ -199,8 +199,7 @@ export const logUsage = mutation({
       address: args.address,
       providerId: args.providerId,
       model: args.model,
-      promptTokens: args.tokens,
-      completionTokens: 0,
+      tokens: args.tokens,
       latencyMs: args.latencyMs,
       createdAt: args.createdAt,
     });
