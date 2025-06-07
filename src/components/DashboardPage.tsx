@@ -18,8 +18,8 @@ const DashboardPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   // Queries
-  const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
-  const userPoints = useQuery(api.points.getUserPoints, address ? { address } : "skip");
+  const userStats = useQuery(api.userPoints.getUserStats, address ? { address } : "skip");
+  const userPoints = useQuery(api.userPoints.getUserPoints, address ? { address } : "skip");
   const systemStats = useQuery(api.analytics.getSystemStats);
   const providers = useQuery(api.providers.list);
   const currentProvider = providers?.find(p => p.address === address);
@@ -38,30 +38,26 @@ const DashboardPage: React.FC = () => {
     const targetPoints = providerStats?.points || userPoints || 0;
     if (targetPoints !== displayPoints) {
       const startPoints = displayPoints;
-      const duration = 1000;
-      const startTime = performance.now();
+      const endPoints = targetPoints;
+      const duration = 1000; // 1 second
+      const startTime = Date.now();
 
-      const animate = (currentTime: number) => {
-        const elapsed = currentTime - startTime;
+      const animate = () => {
+        const now = Date.now();
+        const elapsed = now - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-        const currentPoints = startPoints + (targetPoints - startPoints) * easeOutQuart;
-        
+        const currentPoints = startPoints + (endPoints - startPoints) * easeOutQuart;
+
         setDisplayPoints(currentPoints);
 
         if (progress < 1) {
-          animationFrameRef.current = requestAnimationFrame(animate);
+          requestAnimationFrame(animate);
         }
       };
 
-      animationFrameRef.current = requestAnimationFrame(animate);
+      requestAnimationFrame(animate);
     }
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
   }, [providerStats?.points, userPoints]);
 
   const triggerConfetti = () => {

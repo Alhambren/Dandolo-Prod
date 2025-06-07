@@ -10,8 +10,8 @@ const InferenceInterface: React.FC = () => {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState<any>(null);
 
-  const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
-  const userPoints = useQuery(api.points.getUserPoints, address ? { address } : "skip");
+  const userStats = useQuery(api.userPoints.getUserStats, address ? { address } : "skip");
+  const userPoints = useQuery(api.userPoints.getUserPoints, address ? { address } : "skip");
   const routeInference = useAction(api.inference.route);
 
   const handleSubmit = async (e: React.FormEvent) => {

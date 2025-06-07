@@ -102,7 +102,7 @@ export const addAddressPoints = mutation({
     }
 
     await ctx.db.patch(pointsRecord._id, { 
-      points: pointsRecord.points + amount,
+      points: (pointsRecord.points ?? 0) + amount,
       lastEarned: Date.now()
     });
 
@@ -114,7 +114,7 @@ export const addAddressPoints = mutation({
       ts: Date.now() 
     });
 
-    return pointsRecord.points + amount;
+    return (pointsRecord.points ?? 0) + amount;
   },
 });
 
@@ -143,10 +143,10 @@ export const getPoints = query({
     }
 
     return {
-      points: pointsRecord.points,
-      promptsToday: pointsRecord.promptsToday,
-      pointsToday: pointsRecord.pointsToday,
-      lastEarned: pointsRecord.lastEarned,
+      points: pointsRecord.points ?? 0,
+      promptsToday: pointsRecord.promptsToday ?? 0,
+      pointsToday: pointsRecord.pointsToday ?? 0,
+      lastEarned: pointsRecord.lastEarned ?? 0,
     };
   },
 });
@@ -205,8 +205,8 @@ export const addPoints = mutation({
     } else {
       // Update existing points record
       await ctx.db.patch(points._id, {
-        points: (points.points || 0) + args.points,
-        pointsToday: points.pointsToday + args.points,
+        points: (points.points ?? 0) + args.points,
+        pointsToday: (points.pointsToday ?? 0) + args.points,
         lastEarned: Date.now(),
       });
     }
@@ -241,5 +241,28 @@ export const cleanupPointsHistory = internalMutation({
     }
 
     return { deleted: oldRecords.length };
+  },
+});
+
+export const getWalletStats = query({
+  args: { address: v.string() },
+  returns: v.object({
+    points: v.number(),
+    promptsToday: v.number(),
+    pointsToday: v.number(),
+    pointsThisWeek: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const points = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+
+    return {
+      points: points?.points ?? 0,
+      promptsToday: points?.promptsToday ?? 0,
+      pointsToday: points?.pointsToday ?? 0,
+      pointsThisWeek: points?.points ?? 0,
+    };
   },
 });
