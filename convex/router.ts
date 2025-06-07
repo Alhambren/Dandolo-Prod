@@ -12,64 +12,40 @@ http.route({
   path: "/api/v1/prompt",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    try {
-      const body = await request.json();
-      const { message, model } = body;
-      
-      const authHeader = request.headers.get("Authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      
-      const apiKey = authHeader.substring(7);
-      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { address: apiKey });
-      
-      if (!keyValidation || !keyValidation.address) {
-        return new Response(JSON.stringify({ error: "Invalid API key" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      
-      await ctx.runMutation(api.developers.updateApiKeyUsage, { apiKey });
-      
-      const result = await ctx.runAction(api.inference.route, {
-        prompt: message,
-        model,
-        address: keyValidation.address,
-      });
-      
-      // Log usage metrics
-      await ctx.runMutation(api.analytics.logUsage, {
-        address: keyValidation.address,
-        model: result.model,
-        promptTokens: result.tokens,
-        completionTokens: result.tokens,
-        latencyMs: result.responseTime,
-      });
-      
-      return new Response(JSON.stringify({
-        id: `prompt_${Date.now()}`,
-        text: result.response,
-        provider: result.provider,
-        tokens: result.tokens,
-        cost: result.cost,
-        response_time: result.responseTime,
-        model: result.model,
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-      
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+    const apiKey = request.headers.get("Authorization")?.split(" ")[1];
+    if (!apiKey) {
+      return new Response("Missing API key", { status: 401 });
     }
+
+    const keyValidation = await ctx.runQuery(api.providers.validateKey, { apiKey });
+    if (!keyValidation) {
+      return new Response("Invalid API key", { status: 401 });
+    }
+
+    const body = await request.json();
+    const { prompt, model } = body;
+
+    if (!prompt) {
+      return new Response("Missing prompt", { status: 400 });
+    }
+
+    const result = await ctx.runAction(api.inference.route, {
+      prompt,
+      model,
+      address: keyValidation.address,
+    });
+
+    await ctx.runMutation(api.analytics.logUsage, {
+      address: keyValidation.address,
+      providerId: keyValidation.providerId,
+      model: result.model,
+      tokens: result.tokens,
+      latencyMs: result.responseTime,
+    });
+
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" },
+    });
   }),
 });
 
@@ -78,46 +54,23 @@ http.route({
   path: "/api/v1/balance",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
-    try {
-      const authHeader = request.headers.get("Authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      
-      const apiKey = authHeader.substring(7);
-      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { address: apiKey });
-      
-      if (!keyValidation || !keyValidation.address) {
-        return new Response(JSON.stringify({ error: "Invalid API key" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      
-      const stats = await ctx.runQuery(api.points.getUserStats, {
-        address: keyValidation.address,
-      });
-      
-      return new Response(JSON.stringify({
-        balance: stats.points,
-        prompts_today: stats.promptsToday,
-        prompts_remaining: stats.promptsRemaining,
-        points_today: stats.pointsToday,
-        points_this_week: stats.pointsThisWeek,
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-      
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+    const apiKey = request.headers.get("Authorization")?.split(" ")[1];
+    if (!apiKey) {
+      return new Response("Missing API key", { status: 401 });
     }
+
+    const keyValidation = await ctx.runQuery(api.providers.validateKey, { apiKey });
+    if (!keyValidation) {
+      return new Response("Invalid API key", { status: 401 });
+    }
+
+    const metrics = await ctx.runQuery(api.stats.getUsageMetrics, {
+      address: keyValidation.address,
+    });
+
+    return new Response(JSON.stringify(metrics), {
+      headers: { "Content-Type": "application/json" },
+    });
   }),
 });
 
@@ -187,54 +140,64 @@ interface VeniceResponse {
 }
 
 // Route requests to appropriate provider
-export const route = action({
-  args: {
-    address: v.string(),
-    model: v.optional(v.string()),
-    prompt: v.string(),
-  },
-  handler: async (ctx, args): Promise<VeniceResponse> => {
-    // Check rate limit
-    const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
-      address: args.address,
-    });
+export const route = httpAction({
+  handler: async (ctx, request) => {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const method = request.method;
 
-    if (!rateLimit.allowed) {
-      throw new Error(`Rate limit exceeded. Resets at ${new Date(rateLimit.resetTime).toISOString()}`);
+    // API key validation
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response("Missing or invalid API key", { status: 401 });
     }
 
-    // Get active providers
-    const providers = await ctx.runQuery(api.providers.listActive) as Provider[];
-
-    if (!providers || providers.length === 0) {
-      throw new Error("No active providers available");
+    const apiKey = authHeader.slice(7);
+    const keyValidation = await ctx.runQuery(api.providers.validateKey, { apiKey });
+    if (!keyValidation.valid) {
+      return new Response("Invalid API key", { status: 401 });
     }
 
-    // Select provider with lowest load
-    const selectedProvider = providers.reduce((best: Provider, current: Provider) => {
-      const bestLoad = best.totalPrompts / (best.uptime || 1);
-      const currentLoad = current.totalPrompts / (current.uptime || 1);
-      return currentLoad < bestLoad ? current : best;
-    });
+    // Route handling
+    if (path === "/api/v1/prompt" && method === "POST") {
+      const body = await request.json();
+      const { prompt, model } = body;
 
-    // Call Venice AI
-    const response = await ctx.runAction(api.inference.route, {
-      prompt: args.prompt,
-      model: args.model,
-      address: args.address,
-    }) as VeniceResponse;
+      if (!prompt) {
+        return new Response("Missing prompt", { status: 400 });
+      }
 
-    // Log usage
-    await ctx.runMutation(api.inference.logUsage, {
-      address: args.address,
-      providerId: selectedProvider._id,
-      model: args.model || "default",
-      tokens: response.tokens,
-      createdAt: Date.now(),
-      latencyMs: response.responseTime,
-    });
+      const result = await ctx.runAction(api.inference.route, {
+        prompt,
+        model,
+        address: keyValidation.address,
+      });
 
-    return response;
+      // Log usage
+      await ctx.runMutation(api.analytics.logUsage, {
+        address: keyValidation.address,
+        providerId: keyValidation.providerId,
+        model: result.model,
+        tokens: result.tokens,
+        latencyMs: result.responseTime,
+      });
+
+      return new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (path === "/api/v1/balance" && method === "GET") {
+      const stats = await ctx.runQuery(api.stats.getUsageMetrics, {
+        address: keyValidation.address,
+      });
+
+      return new Response(JSON.stringify(stats), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response("Not found", { status: 404 });
   },
 });
 
