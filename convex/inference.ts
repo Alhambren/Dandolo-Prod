@@ -88,67 +88,36 @@ export const route = action({
     address: v.optional(v.string()),
     model: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{
-    response: string;
-    provider: string;
-    tokens: number;
-    cost: number;
-    responseTime: number;
-    pointsAwarded: number;
-    model: string;
-  }> => {
-    // Check rate limit first (50 prompts/day during MVP)
+  handler: async (ctx, args) => {
+    // Rate limit check
     const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
       address: args.address,
     });
 
     if (!rateLimitCheck.allowed) {
-      throw new Error(`Daily limit reached (${rateLimitCheck.current}/50 prompts). Try again tomorrow!`);
+      throw new Error(`Daily limit reached (${rateLimitCheck.current}/50)`);
     }
 
-    // Get active providers with API keys (internal query)
+    // Get active providers
     const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-    
+
     if (providers.length === 0) {
-      throw new Error("No providers available at the moment");
+      throw new Error("No providers available");
     }
 
-    // Select best provider based on model if specified
-    let selectedProvider;
-    if (args.model && args.model !== "auto") {
-      // Try to find a provider that supports the requested model
-      selectedProvider = providers.find((p: any) => p.name.toLowerCase().includes(args.model!.toLowerCase())) 
-        || providers[Math.floor(Math.random() * providers.length)];
-    } else {
-      // Random selection for auto mode
-      selectedProvider = providers[Math.floor(Math.random() * providers.length)];
-    }
+    // Select random provider (TODO: stake-weighted)
+    const selectedProvider = providers[Math.floor(Math.random() * providers.length)];
 
-    // Call Venice.ai API through selected provider
     const startTime = Date.now();
-    let success = false;
-    let errorMessage: string | undefined;
 
     try {
+      // Call Venice.ai
       const veniceResponse = await callVeniceAI(args.prompt, selectedProvider.veniceApiKey, args.model);
       const responseTime = Date.now() - startTime;
-      success = true;
 
-      // Award points to user (1 point per prompt, but free during MVP)
-      const pointsAwarded: number = await ctx.runMutation(api.wallets.addAddressPoints, {
-        address: args.address || 'anonymous', // Fallback for non-wallet users
-        amount: 1,
-        reason: 'PROMPT_COMPLETION',
-      });
-
-      // Increment provider prompt count
-      await ctx.runMutation(api.providers.incrementPromptCount, {
-        providerId: selectedProvider._id,
-      });
-
-      // Log ONLY anonymous usage metrics - NEVER prompt content
+      // Log usage (anonymous metrics only)
       await ctx.runMutation(api.inference.logUsage, {
-        address: args.address,
+        address: args.address || 'anonymous',
         providerId: selectedProvider._id,
         model: args.model || veniceResponse.model,
         tokens: veniceResponse.tokens,
@@ -156,10 +125,9 @@ export const route = action({
         latencyMs: responseTime,
       });
 
-      // Track successful model usage
-      await ctx.runMutation(api.models.trackModelHealth, {
-        modelId: args.model || veniceResponse.model,
-        success: true,
+      // Award provider points
+      await ctx.runMutation(api.providers.incrementPromptCount, {
+        providerId: selectedProvider._id,
       });
 
       return {
@@ -168,20 +136,10 @@ export const route = action({
         tokens: veniceResponse.tokens,
         cost: veniceResponse.cost,
         responseTime,
-        pointsAwarded,
         model: args.model || veniceResponse.model,
       };
     } catch (error) {
-      errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // Track failed model usage
-      await ctx.runMutation(api.models.trackModelHealth, {
-        modelId: args.model || "unknown",
-        success: false,
-        error: errorMessage,
-      });
-
-      throw error;
+      throw new Error(`Inference failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 });
