@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { action, query, mutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 // Venice.ai API integration - direct routing
 async function callVeniceAI(prompt: string, apiKey: string, model?: string) {
