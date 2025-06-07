@@ -26,5 +26,5 @@ crons.interval(
   internal.analytics.cleanupOldLogs,
   {}
 );
-
 export default crons;
+

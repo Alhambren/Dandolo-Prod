@@ -186,7 +186,7 @@ export const getUsageMetrics = query({
       totalPrompts: usageLogs.length,
       promptsLast24h: last24h.length,
       promptsLast7days: last7days.length,
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.promptTokens + log.completionTokens, 0),
+      totalTokens: usageLogs.reduce((sum, log) => sum + log.tokens, 0),
       avgResponseTime: avgLatency,
       modelUsage,
       activeProviders: new Set(usageLogs.map(log => log.providerId).filter(Boolean)).size,

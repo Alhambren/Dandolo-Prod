@@ -23,8 +23,7 @@ export default defineSchema({
     address: v.string(),
     providerId: v.optional(v.id("providers")),
     model: v.string(),
-    promptTokens: v.number(),
-    completionTokens: v.number(),
+    tokens: v.number(),
     latencyMs: v.number(),
     createdAt: v.number(),
   })
