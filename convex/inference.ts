@@ -98,9 +98,9 @@ export const route = action({
     model: string;
   }> => {
     // Check rate limit first (50 prompts/day during MVP)
-    const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
-      address: args.address,
-    });
+      const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+        address: args.address || 'anonymous',
+      });
 
     if (!rateLimitCheck.allowed) {
       throw new Error(`Daily limit reached (${rateLimitCheck.current}/50 prompts). Try again tomorrow!`);
@@ -197,13 +197,13 @@ export const logUsage = mutation({
     latencyMs: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("usageLogs", {
-      address: args.address,
-      providerId: args.providerId,
-      model: args.model,
-      tokens: args.tokens,
-      latencyMs: args.latencyMs,
-      createdAt: args.createdAt,
-    });
+      await ctx.db.insert("usageLogs", {
+        address: args.address || 'anonymous',
+        providerId: args.providerId,
+        model: args.model,
+        tokens: args.tokens,
+        latencyMs: args.latencyMs,
+        createdAt: args.createdAt,
+      });
   },
 });
