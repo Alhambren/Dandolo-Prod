@@ -34,8 +34,9 @@ const HomePage: React.FC = () => {
                   </GlassCard>
                 ))
               ) : (
-                <GlassCard className="p-4" data-testid="no-providers">
-                  <p className="text-gray-300 text-center">No active providers yet. Be the first to contribute VCU!</p>
+                <GlassCard className="p-8 text-center" data-testid="no-providers">
+                  <p className="text-gray-300">No providers online yet</p>
+                  <p className="text-sm text-gray-400 mt-2">Be the first to contribute VCU!</p>
                 </GlassCard>
               )}
             </div>

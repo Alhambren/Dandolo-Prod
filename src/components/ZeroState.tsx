@@ -8,9 +8,11 @@ export const ZeroNumber = ({ children }: { children: React.ReactNode }) => (
 interface EmptyStateProps {
   title: string;
   subtitle?: string;
+  /** Optional call to action element (e.g. link or button) */
+  action?: React.ReactNode;
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({ title, subtitle }) => {
+export const EmptyState: React.FC<EmptyStateProps> = ({ title, subtitle, action }) => {
   return (
     <div
       className="text-center py-12"
@@ -24,6 +26,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ title, subtitle }) => {
           {subtitle}
         </p>
       )}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 };
