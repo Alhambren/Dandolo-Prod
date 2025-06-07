@@ -9,7 +9,7 @@ export type API = {
   };
   inference: {
     route: FunctionReference<"action", "public", { prompt: string; model?: string; walletAddress?: string; sessionId: string }, null, any>;
-    logUsage: FunctionReference<"mutation", "public", { address?: string; sessionId: string; model: string; tokens: number; cost: number; timestamp: number; responseTime: number }, null, void>;
+    logUsage: FunctionReference<"mutation", "public", { address?: string; providerId: Id<"providers">; model: string; tokens: number; createdAt: number; latencyMs: number }, null, void>;
     // ... other inference methods ...
   };
   wallets: {
@@ -23,6 +23,7 @@ export type API = {
   };
   analytics: {
     getSystemStats: FunctionReference<"query", "public", {}, null, { totalProviders: number; activeProviders: number; totalVCU: number; totalPrompts: number; promptsToday: number; avgResponseTime: number; networkUptime: number; activeUsers: number; }>;
+    logUsage: FunctionReference<"mutation", "public", { address?: string; providerId: Id<"providers">; model: string; tokens: number; latencyMs: number }, null, void>;
     // ... other analytics methods ...
   };
   rateLimit: {
