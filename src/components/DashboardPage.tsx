@@ -96,44 +96,40 @@ const DashboardPage: React.FC = () => {
   };
 
   const handleProviderRegistration = async () => {
-    if (!providerName.trim()) {
-      setError("Please enter a provider name");
+    if (!address) {
+      toast.error("Connect wallet first");
       return;
     }
 
     if (!veniceApiKey.trim()) {
-      setError("Please enter your Venice.ai API key");
+      toast.error("Enter Venice.ai API key");
       return;
     }
 
     setIsRegistering(true);
     setError(null);
-    
+
     try {
-      console.log("Starting provider registration...");
-      console.log("API Key format:", veniceApiKey.substring(0, 5) + "...");
-      
+      // Validate API key
       const validation = await validateVeniceApiKey({ apiKey: veniceApiKey });
-      console.log("Validation complete:", validation);
-      
+
       if (!validation.isValid) {
-        console.error("Validation failed:", validation.error);
         throw new Error(validation.error || "Invalid API key");
       }
-      
-      console.log("Proceeding with registration...");
+
+      // Register provider
       await registerProvider({
-        name: providerName,
-        veniceApiKey,
-        initialBalance: validation.balance,
+        address: address,
+        name: providerName || `Provider ${address.substring(0, 8)}`,
+        veniceApiKey: veniceApiKey.trim(),
       });
 
       setProviderName("");
       setVeniceApiKey("");
-      setSuccess("Provider registered successfully!");
+      toast.success("Provider registered successfully!");
+      triggerConfetti();
     } catch (error) {
-      console.error("Full registration error:", error);
-      setError(error instanceof Error ? error.message : "Failed to register provider");
+      setError(error instanceof Error ? error.message : "Registration failed");
     } finally {
       setIsRegistering(false);
     }

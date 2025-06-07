@@ -81,52 +81,40 @@ export const validateVeniceApiKey = action({
 // MVP: Register provider with anti-Sybil checks
 export const registerProvider = mutation({
   args: {
+    address: v.string(),
     name: v.string(),
     veniceApiKey: v.string(),
-    initialBalance: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    console.log("Starting provider registration...");
-    
-    // Get authenticated user
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated - please connect your wallet");
-    }
-
-    const walletAddress = identity.subject;
-    console.log("Registering provider for address:", walletAddress);
-    
-    // MVP RULE 1: One provider per wallet
+    // One provider per wallet
     const existingProvider = await ctx.db
       .query("providers")
-      .filter((q) => q.eq(q.field("address"), walletAddress))
+      .filter((q) => q.eq(q.field("address"), args.address))
       .first();
-      
+
     if (existingProvider) {
       throw new Error("One provider per wallet address");
     }
-    
-    // MVP RULE 2: No duplicate API keys
+
+    // No duplicate API keys
     const apiKeyHash = hashApiKey(args.veniceApiKey);
-    
     const duplicateKey = await ctx.db
       .query("providers")
       .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyHash))
       .first();
-      
+
     if (duplicateKey) {
       throw new Error("This API key is already registered");
     }
 
     // Create provider
     const providerId = await ctx.db.insert("providers", {
-      address: walletAddress,
-      name: args.name || `Provider ${walletAddress.substring(0, 8)}`,
-      description: "Venice.ai Compute Provider",
+      address: args.address,
+      name: args.name,
+      description: "Venice.ai Provider",
       veniceApiKey: args.veniceApiKey,
-      apiKeyHash: apiKeyHash, // For duplicate detection
-      vcuBalance: 0, // Not tracking VCU in MVP
+      apiKeyHash: apiKeyHash,
+      vcuBalance: 0,
       isActive: true,
       uptime: 100,
       totalPrompts: 0,
@@ -135,12 +123,10 @@ export const registerProvider = mutation({
       status: "active" as const,
     });
 
-    console.log("✅ Provider registered successfully:", providerId);
-
-    // Initialize provider points
+    // Initialize points
     await ctx.db.insert("providerPoints", {
       providerId: providerId,
-      points: 0, // No welcome bonus in MVP
+      points: 0,
       totalPrompts: 0,
       lastEarned: Date.now(),
     });
@@ -322,15 +308,24 @@ export const incrementPromptCount = mutation({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
-    if (provider) {
-      await ctx.db.patch(args.providerId, {
-        totalPrompts: provider.totalPrompts + 1,
-      });
-      
-      // Award points immediately
-      await ctx.runMutation(api.providers.awardProviderPoints, {
-        providerId: args.providerId,
-        promptsServed: 1,
+    if (!provider) return;
+
+    // Update provider stats
+    await ctx.db.patch(args.providerId, {
+      totalPrompts: provider.totalPrompts + 1,
+    });
+
+    // Award 100 points per prompt
+    const pointsRecord = await ctx.db
+      .query("providerPoints")
+      .filter((q) => q.eq(q.field("providerId"), args.providerId))
+      .first();
+
+    if (pointsRecord) {
+      await ctx.db.patch(pointsRecord._id, {
+        points: pointsRecord.points + 100,
+        totalPrompts: pointsRecord.totalPrompts + 1,
+        lastEarned: Date.now(),
       });
     }
   },
