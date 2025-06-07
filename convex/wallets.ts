@@ -22,7 +22,7 @@ interface Provider {
 }
 
 interface Points {
-  _id: Id<"points">;
+  _id: Id<"userPoints">;
   address: string;
   points: number;
   promptsToday: number;
@@ -55,12 +55,12 @@ export const verifyWallet = mutation({
 
     // Ensure points record exists
     const existingPoints = await ctx.db
-      .query('points')
+      .query('userPoints')
       .withIndex('by_address', q => q.eq('address', address))
       .unique();
 
     if (!existingPoints) {
-      await ctx.db.insert('points', { 
+      await ctx.db.insert('userPoints', { 
         address, 
         points: 0,
         promptsToday: 0,
@@ -82,14 +82,14 @@ export const addAddressPoints = mutation({
   handler: async (ctx, { address, amount, reason }) => {
     // Update total points
     const pointsRecord = await ctx.db
-      .query('points')
+      .query('userPoints')
       .withIndex('by_address', q => q.eq('address', address))
       .unique();
 
     if (!pointsRecord) {
       // Create new points record for anonymous users
       if (address === 'anonymous') {
-        const newRecord = await ctx.db.insert('points', { 
+        const newRecord = await ctx.db.insert('userPoints', { 
           address, 
           points: amount,
           promptsToday: 0,
@@ -118,36 +118,105 @@ export const addAddressPoints = mutation({
   },
 });
 
-// Get points for a wallet address
-export const getPoints = query({
+// Get user's total points
+export const getUserPoints = query({
+  args: { address: v.string() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const points = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+    return points?.points ?? 0;
+  },
+});
+
+// Get user's stats including points history
+export const getUserStats = query({
   args: { address: v.string() },
   returns: v.object({
     points: v.number(),
     promptsToday: v.number(),
     pointsToday: v.number(),
-    lastEarned: v.number(),
+    pointsThisWeek: v.number(),
+    pointsHistory: v.array(v.object({
+      ts: v.number(),
+      points: v.number(),
+    })),
   }),
   handler: async (ctx, args) => {
+    // Get points from userPoints table
     const pointsRecord = await ctx.db
-      .query("points")
-      .withIndex("by_address", q => q.eq("address", args.address))
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
-    if (!pointsRecord) {
-      return {
-        points: 0,
-        promptsToday: 0,
-        pointsToday: 0,
-        lastEarned: 0,
-      };
-    }
+    const points = pointsRecord?.points ?? 0;
+    const promptsToday = pointsRecord?.promptsToday ?? 0;
+    const pointsToday = pointsRecord?.pointsToday ?? 0;
+
+    // Get today's usage from points_history
+    const todayUsage = await ctx.db
+      .query("points_history")
+      .filter((q) => q.eq(q.field("address"), args.address))
+      .collect();
+
+    const todayUsageArr = todayUsage.map(entry => ({
+      ts: entry.ts,
+      points: entry.amount,
+    }));
 
     return {
-      points: pointsRecord.points ?? 0,
-      promptsToday: pointsRecord.promptsToday ?? 0,
-      pointsToday: pointsRecord.pointsToday ?? 0,
-      lastEarned: pointsRecord.lastEarned ?? 0,
+      points,
+      promptsToday,
+      pointsToday,
+      pointsThisWeek: points,
+      pointsHistory: todayUsageArr,
     };
+  },
+});
+
+// Add points to a user
+export const addUserPoints = internalMutation({
+  args: {
+    address: v.string(),
+    amount: v.number(),
+    source: v.union(v.literal("prompt"), v.literal("referral"), v.literal("other")),
+  },
+  handler: async (ctx, args) => {
+    const points = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+
+    if (points) {
+      const newPoints = (points.points ?? 0) + args.amount;
+      const newPromptsToday = (points.promptsToday ?? 0) + (args.source === "prompt" ? 1 : 0);
+      const newPointsToday = (points.pointsToday ?? 0) + args.amount;
+
+      await ctx.db.patch(points._id, {
+        points: newPoints,
+        promptsToday: newPromptsToday,
+        pointsToday: newPointsToday,
+        lastEarned: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("userPoints", {
+        address: args.address,
+        points: args.amount,
+        promptsToday: args.source === "prompt" ? 1 : 0,
+        pointsToday: args.amount,
+        lastEarned: Date.now(),
+      });
+    }
+
+    // Log points history
+    await ctx.db.insert("points_history", {
+      address: args.address,
+      amount: args.amount,
+      reason: args.source,
+      ts: Date.now(),
+    });
   },
 });
 
@@ -169,7 +238,7 @@ export const getWalletBalance = query({
       .collect();
 
     const pointsRecord = await ctx.db
-      .query("points")
+      .query("userPoints")
       .withIndex("by_address", q => q.eq("address", args.address))
       .first();
 
@@ -189,13 +258,13 @@ export const addPoints = mutation({
   },
   handler: async (ctx, args) => {
     const points = await ctx.db
-      .query("points")
+      .query("userPoints")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first() as Points | null;
 
     if (!points) {
       // Create new points record
-      await ctx.db.insert("points", {
+      await ctx.db.insert("userPoints", {
         address: args.address,
         points: args.points,
         promptsToday: 0,
@@ -221,29 +290,6 @@ export const addPoints = mutation({
   },
 });
 
-// Clean up old points history
-export const cleanupPointsHistory = internalMutation({
-  args: {},
-  returns: v.object({
-    deleted: v.number(),
-  }),
-  handler: async (ctx) => {
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    
-    const oldRecords = await ctx.db
-      .query("points_history")
-      .filter((q) => q.lt(q.field("ts"), thirtyDaysAgo))
-      .collect();
-
-    // Delete old records in batches
-    for (const record of oldRecords) {
-      await ctx.db.delete(record._id);
-    }
-
-    return { deleted: oldRecords.length };
-  },
-});
-
 export const getWalletStats = query({
   args: { address: v.string() },
   returns: v.object({
@@ -264,5 +310,50 @@ export const getWalletStats = query({
       pointsToday: points?.pointsToday ?? 0,
       pointsThisWeek: points?.points ?? 0,
     };
+  },
+});
+
+// Get provider points
+export const getProviderPoints = query({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    const pointsRecord = await ctx.db
+      .query("providerPoints")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .first();
+
+    return {
+      points: pointsRecord?.points ?? 0,
+      totalPrompts: pointsRecord?.totalPrompts ?? 0,
+      lastEarned: pointsRecord?.lastEarned ?? 0,
+      lastDailyReward: pointsRecord?.lastDailyReward ?? 0,
+    };
+  },
+});
+
+// Get points leaderboard
+export const getPointsLeaderboard = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 10;
+    const allProviderPoints = await ctx.db.query("providerPoints").collect();
+    
+    const leaderboard = await Promise.all(
+      allProviderPoints.map(async (pp) => {
+        const provider = await ctx.db.get(pp.providerId);
+        return {
+          providerId: pp.providerId,
+          name: provider?.name ?? "Unknown Provider",
+          points: pp.points,
+          totalPrompts: pp.totalPrompts,
+          vcuBalance: provider?.vcuBalance ?? 0,
+          lastEarned: pp.lastEarned,
+        };
+      })
+    );
+
+    return leaderboard
+      .sort((a, b) => b.points - a.points)
+      .slice(0, limit);
   },
 });

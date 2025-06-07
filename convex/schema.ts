@@ -6,21 +6,22 @@ export default defineSchema({
   ...authTables,
 
   providers: defineTable({
-    address: v.optional(v.string()),
-    name: v.optional(v.string()),
+    address: v.string(),
+    name: v.string(),
     description: v.optional(v.string()),
-    veniceApiKey: v.optional(v.string()),
+    veniceApiKey: v.string(),
     apiKeyHash: v.optional(v.string()),
-    vcuBalance: v.optional(v.number()),
-    isActive: v.optional(v.boolean()),
-    uptime: v.optional(v.number()),
-    totalPrompts: v.optional(v.number()),
-    registrationDate: v.optional(v.number()),
+    vcuBalance: v.number(),
+    isActive: v.boolean(),
+    uptime: v.number(),
+    totalPrompts: v.number(),
+    registrationDate: v.number(),
     avgResponseTime: v.optional(v.number()),
     status: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("inactive"))),
     lastHealthCheck: v.optional(v.number()),
   })
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_api_key_hash", ["apiKeyHash"]),
 
   providerPoints: defineTable({
     providerId: v.id("providers"),
@@ -30,24 +31,44 @@ export default defineSchema({
   }).index("by_provider", ["providerId"]),
 
   usageLogs: defineTable({
-    address: v.string(),
-    providerId: v.optional(v.id("providers")),
-    model: v.string(),
+    providerId: v.id("providers"),
+    userId: v.id("users"),
+    modelId: v.string(),
+    prompt: v.string(),
+    response: v.string(),
     tokens: v.number(),
-    latencyMs: v.number(),
-    createdAt: v.number(),
-  })
-    .index("by_provider", ["providerId"])
-    .index("by_address", ["address"]),
+    cost: v.number(),
+    timestamp: v.number(),
+  }).index("by_provider", ["providerId"]),
 
-  userPoints: defineTable({
-    address: v.string(),
-    lastEarned: v.float64(),
-    points: v.float64(),
-    pointsToday: v.float64(),
-    promptsToday: v.float64(),
-  })
-    .index("by_address", ["address"]),
+  points: defineTable({
+    userId: v.optional(v.id("users")),
+    points: v.optional(v.number()),
+    promptsToday: v.optional(v.number()),
+    pointsToday: v.optional(v.number()),
+    lastActivity: v.optional(v.number()),
+    total: v.optional(v.number()),
+    totalSpent: v.optional(v.number()),
+    address: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
+
+  models: defineTable({
+    name: v.string(),
+    description: v.string(),
+    provider: v.string(),
+    costPerToken: v.number(),
+    maxTokens: v.number(),
+    isActive: v.boolean(),
+  }).index("by_provider", ["provider"]),
+
+  analytics: defineTable({
+    date: v.string(),
+    totalPrompts: v.number(),
+    totalTokens: v.number(),
+    totalCost: v.number(),
+    activeUsers: v.number(),
+    activeProviders: v.number(),
+  }).index("by_date", ["date"]),
 
   healthChecks: defineTable({
     providerId: v.id("providers"),
@@ -88,11 +109,4 @@ export default defineSchema({
     isHealthy: v.boolean(),
     lastError: v.optional(v.string()),
   }).index("by_model", ["modelId"]),
-
-  points_history: defineTable({
-    address: v.string(),
-    amount: v.number(),
-    reason: v.string(),
-    ts: v.number(),
-  }).index("by_address", ["address"]),
 });
