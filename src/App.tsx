@@ -67,7 +67,7 @@ export default function App() {
       <main className="container mx-auto px-4 py-8">
         {currentPage === 'home' && <HomePage />}
         {currentPage === 'chat' && <ChatPage />}
-        {currentPage === 'providers' && <ProvidersPage />}
+        {currentPage === 'providers' && <ProvidersPage setCurrentPage={setCurrentPage} />}
         {currentPage === 'dashboard' && <DashboardPage />}
         {currentPage === 'developers' && <DevelopersPage />}
       </main>
