@@ -103,7 +103,9 @@ export const cleanupOldLogs = internalMutation({
 export const logUsage = mutation({
   args: {
     address: v.optional(v.string()),
-    providerId: v.id("providers"),
+    // providerId may be undefined when the router doesn't know which provider
+    // handled the request
+    providerId: v.optional(v.id("providers")),
     model: v.string(),
     tokens: v.number(),
     latencyMs: v.number(),
