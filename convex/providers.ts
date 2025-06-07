@@ -13,67 +13,53 @@ function hashApiKey(apiKey: string): string {
   return Math.abs(hash).toString(36);
 }
 
-// MVP: Validate Venice.ai API key
+// Validate Venice.ai API key and calculate available VCU
 export const validateVeniceApiKey = action({
   args: { apiKey: v.string() },
-  handler: async (ctx, args) => {
-    console.log("Validating Venice.ai API key...");
-    
+  handler: async (_ctx, args) => {
+    console.log("Starting Venice.ai API key validation...");
+
     try {
-      // Test with a minimal completion request
-      const response = await fetch("https://api.venice.ai/api/v1/chat/completions", {
-        method: "POST",
+      // Query models to determine total context tokens
+      const response = await fetch("https://api.venice.ai/api/v1/models", {
+        method: "GET",
         headers: {
           "Authorization": `Bearer ${args.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: "llama-3.2-3b", // Cheapest model for validation
-          messages: [
-            {
-              role: "user",
-              content: "Hi"
-            }
-          ],
-          max_tokens: 1,
-          temperature: 0,
-          stream: false
-        }),
       });
 
-      console.log(`Venice.ai response status: ${response.status}`);
-      
+      console.log(`Venice.ai models response status: ${response.status}`);
+
       if (response.ok) {
-        console.log("✅ API key is valid!");
+        const data = await response.json();
+
+        const totalContextTokens =
+          data.data?.reduce((sum: number, model: any) => {
+            return sum + (model.model_spec?.availableContextTokens || 0);
+          }, 0) || 0;
+
+        // 1 VCU = 135.27 context tokens
+        const totalVCU = Math.round(totalContextTokens / 135.27);
+
         return {
           isValid: true,
-          balance: 0, // Not used in MVP
+          balance: totalVCU,
           currency: "VCU",
+          models: data.data?.length || 0,
+          contextTokens: totalContextTokens,
         };
       } else if (response.status === 401) {
-        return {
-          isValid: false,
-          error: "Invalid API key",
-        };
+        return { isValid: false, error: "Invalid API key" };
       } else if (response.status === 429) {
         // Rate limited but key is valid
-        return {
-          isValid: true,
-          balance: 0,
-          currency: "VCU",
-        };
+        return { isValid: true, balance: 0, currency: "VCU" };
       } else {
-        return {
-          isValid: false,
-          error: `Venice.ai error: ${response.status}`,
-        };
+        return { isValid: false, error: `Venice.ai error: ${response.status}` };
       }
     } catch (error) {
       console.error("Validation error:", error);
-      return {
-        isValid: false,
-        error: "Failed to connect to Venice.ai",
-      };
+      return { isValid: false, error: "Failed to connect to Venice.ai" };
     }
   },
 });
@@ -128,6 +114,64 @@ export const registerProvider = mutation({
     // Initialize points
     await ctx.db.insert("providerPoints", {
       providerId: providerId,
+      points: 0,
+      totalPrompts: 0,
+      lastEarned: Date.now(),
+    });
+
+    return providerId;
+  },
+});
+
+// Register provider using calculated VCU balance
+export const registerProviderWithVCU = mutation({
+  args: {
+    address: v.string(),
+    name: v.string(),
+    veniceApiKey: v.string(),
+    vcuBalance: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const walletAddress = args.address;
+
+    // One provider per wallet
+    const existingProvider = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("address"), walletAddress))
+      .first();
+
+    if (existingProvider) {
+      throw new Error("One provider per wallet address");
+    }
+
+    const apiKeyHash = hashApiKey(args.veniceApiKey);
+    const duplicateKey = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyHash))
+      .first();
+
+    if (duplicateKey) {
+      throw new Error("This API key is already registered");
+    }
+
+    // Create provider with provided VCU balance
+    const providerId = await ctx.db.insert("providers", {
+      address: walletAddress,
+      name: args.name,
+      description: "Venice.ai Provider",
+      veniceApiKey: args.veniceApiKey,
+      apiKeyHash,
+      vcuBalance: args.vcuBalance,
+      isActive: true,
+      uptime: 100,
+      totalPrompts: 0,
+      registrationDate: Date.now(),
+      avgResponseTime: 0,
+      status: "active" as const,
+    });
+
+    await ctx.db.insert("providerPoints", {
+      providerId,
       points: 0,
       totalPrompts: 0,
       lastEarned: Date.now(),
