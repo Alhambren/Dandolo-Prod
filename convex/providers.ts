@@ -86,10 +86,12 @@ export const registerProvider = mutation({
     veniceApiKey: v.string(),
   },
   handler: async (ctx, args) => {
+    const walletAddress = args.address;
+
     // One provider per wallet
     const existingProvider = await ctx.db
       .query("providers")
-      .filter((q) => q.eq(q.field("address"), args.address))
+      .filter((q) => q.eq(q.field("address"), walletAddress))
       .first();
 
     if (existingProvider) {
@@ -109,7 +111,7 @@ export const registerProvider = mutation({
 
     // Create provider
     const providerId = await ctx.db.insert("providers", {
-      address: args.address,
+      address: walletAddress,
       name: args.name,
       description: "Venice.ai Provider",
       veniceApiKey: args.veniceApiKey,
