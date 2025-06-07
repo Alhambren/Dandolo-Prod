@@ -239,7 +239,7 @@ const DashboardPage: React.FC = () => {
       </div>
     </div>
   );
-  }
+  };
 
   // Registration form for non-providers
   return (
