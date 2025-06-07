@@ -98,9 +98,9 @@ export const route = action({
     model: string;
   }> => {
     // Check rate limit first (50 prompts/day during MVP)
-      const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
-        address: args.address || 'anonymous',
-      });
+    const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+      address: args.address,
+    });
 
     if (!rateLimitCheck.allowed) {
       throw new Error(`Daily limit reached (${rateLimitCheck.current}/50 prompts). Try again tomorrow!`);
@@ -148,8 +148,7 @@ export const route = action({
 
       // Log ONLY anonymous usage metrics - NEVER prompt content
       await ctx.runMutation(api.inference.logUsage, {
-        // If the caller didn't provide an address, record usage as anonymous
-        address: args.address || 'anonymous',
+        address: args.address,
         providerId: selectedProvider._id,
         model: args.model || veniceResponse.model,
         tokens: veniceResponse.tokens,
@@ -197,13 +196,14 @@ export const logUsage = mutation({
     latencyMs: v.number(),
   },
   handler: async (ctx, args) => {
-      await ctx.db.insert("usageLogs", {
-        address: args.address || 'anonymous',
-        providerId: args.providerId,
-        model: args.model,
-        tokens: args.tokens,
-        latencyMs: args.latencyMs,
-        createdAt: args.createdAt,
-      });
+    await ctx.db.insert("usageLogs", {
+      address: args.address,
+      providerId: args.providerId,
+      model: args.model,
+      promptTokens: args.tokens,
+      completionTokens: 0,
+      latencyMs: args.latencyMs,
+      createdAt: args.createdAt,
+    });
   },
 });
