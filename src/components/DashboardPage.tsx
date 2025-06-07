@@ -30,7 +30,7 @@ const DashboardPage: React.FC = () => {
 
   // Mutations and Actions
   const validateVeniceApiKey = useAction(api.providers.validateVeniceApiKey);
-  const registerProvider = useMutation(api.providers.registerProvider);
+  const registerProviderWithVCU = useMutation(api.providers.registerProviderWithVCU);
   const removeProvider = useMutation(api.providers.remove);
 
   // Animate points counter
@@ -95,7 +95,7 @@ const DashboardPage: React.FC = () => {
     }, 250);
   };
 
-  const handleProviderRegistration = async () => {
+  const validateAndRegister = async () => {
     if (!address) {
       toast.error("Connect wallet first");
       return;
@@ -107,29 +107,32 @@ const DashboardPage: React.FC = () => {
     }
 
     setIsRegistering(true);
-    setError(null);
 
     try {
-      // Validate API key
+      // Step 1: validate API key and fetch VCU
       const validation = await validateVeniceApiKey({ apiKey: veniceApiKey });
 
       if (!validation.isValid) {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      // Register provider
-      await registerProvider({
+      toast.success(`✅ Validated! ${validation.balance.toLocaleString()} VCU available (${validation.models} models)`);
+
+      // Step 2: register provider with computed balance
+      await registerProviderWithVCU({
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
+        vcuBalance: validation.balance,
       });
 
       setProviderName("");
       setVeniceApiKey("");
-      toast.success("Provider registered successfully!");
+      toast.success("🎉 Provider registered successfully!");
       triggerConfetti();
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Registration failed");
+      const errorMessage = error instanceof Error ? error.message : "Registration failed";
+      toast.error(errorMessage);
     } finally {
       setIsRegistering(false);
     }
@@ -303,7 +306,7 @@ const DashboardPage: React.FC = () => {
               </div>
               
               <button
-                onClick={handleProviderRegistration}
+                onClick={validateAndRegister}
                 disabled={isRegistering || !veniceApiKey.trim() || !address}
                 className="w-full px-4 py-3 bg-gradient-to-r from-red to-gold text-white font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
               >
