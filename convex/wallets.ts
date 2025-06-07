@@ -1,6 +1,5 @@
-import { mutation, query, internalMutation, action } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import { api, internal } from "./_generated/api";
 import { ethers } from "ethers";
 import { Id } from "./_generated/dataModel";
 
@@ -32,97 +31,152 @@ interface Points {
 }
 
 export const verifyWallet = mutation({
-  args: {
-    address: v.string(),
-    signature: v.string(),
-    nonce: v.string(),
+  args: { 
+    address: v.string(), 
+    msg: v.string(), 
+    signature: v.string() 
   },
-  handler: async (ctx, args) => {
-    const recovered = ethers.verifyMessage(args.nonce, args.signature);
-    const isValid = recovered.toLowerCase() === args.address.toLowerCase();
-
-    if (!isValid) {
-      throw new Error("Invalid signature");
+  handler: async (ctx, { address, msg, signature }) => {
+    // Verify signature matches message and address
+    const recovered = ethers.verifyMessage(msg, signature);
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      throw new Error('Invalid signature');
     }
 
-    // Check if nonce is expired (5 minutes)
-    const nonceTime = parseInt(args.nonce.split(":")[1]);
-    if (Date.now() - nonceTime > 5 * 60 * 1000) {
-      throw new Error("Nonce expired");
+    // Parse message and check nonce expiration
+    const parsed = Object.fromEntries(
+      msg.split('\n').map(line => line.split(': '))
+    );
+
+    const issuedAt = Date.parse(parsed.issuedAt);
+    if (Date.now() - issuedAt > 15 * 60_000) {
+      throw new Error('Signature expired');
     }
 
-    return { success: true };
+    // Ensure points record exists
+    const existingPoints = await ctx.db
+      .query('points')
+      .withIndex('by_address', q => q.eq('address', address))
+      .unique();
+
+    if (!existingPoints) {
+      await ctx.db.insert('points', { 
+        address, 
+        points: 0,
+        promptsToday: 0,
+        pointsToday: 0,
+        lastEarned: Date.now()
+      });
+    }
+
+    return { ok: true, address };
   },
 });
 
 export const addAddressPoints = mutation({
-  args: {
-    address: v.string(),
-    amount: v.number(),
-    reason: v.string(),
+  args: { 
+    address: v.string(), 
+    amount: v.number(), 
+    reason: v.string() 
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { address, amount, reason }) => {
+    // Update total points
     const pointsRecord = await ctx.db
-      .query("points")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
-      .first();
+      .query('points')
+      .withIndex('by_address', q => q.eq('address', address))
+      .unique();
 
-    if (pointsRecord) {
-      await ctx.db.patch(pointsRecord._id, {
-        points: (pointsRecord.points || 0) + args.amount,
-        lastEarned: Date.now(),
-      });
-    } else {
-      await ctx.db.insert("points", {
-        address: args.address,
-        points: args.amount,
-        promptsToday: 0,
-        pointsToday: 0,
-        lastEarned: Date.now(),
-      });
+    if (!pointsRecord) {
+      // Create new points record for anonymous users
+      if (address === 'anonymous') {
+        const newRecord = await ctx.db.insert('points', { 
+          address, 
+          points: amount,
+          promptsToday: 0,
+          pointsToday: amount,
+          lastEarned: Date.now()
+        });
+        return amount;
+      }
+      throw new Error('No points record found for address');
     }
 
-    // Log history
-    await ctx.db.insert("points_history", {
-      address: args.address,
-      amount: args.amount,
-      reason: args.reason,
-      ts: Date.now(),
+    await ctx.db.patch(pointsRecord._id, { 
+      points: pointsRecord.points + amount,
+      lastEarned: Date.now()
     });
 
-    return { success: true };
+    // Log points history
+    await ctx.db.insert('points_history', { 
+      address, 
+      amount, 
+      reason, 
+      ts: Date.now() 
+    });
+
+    return pointsRecord.points + amount;
   },
 });
 
+// Get points for a wallet address
 export const getPoints = query({
   args: { address: v.string() },
+  returns: v.object({
+    points: v.number(),
+    promptsToday: v.number(),
+    pointsToday: v.number(),
+    lastEarned: v.number(),
+  }),
   handler: async (ctx, args) => {
     const pointsRecord = await ctx.db
       .query("points")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .withIndex("by_address", q => q.eq("address", args.address))
       .first();
 
+    if (!pointsRecord) {
+      return {
+        points: 0,
+        promptsToday: 0,
+        pointsToday: 0,
+        lastEarned: 0,
+      };
+    }
+
     return {
-      points: pointsRecord?.points ?? 0,
-      promptsToday: pointsRecord?.promptsToday ?? 0,
-      pointsToday: pointsRecord?.pointsToday ?? 0,
-      lastEarned: pointsRecord?.lastEarned ?? 0,
+      points: pointsRecord.points,
+      promptsToday: pointsRecord.promptsToday,
+      pointsToday: pointsRecord.pointsToday,
+      lastEarned: pointsRecord.lastEarned,
     };
   },
 });
 
+// Get wallet balance
 export const getWalletBalance = query({
   args: { address: v.string() },
+  returns: v.object({
+    balance: v.number(),
+    prompts_today: v.number(),
+    points_today: v.number(),
+  }),
   handler: async (ctx, args) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const usageLogs = await ctx.db
+      .query("usageLogs")
+      .filter((q) => q.eq(q.field("address"), args.address))
+      .collect();
+
     const pointsRecord = await ctx.db
       .query("points")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .withIndex("by_address", q => q.eq("address", args.address))
       .first();
 
     return {
       balance: pointsRecord?.points ?? 0,
-      promptsToday: pointsRecord?.promptsToday ?? 0,
-      pointsToday: pointsRecord?.pointsToday ?? 0,
+      prompts_today: usageLogs.filter(log => log.createdAt >= today.getTime()).length,
+      points_today: pointsRecord?.pointsToday ?? 0,
     };
   },
 });
