@@ -105,16 +105,16 @@ export const logUsage = mutation({
     address: v.optional(v.string()),
     providerId: v.id("providers"),
     model: v.string(),
-    tokens: v.optional(v.number()),
-    latencyMs: v.optional(v.number()),
+    tokens: v.number(),
+    latencyMs: v.number(),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("usageLogs", {
       address: args.address || 'anonymous',
       providerId: args.providerId,
       model: args.model,
-      tokens: args.tokens ?? 0,
-      latencyMs: args.latencyMs ?? 0,
+      tokens: args.tokens,
+      latencyMs: args.latencyMs,
       createdAt: Date.now(),
     });
   },
