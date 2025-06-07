@@ -82,13 +82,36 @@ function calculateCost(tokens: number, model: string): number {
   return Math.ceil(tokens * rate * 1000); // Convert to micro-VCU
 }
 
+interface Provider {
+  _id: Id<"providers">;
+  name: string;
+  veniceApiKey: string;
+}
+
+interface RouteResponse {
+  response: string;
+  provider: string;
+  tokens: number;
+  cost: number;
+  responseTime: number;
+  model: string;
+}
+
 export const route = action({
   args: {
     prompt: v.string(),
     address: v.optional(v.string()),
     model: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  returns: v.object({
+    response: v.string(),
+    provider: v.string(),
+    tokens: v.number(),
+    cost: v.number(),
+    responseTime: v.number(),
+    model: v.string(),
+  }),
+  handler: async (ctx, args): Promise<RouteResponse> => {
     // Rate limit check
     const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
       address: args.address,
@@ -99,14 +122,14 @@ export const route = action({
     }
 
     // Get active providers
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+    const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
 
     if (providers.length === 0) {
       throw new Error("No providers available");
     }
 
     // Select random provider (TODO: stake-weighted)
-    const selectedProvider = providers[Math.floor(Math.random() * providers.length)];
+    const selectedProvider: Provider = providers[Math.floor(Math.random() * providers.length)];
 
     const startTime = Date.now();
 
@@ -117,7 +140,7 @@ export const route = action({
 
       // Log usage (anonymous metrics only)
       await ctx.runMutation(api.inference.logUsage, {
-        address: args.address || 'anonymous',
+        address: args.address ?? 'anonymous',
         providerId: selectedProvider._id,
         model: args.model || veniceResponse.model,
         tokens: veniceResponse.tokens,
@@ -155,11 +178,10 @@ export const logUsage = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("usageLogs", {
-      address: args.address,
+      address: args.address ?? 'anonymous',
       providerId: args.providerId,
       model: args.model,
-      promptTokens: args.tokens,
-      completionTokens: 0,
+      tokens: args.tokens,
       latencyMs: args.latencyMs,
       createdAt: args.createdAt,
     });

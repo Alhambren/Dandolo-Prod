@@ -13,8 +13,8 @@ const Dashboard: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   
   // Queries
-  const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
-  const userPoints = useQuery(api.points.getUserPoints, address ? { address } : "skip");
+  const userStats = useQuery(api.userPoints.getUserStats, address ? { address } : "skip");
+  const userPoints = useQuery(api.userPoints.getUserPoints, address ? { address } : "skip");
   const generateApiKey = useMutation(api.developers.generateApiKey);
   const rateLimitStatus = useQuery(api.rateLimit.getRateLimitStatus, address ? { address } : "skip");
   const validateVeniceKey = useAction(api.providers.validateVeniceApiKey);

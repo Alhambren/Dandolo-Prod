@@ -131,8 +131,8 @@ export const getProviderLeaderboard = query({
         return {
           ...provider,
           veniceApiKey: undefined,
-          points: points?.points || 0,
-          totalPrompts: points?.totalPrompts || 0,
+          points: points?.points ?? 0,
+          totalPrompts: points?.totalPrompts ?? 0,
         };
       })
     );

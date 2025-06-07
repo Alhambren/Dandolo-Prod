@@ -9,7 +9,7 @@ const ChatPage: React.FC = () => {
   const [message, setMessage] = useState('');
   
   // Queries
-  const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
+  const userStats = useQuery(api.userPoints.getUserStats, address ? { address } : "skip");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

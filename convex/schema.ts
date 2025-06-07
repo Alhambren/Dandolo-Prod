@@ -6,21 +6,21 @@ export default defineSchema({
   ...authTables,
 
   providers: defineTable({
-    address: v.string(),
-    name: v.string(),
+    address: v.optional(v.string()),
+    name: v.optional(v.string()),
     description: v.optional(v.string()),
-    veniceApiKey: v.string(),
-    apiKeyHash: v.string(),
-    vcuBalance: v.number(),
-    isActive: v.boolean(),
-    uptime: v.number(),
-    totalPrompts: v.number(),
-    registrationDate: v.number(),
-    avgResponseTime: v.number(),
-    status: v.union(v.literal("pending"), v.literal("active"), v.literal("inactive")),
+    veniceApiKey: v.optional(v.string()),
+    apiKeyHash: v.optional(v.string()),
+    vcuBalance: v.optional(v.number()),
+    isActive: v.optional(v.boolean()),
+    uptime: v.optional(v.number()),
+    totalPrompts: v.optional(v.number()),
+    registrationDate: v.optional(v.number()),
+    avgResponseTime: v.optional(v.number()),
+    status: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("inactive"))),
+    lastHealthCheck: v.optional(v.number()),
   })
-    .index("by_active", ["isActive"])
-    .index("by_api_key_hash", ["apiKeyHash"]),
+    .index("by_active", ["isActive"]),
 
   providerPoints: defineTable({
     providerId: v.id("providers"),
@@ -40,13 +40,14 @@ export default defineSchema({
     .index("by_provider", ["providerId"])
     .index("by_address", ["address"]),
 
-  points: defineTable({
+  userPoints: defineTable({
     address: v.string(),
-    points: v.number(),
-    promptsToday: v.number(),
-    pointsToday: v.number(),
-    lastEarned: v.number(),
-  }).index("by_address", ["address"]),
+    lastEarned: v.float64(),
+    points: v.float64(),
+    pointsToday: v.float64(),
+    promptsToday: v.float64(),
+  })
+    .index("by_address", ["address"]),
 
   healthChecks: defineTable({
     providerId: v.id("providers"),
@@ -55,4 +56,43 @@ export default defineSchema({
     responseTime: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
   }).index("by_provider", ["providerId"]),
+
+  apiKeys: defineTable({
+    address: v.optional(v.string()),
+    name: v.string(),
+    key: v.string(),
+    isActive: v.boolean(),
+    usageCount: v.number(),
+    sessionId: v.string(),
+    createdAt: v.number(),
+    lastUsed: v.optional(v.number()),
+  })
+    .index("by_address", ["address"])
+    .index("by_key", ["key"]),
+
+  modelCache: defineTable({
+    models: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      available: v.boolean(),
+      lastUpdated: v.number(),
+    })),
+    lastUpdated: v.number(),
+  }),
+
+  modelHealth: defineTable({
+    modelId: v.string(),
+    successCount: v.number(),
+    failureCount: v.number(),
+    lastUsed: v.number(),
+    isHealthy: v.boolean(),
+    lastError: v.optional(v.string()),
+  }).index("by_model", ["modelId"]),
+
+  points_history: defineTable({
+    address: v.string(),
+    amount: v.number(),
+    reason: v.string(),
+    ts: v.number(),
+  }).index("by_address", ["address"]),
 });
