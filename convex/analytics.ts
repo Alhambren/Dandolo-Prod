@@ -19,8 +19,8 @@ export const getSystemStats = query({
     today.setHours(0, 0, 0, 0);
     const todayUsage = usageLogs.filter(log => log.createdAt >= today.getTime());
     
-    const totalVCU = activeProviders.reduce((sum, p) => sum + p.vcuBalance, 0);
-    const totalPrompts = providers.reduce((sum, p) => sum + p.totalPrompts, 0);
+    const totalVCU = activeProviders.reduce((sum, p) => sum + (p.vcuBalance ?? 0), 0);
+    const totalPrompts = providers.reduce((sum, p) => sum + (p.totalPrompts ?? 0), 0);
     
     // Calculate average response time
     const avgResponseTime = usageLogs.length > 0 
@@ -34,6 +34,10 @@ export const getSystemStats = query({
       recent.filter(log => log.address).map(log => log.address)
     ).size;
 
+    const avgUptime = activeProviders.length > 0
+      ? activeProviders.reduce((sum, p) => sum + (p.uptime ?? 0), 0) / activeProviders.length
+      : 0;
+
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
@@ -41,9 +45,7 @@ export const getSystemStats = query({
       totalPrompts,
       promptsToday: todayUsage.length,
       avgResponseTime: Math.round(avgResponseTime),
-      networkUptime: activeProviders.length > 0 
-        ? activeProviders.reduce((sum, p) => sum + p.uptime, 0) / activeProviders.length 
-        : 0,
+      networkUptime: avgUptime,
       activeUsers, // Anonymous count only
     };
   },

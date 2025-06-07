@@ -20,7 +20,7 @@ export const generateApiKey = mutation({
       createdAt: Date.now(),
       lastUsed: undefined,
       usageCount: 0,
-      sessionId: "dev-session", // TODO: Replace with actual session ID if available
+      sessionId: "dev-session",
     });
 
     return apiKey;

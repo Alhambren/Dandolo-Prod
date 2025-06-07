@@ -62,10 +62,10 @@ export const getNetworkStats = query({
       .collect();
 
     const activeProviders = providers.filter(p => p.isActive);
-    const totalVCU = providers.reduce((sum, p) => sum + p.vcuBalance, 0);
-    const totalPrompts = providers.reduce((sum, p) => sum + p.totalPrompts, 0);
-    const networkUptime = activeProviders.length > 0 
-      ? activeProviders.reduce((sum, p) => sum + p.uptime, 0) / activeProviders.length 
+    const totalVCU = providers.reduce((sum, p) => sum + (p.vcuBalance ?? 0), 0);
+    const totalPrompts = providers.reduce((sum, p) => sum + (p.totalPrompts ?? 0), 0);
+    const avgUptime = activeProviders.length > 0
+      ? activeProviders.reduce((sum, p) => sum + (p.uptime ?? 0), 0) / activeProviders.length
       : 0;
 
     const recentLogs = await ctx.db
@@ -86,11 +86,12 @@ export const getNetworkStats = query({
       activeProviders: activeProviders.length,
       totalVCU,
       totalPrompts,
+      avgUptime,
       promptsToday: recentLogs.filter(log => 
         log.createdAt > Date.now() - 24 * 60 * 60 * 1000
       ).length,
       avgResponseTime,
-      networkUptime,
+      networkUptime: avgUptime,
       activeUsers,
     };
   },

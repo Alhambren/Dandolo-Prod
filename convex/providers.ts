@@ -17,8 +17,6 @@ function hashApiKey(apiKey: string): string {
 export const validateVeniceApiKey = action({
   args: { apiKey: v.string() },
   handler: async (_ctx, args) => {
-    console.log("Starting Venice.ai API key validation...");
-
     try {
       // Query models to determine total context tokens
       const response = await fetch("https://api.venice.ai/api/v1/models", {
@@ -28,8 +26,6 @@ export const validateVeniceApiKey = action({
           "Content-Type": "application/json",
         },
       });
-
-      console.log(`Venice.ai models response status: ${response.status}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -58,7 +54,6 @@ export const validateVeniceApiKey = action({
         return { isValid: false, error: `Venice.ai error: ${response.status}` };
       }
     } catch (error) {
-      console.error("Validation error:", error);
       return { isValid: false, error: "Failed to connect to Venice.ai" };
     }
   },
@@ -117,6 +112,7 @@ export const registerProvider = mutation({
       providerId: providerId,
       points: 0,
       totalPrompts: 0,
+      lastDailyReward: 0,
       lastEarned: Date.now(),
     });
 
@@ -178,6 +174,7 @@ export const registerProviderWithVCU = mutation({
       providerId: providerId,
       points: 0,
       totalPrompts: 0,
+      lastDailyReward: 0,
       lastEarned: Date.now(),
     });
 
@@ -217,7 +214,7 @@ export const awardProviderPoints = mutation({
     
     // Update provider stats
     await ctx.db.patch(args.providerId, {
-      totalPrompts: provider.totalPrompts + args.promptsServed,
+      totalPrompts: (provider.totalPrompts ?? 0) + args.promptsServed,
     });
     
     // Update or create points record
@@ -240,8 +237,6 @@ export const awardProviderPoints = mutation({
         lastEarned: Date.now(),
       });
     }
-    
-    console.log(`Awarded ${pointsEarned} points to provider ${provider.name}`);
   },
 });
 
@@ -258,7 +253,7 @@ export const updateProviderHealth = mutation({
       throw new Error("Provider not found");
     }
 
-    const newUptime = (provider.uptime * 0.95) + (args.isHealthy ? 100 * 0.05 : 0);
+    const newUptime = ((provider.uptime ?? 0) * 0.95) + (args.isHealthy ? 100 * 0.05 : 0);
     const newAvgResponseTime = provider.avgResponseTime && args.responseTime
       ? (provider.avgResponseTime * 0.9) + (args.responseTime * 0.1)
       : args.responseTime || provider.avgResponseTime || 0;
@@ -352,7 +347,7 @@ export const incrementPromptCount = mutation({
 
     // Update provider stats
     await ctx.db.patch(args.providerId, {
-      totalPrompts: provider.totalPrompts + 1,
+      totalPrompts: (provider.totalPrompts ?? 0) + 1,
     });
 
     // Award 100 points per prompt
@@ -552,7 +547,6 @@ export const performHealthCheck = action({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args) => {
     // Simplified for MVP - actual health checks run via cron
-    console.log("Health check requested for provider:", args.providerId);
   },
 });
 
@@ -588,100 +582,52 @@ export const getLeaderboard = query({
   },
 });
 
-// CLEANUP: Remove problematic points document
-export const cleanupBadPointsDocument = mutation({
-  args: {},
-  handler: async (ctx) => {
-    try {
-      // Delete the specific problematic document
-      await ctx.db.delete("k57az83s7yarb84ryx9s5dd9qx7h9771" as any);
-      return { success: true, message: "Deleted problematic document" };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
-    }
-  },
-});
-
-// CLEANUP MUTATIONS - Remove all bad legacy data
-export const cleanupAllBadData = mutation({
-  args: {},
-  handler: async (ctx) => {
-    let cleaned = {
-      points: 0,
-      providers: 0,
-      providerPoints: 0,
-      usageLogs: 0,
-      healthChecks: 0
-    };
-
-    // Clean points table - remove documents with missing required fields
-    const allPoints = await ctx.db.query("points").collect();
-    for (const point of allPoints) {
-      if (!point.address || !point.points || !point.promptsToday || !point.pointsToday || !point.lastEarned) {
-        await ctx.db.delete(point._id);
-        cleaned.points++;
-      }
-    }
-
-    // Clean providers table - remove documents with missing required fields
-    const allProviders = await ctx.db.query("providers").collect();
-    for (const provider of allProviders) {
-      if (!provider.address || !provider.name || !provider.veniceApiKey || !provider.apiKeyHash) {
-        await ctx.db.delete(provider._id);
-        cleaned.providers++;
-      }
-    }
-
-    // Clean providerPoints table
-    const allProviderPoints = await ctx.db.query("providerPoints").collect();
-    for (const pp of allProviderPoints) {
-      if (!pp.providerId || pp.points === undefined) {
-        await ctx.db.delete(pp._id);
-        cleaned.providerPoints++;
-      }
-    }
-
-    // Clean usageLogs table
-    const allUsageLogs = await ctx.db.query("usageLogs").collect();
-    for (const log of allUsageLogs) {
-      if (!log.address || !log.model) {
-        await ctx.db.delete(log._id);
-        cleaned.usageLogs++;
-      }
-    }
-
-    // Clean healthChecks table
-    const allHealthChecks = await ctx.db.query("healthChecks").collect();
-    for (const check of allHealthChecks) {
-      if (!check.providerId || !check.status) {
-        await ctx.db.delete(check._id);
-        cleaned.healthChecks++;
-      }
-    }
-
-    return cleaned;
-  },
-});
-
 export const getProviderStats = query({
   args: { address: v.string() },
   returns: v.object({
+    totalPrompts: v.number(),
+    uptime: v.number(),
     points: v.number(),
-    promptsToday: v.number(),
-    pointsToday: v.number(),
-    pointsThisWeek: v.number(),
   }),
   handler: async (ctx, args) => {
+    const provider = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("address"), args.address))
+      .first() as { totalPrompts?: number; uptime?: number } | null;
+
+    if (!provider) return;
+
     const points = await ctx.db
       .query("userPoints")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
+    const totalPrompts = (provider.totalPrompts ?? 0) + args.promptsServed;
+    const uptime = ((provider.uptime ?? 0) * 0.95) + (args.isHealthy ? 100 * 0.05 : 0);
+    const pointsValue = points?.points ?? 0;
+
     return {
-      points: points?.points ?? 0,
-      promptsToday: points?.promptsToday ?? 0,
-      pointsToday: points?.pointsToday ?? 0,
-      pointsThisWeek: points?.points ?? 0,
+      totalPrompts,
+      uptime,
+      points: pointsValue,
     };
+  },
+});
+
+export const updateProviderStats = internalMutation({
+  args: {
+    providerId: v.id("providers"),
+    totalPrompts: v.optional(v.number()),
+    uptime: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) return;
+
+    const updates: any = {};
+    if (args.totalPrompts !== undefined) updates.totalPrompts = args.totalPrompts;
+    if (args.uptime !== undefined) updates.uptime = args.uptime;
+
+    await ctx.db.patch(args.providerId, updates);
   },
 });

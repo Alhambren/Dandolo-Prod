@@ -141,11 +141,13 @@ http.route({
       address,
     });
 
+    const promptsRemaining = Math.max(0, stats.points - stats.promptsToday);
+
     return new Response(
       JSON.stringify({
         balance: stats.points,
         prompts_today: stats.promptsToday,
-        prompts_remaining: stats.promptsRemaining,
+        prompts_remaining: promptsRemaining,
         points_today: stats.pointsToday,
         points_this_week: stats.pointsThisWeek,
         points_history: stats.pointsHistory,

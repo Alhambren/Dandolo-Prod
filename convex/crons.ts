@@ -3,28 +3,13 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Daily health check for all providers
+// Run daily VCU rewards check every 24 hours
 crons.interval(
-  "daily health check",
+  "daily VCU rewards check",
   { hours: 24 },
-  internal.providers.runHealthChecks,
+  internal.points.distributeDailyVCURewards,
   {}
 );
 
-// Daily VCU check and point allocation for providers
-crons.interval(
-  "daily VCU check",
-  { hours: 24 },
-  internal.points.dailyVCUCheck,
-  {}
-);
-
-// Clean up old usage logs (keep last 30 days)
-crons.interval(
-  "cleanup old logs",
-  { hours: 24 * 7 }, // Weekly cleanup
-  internal.analytics.cleanupOldLogs,
-  {}
-);
 export default crons;
 

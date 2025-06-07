@@ -122,13 +122,13 @@ export const route = action({
     }
 
     // Get active providers
-    const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    const providers = (await ctx.runQuery(internal.providers.listActiveInternal)) as Provider[];
 
     if (providers.length === 0) {
       throw new Error("No providers available");
     }
 
-    // Select random provider (TODO: stake-weighted)
+    // Select random provider
     const selectedProvider: Provider = providers[Math.floor(Math.random() * providers.length)];
 
     const startTime = Date.now();
