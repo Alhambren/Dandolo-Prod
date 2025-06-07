@@ -107,30 +107,30 @@ const Dashboard: React.FC = () => {
     <div className="space-y-8">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          value={networkStats.activeProviders}
+          value={networkStats?.activeProviders || 0}
           label="Active Providers"
-          subtitle="Online compute nodes"
+          subtitle={networkStats?.activeProviders ? "Online compute nodes" : "Waiting for providers"}
           accentClass="text-green-400"
           tooltip="The network is not live yet; these numbers will update automatically as providers join."
         />
         <StatCard
-          value={networkStats.totalVCU}
+          value={networkStats?.totalVCU || 0}
           label="Total VCU"
-          subtitle="Network compute units"
+          subtitle={networkStats?.totalVCU ? "Network capacity" : "Waiting for providers"}
           accentClass="text-blue-400"
           tooltip="The network is not live yet; these numbers will update automatically as providers join."
         />
         <StatCard
-          value={networkStats.totalPrompts}
+          value={networkStats?.totalPrompts || 0}
           label="Total Prompts"
-          subtitle="Requests processed"
+          subtitle={networkStats?.totalPrompts ? "Requests processed" : "Waiting for providers"}
           accentClass="text-purple-400"
           tooltip="The network is not live yet; these numbers will update automatically as providers join."
         />
         <StatCard
-          value={networkStats.networkUptime}
+          value={networkStats?.networkUptime || 0}
           label="Network Uptime"
-          subtitle="Average availability"
+          subtitle={networkStats?.networkUptime ? "Average availability" : "Waiting for providers"}
           accentClass="text-yellow-400"
           tooltip="The network is not live yet; these numbers will update automatically as providers join."
         />

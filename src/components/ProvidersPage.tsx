@@ -3,6 +3,7 @@ import { useQuery } from 'convex/react';
 import GlassCard from './GlassCard';
 import { api } from '../../convex/_generated/api';
 import { Link } from 'react-router-dom';
+import { EmptyState } from './ZeroState';
 
 const ProvidersPage: React.FC = () => {
   const networkStats = useQuery(api.stats.getNetworkStats);
@@ -43,9 +44,15 @@ const ProvidersPage: React.FC = () => {
                   </GlassCard>
                 ))
               ) : (
-                <GlassCard className="p-4" data-testid="no-providers">
-                  <p className="text-gray-300 text-center">No providers registered yet. Be the first to join the network!</p>
-                </GlassCard>
+                <EmptyState
+                  title="No Active Providers"
+                  subtitle="Connect your Venice.ai API to be the first provider"
+                  action={
+                    <Link to="/dashboard" className="primary-cta">
+                      Become a Provider
+                    </Link>
+                  }
+                />
               )}
             </div>
           </div>
