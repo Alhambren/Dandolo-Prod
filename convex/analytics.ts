@@ -110,7 +110,7 @@ export const logUsage = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("usageLogs", {
-      address: args.address,
+      address: args.address || 'anonymous',
       providerId: args.providerId,
       model: args.model,
       tokens: args.tokens ?? 0,
