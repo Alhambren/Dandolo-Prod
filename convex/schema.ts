@@ -2,47 +2,41 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 
-// Database schema defining all data collections used by the application.
-// Each table uses strict typing to ensure data integrity.
 export default defineSchema({
   ...authTables,
 
-  // PROVIDERS: Venice.ai compute providers (one per wallet)
+  // PROVIDERS: Venice.ai compute providers
   providers: defineTable({
-    address: v.string(),              // Wallet address (REQUIRED)
-    name: v.string(),                 // Provider display name (REQUIRED)
-    description: v.optional(v.string()), // Optional description
-    veniceApiKey: v.string(),         // Venice.ai API key (REQUIRED)
-    apiKeyHash: v.string(),           // Hash for duplicate detection (REQUIRED)
-    vcuBalance: v.number(),           // Available VCU from Venice (REQUIRED)
-    isActive: v.boolean(),            // Currently serving requests (REQUIRED)
-    uptime: v.number(),               // Success rate percentage (REQUIRED)
-    totalPrompts: v.number(),         // Total prompts served (REQUIRED)
-    registrationDate: v.number(),     // Registration timestamp (REQUIRED)
-    avgResponseTime: v.number(),      // Average response time (REQUIRED)
-    status: v.union(
-      v.literal("pending"),
-      v.literal("active"),
-      v.literal("inactive")
-    ),                                // Status (REQUIRED)
-    lastHealthCheck: v.optional(v.number()), // Last health check time
-    region: v.optional(v.string()),   // Geographic region
-    gpuType: v.optional(v.string()),  // GPU type for performance
+    address: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+    veniceApiKey: v.string(),
+    apiKeyHash: v.optional(v.string()), // Made optional for legacy data
+    vcuBalance: v.number(),
+    isActive: v.boolean(),
+    uptime: v.number(),
+    totalPrompts: v.number(),
+    registrationDate: v.number(),
+    avgResponseTime: v.optional(v.number()), // Made optional for legacy data
+    status: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("inactive"))), // Made optional
+    lastHealthCheck: v.optional(v.number()),
+    region: v.optional(v.string()),
+    gpuType: v.optional(v.string()),
   })
     .index("by_active", ["isActive"])
     .index("by_address", ["address"])
     .index("by_api_key_hash", ["apiKeyHash"]),
 
-  // USER POINTS: Match existing code expectations
+  // USER POINTS: What the code expects
   userPoints: defineTable({
-    address: v.string(),              // Wallet address
-    points: v.number(),               // Total points balance
-    promptsToday: v.number(),         // Daily usage count
-    pointsToday: v.number(),          // Points earned today
-    lastEarned: v.number(),           // Last activity timestamp
+    address: v.string(),
+    points: v.number(),
+    promptsToday: v.number(),
+    pointsToday: v.number(),
+    lastEarned: v.number(),
   }).index("by_address", ["address"]),
 
-  // LEGACY POINTS: Keep existing table for compatibility
+  // LEGACY POINTS: Keep for compatibility
   points: defineTable({
     userId: v.optional(v.id("users")),
     points: v.optional(v.number()),
@@ -57,80 +51,79 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_address", ["address"]),
 
-  // POINTS HISTORY: Transparent point tracking
-  points_history: defineTable({
-    address: v.string(),              // Wallet address (REQUIRED)
-    amount: v.number(),               // Points awarded (REQUIRED)
-    reason: v.string(),               // "prompt", "referral", etc. (REQUIRED)
-    ts: v.number(),                   // Timestamp (REQUIRED)
-  }).index("by_address", ["address"]),
-
   // PROVIDER POINTS: Points earned by providers
   providerPoints: defineTable({
-    providerId: v.id("providers"),    // Provider ID (REQUIRED)
-    points: v.number(),               // Total points earned (REQUIRED)
-    totalPrompts: v.number(),         // Total prompts served (REQUIRED)
-    lastEarned: v.number(),           // Last earning timestamp (REQUIRED)
-    lastDailyReward: v.optional(v.number()), // Last daily VCU reward
+    providerId: v.id("providers"),
+    points: v.number(),
+    totalPrompts: v.number(),
+    lastEarned: v.number(),
+    lastDailyReward: v.optional(v.number()),
   }).index("by_provider", ["providerId"]),
 
-  // USAGE LOGS: Anonymous metrics ONLY
+  // USAGE LOGS: Anonymous metrics
   usageLogs: defineTable({
-    address: v.string(),              // Wallet or 'anonymous' (REQUIRED)
-    providerId: v.optional(v.id("providers")), // Which provider served
-    model: v.string(),                // Model used (REQUIRED)
-    tokens: v.number(),               // Token count (REQUIRED)
-    latencyMs: v.number(),            // Response time (REQUIRED)
-    createdAt: v.number(),            // Timestamp (REQUIRED)
+    address: v.string(),
+    providerId: v.optional(v.id("providers")),
+    model: v.string(),
+    tokens: v.number(),
+    latencyMs: v.number(),
+    createdAt: v.number(),
   })
     .index("by_provider", ["providerId"])
     .index("by_address", ["address"])
     .index("by_created", ["createdAt"]),
 
+  // POINTS HISTORY: Track point awards
+  points_history: defineTable({
+    address: v.string(),
+    amount: v.number(),
+    reason: v.string(),
+    ts: v.number(),
+  }).index("by_address", ["address"]),
+
   // HEALTH CHECKS: Provider monitoring
   healthChecks: defineTable({
-    providerId: v.id("providers"),    // Provider ID (REQUIRED)
-    timestamp: v.number(),            // Timestamp (REQUIRED)
-    status: v.union(v.literal("success"), v.literal("failure")), // Status (REQUIRED)
+    providerId: v.id("providers"),
+    timestamp: v.number(),
+    status: v.union(v.literal("success"), v.literal("failure")),
     responseTime: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
   }).index("by_provider", ["providerId"]),
 
   // API KEYS: Developer access tokens
   apiKeys: defineTable({
-    address: v.optional(v.string()),  // Developer wallet (optional)
-    name: v.string(),                 // Key name
-    key: v.string(),                  // API key
-    isActive: v.boolean(),            // Key status
-    usageCount: v.optional(v.number()), // Times used
-    sessionId: v.optional(v.string()),  // Session tracking
-    createdAt: v.number(),            // Creation timestamp
-    lastUsed: v.optional(v.number()), // Last usage
-    totalUsage: v.optional(v.number()), // Aggregate usage
+    address: v.optional(v.string()), // Made optional for legacy data
+    name: v.string(),
+    key: v.string(),
+    isActive: v.boolean(),
+    usageCount: v.optional(v.number()), // Made optional for legacy data
+    sessionId: v.optional(v.string()), // Made optional for legacy data
+    createdAt: v.number(),
+    lastUsed: v.optional(v.number()),
+    totalUsage: v.optional(v.number()), // Made optional for legacy data
   })
     .index("by_address", ["address"])
     .index("by_key", ["key"]),
 
   // MODEL CACHE: Venice.ai model availability
   modelCache: defineTable({
-    models: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        available: v.boolean(),
-        lastUpdated: v.number(),
-      })
-    ),
+    models: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      available: v.boolean(),
+      lastUpdated: v.number(),
+    })),
     lastUpdated: v.number(),
   }),
 
   // MODEL HEALTH: Track model performance
   modelHealth: defineTable({
-    modelId: v.string(),              // Model ID (REQUIRED)
-    successCount: v.number(),         // Success count (REQUIRED)
-    failureCount: v.number(),         // Failure count (REQUIRED)
-    lastUsed: v.number(),             // Last used timestamp (REQUIRED)
-    isHealthy: v.boolean(),           // Health status (REQUIRED)
+    modelId: v.string(),
+    successCount: v.number(),
+    failureCount: v.number(),
+    lastUsed: v.number(),
+    isHealthy: v.boolean(),
     lastError: v.optional(v.string()),
   }).index("by_model", ["modelId"]),
 });
+
