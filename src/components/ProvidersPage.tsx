@@ -8,7 +8,7 @@ interface ProvidersPageProps {
 }
 const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
-  const providers = useQuery(api.providers.listActive);
+  const topProviders = useQuery(api.providers.getTopProviders, { limit: 3 });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white" data-testid="providers-page">
@@ -24,30 +24,52 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-          {/* Active Providers - Full height */}
+          {/* Top 3 Providers */}
           <GlassCard className="p-6 h-full">
-            <h2 className="text-2xl font-bold mb-4">Active Providers</h2>
-            {providers && providers.length > 0 ? (
+            <h2 className="text-2xl font-bold mb-4">Top 3 Providers</h2>
+            {topProviders && topProviders.length > 0 ? (
               <div className="space-y-4">
-                {providers.map((provider) => (
+                {topProviders.map((provider, index) => (
                   <div key={provider._id} className="p-4 bg-white/5 rounded-lg">
-                    <h3 className="text-lg font-semibold">{provider.name}</h3>
-                    <p className="text-gray-300">{provider.description || 'Venice.ai Compute Provider'}</p>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-gold to-red rounded-full flex items-center justify-center text-white font-bold">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold">{provider.name}</h3>
+                          <p className="text-sm text-gray-400">
+                            {provider.address.substring(0, 8)}...{provider.address.substring(-6)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`px-2 py-1 rounded text-xs ${
+                        provider.isActive 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {provider.isActive ? 'Active' : 'Inactive'}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <p className="text-gray-400">VCU</p>
+                        <p className="font-semibold">{provider.vcuBalance.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400">Prompts</p>
+                        <p className="font-semibold">{provider.totalPrompts.toLocaleString()}</p>
+                      </div>
                       <div>
                         <p className="text-gray-400">Uptime</p>
                         <p className="font-semibold">{provider.uptime.toFixed(1)}%</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Total Prompts</p>
-                        <p className="font-semibold">{provider.totalPrompts}</p>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full min-h-[400px]">
+              <div className="flex items-center justify-center h-full min-h-[300px]">
                 <div className="text-center py-8">
                   <div className="mb-6">
                     <svg className="w-24 h-24 mx-auto text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -58,13 +80,8 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                     Be the First Provider
                   </h3>
                   <p className="text-gray-400 max-w-md mx-auto mb-6">
-                    Connect your Venice.ai compute to the network and start processing AI requests for the community.
+                    Connect your Venice.ai compute to the network and start earning rewards.
                   </p>
-                  <div className="text-sm text-gray-500 space-y-1">
-                    <p>✓ Contribute VCU to the network</p>
-                    <p>✓ Automatic request routing</p>
-                    <p>✓ Real-time health monitoring</p>
-                  </div>
                 </div>
               </div>
             )}
