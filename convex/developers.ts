@@ -78,7 +78,7 @@ export const updateApiKeyUsage = mutation({
     if (keyRecord) {
       await ctx.db.patch(keyRecord._id, {
         lastUsed: Date.now(),
-        usageCount: keyRecord.usageCount + 1,
+        usageCount: (keyRecord.usageCount || 0) + 1,
       });
     }
   },
@@ -100,7 +100,7 @@ export const getSdkStats = query({
   handler: async (ctx) => {
     const apiKeys = await ctx.db.query("apiKeys").collect();
     const activeKeys = apiKeys.filter(key => key.isActive);
-    const totalUsage = apiKeys.reduce((sum, key) => sum + key.usageCount, 0);
+    const totalUsage = apiKeys.reduce((sum, key) => sum + (key.usageCount || 0), 0);
     
     const last30Days = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const recentKeys = apiKeys.filter(key => key.createdAt > last30Days);

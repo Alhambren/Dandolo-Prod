@@ -141,17 +141,43 @@ export const getPointsLeaderboard = query({
   },
 });
 
-export const migratePoints = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const points = await ctx.db.query("points").collect();
-    for (const point of points) {
-      await ctx.db.patch(point._id, {
-        userId: point.address, // Convert address to userId
-        points: 0, // Initialize new required fields
-        promptsToday: 0,
-        pointsToday: 0,
-      });
-    }
-  },
+
+// Get user stats (for API endpoints)
+export const getUserStats = query({
+ args: { address: v.string() },
+ handler: async (ctx, args) => {
+   const points = await ctx.db
+     .query("userPoints")
+     .withIndex("by_address", (q) => q.eq("address", args.address))
+     .first();
+
+   const today = new Date();
+   today.setHours(0, 0, 0, 0);
+   const todayTimestamp = today.getTime();
+
+   const todayHistory = await ctx.db
+     .query("points_history")
+     .filter((q) => 
+       q.and(
+         q.eq(q.field("address"), args.address),
+         q.gte(q.field("ts"), todayTimestamp)
+       )
+     )
+     .collect();
+
+   const promptsToday = todayHistory.filter(h => h.reason === "prompt").length;
+   const pointsToday = todayHistory.reduce((sum, h) => sum + h.amount, 0);
+
+   return {
+     points: points?.points ?? 0,
+     promptsToday,
+     pointsRemaining: Math.max(0, 50 - promptsToday),
+     pointsToday,
+     pointsThisWeek: points?.points ?? 0,
+     pointsHistory: todayHistory.map(h => ({
+       ts: h.ts,
+       points: h.amount,
+     })),
+   };
+ },
 });
