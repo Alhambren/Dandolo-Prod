@@ -181,3 +181,16 @@ export const getUserStats = query({
    };
  },
 });
+
+// Get user's total points
+export const getUserPoints = query({
+  args: { address: v.string() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const points = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+    return points?.points ?? 0;
+  },
+});
