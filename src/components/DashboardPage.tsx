@@ -18,7 +18,7 @@ const DashboardPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   // Queries
-  const userStats = useQuery(api.userPoints.getUserStats, address ? { address } : "skip");
+  const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
   const userPoints = useQuery(api.userPoints.getUserPoints, address ? { address } : "skip");
   const systemStats = useQuery(api.analytics.getSystemStats);
   const providers = useQuery(api.providers.list);
