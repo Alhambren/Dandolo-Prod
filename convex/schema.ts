@@ -33,14 +33,29 @@ export default defineSchema({
     .index("by_address", ["address"])
     .index("by_api_key_hash", ["apiKeyHash"]),
 
-  // USER POINTS: Wallet-based user points and limits
-  points: defineTable({
-    address: v.string(),              // Wallet address (REQUIRED)
-    points: v.number(),               // Total points balance (REQUIRED)
-    promptsToday: v.number(),         // Daily usage count (REQUIRED)
-    pointsToday: v.number(),          // Points earned today (REQUIRED)
-    lastEarned: v.number(),           // Last activity timestamp (REQUIRED)
+  // USER POINTS: Match existing code expectations
+  userPoints: defineTable({
+    address: v.string(),              // Wallet address
+    points: v.number(),               // Total points balance
+    promptsToday: v.number(),         // Daily usage count
+    pointsToday: v.number(),          // Points earned today
+    lastEarned: v.number(),           // Last activity timestamp
   }).index("by_address", ["address"]),
+
+  // LEGACY POINTS: Keep existing table for compatibility
+  points: defineTable({
+    userId: v.optional(v.id("users")),
+    points: v.optional(v.number()),
+    promptsToday: v.optional(v.number()),
+    pointsToday: v.optional(v.number()),
+    lastActivity: v.optional(v.number()),
+    total: v.optional(v.number()),
+    totalSpent: v.optional(v.number()),
+    address: v.optional(v.string()),
+    lastEarned: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_address", ["address"]),
 
   // POINTS HISTORY: Transparent point tracking
   points_history: defineTable({
@@ -83,14 +98,15 @@ export default defineSchema({
 
   // API KEYS: Developer access tokens
   apiKeys: defineTable({
-    address: v.string(),              // Developer wallet (REQUIRED)
-    name: v.string(),                 // Key name (REQUIRED)
-    key: v.string(),                  // API key (REQUIRED)
-    isActive: v.boolean(),            // Key status (REQUIRED)
-    usageCount: v.number(),           // Times used (REQUIRED)
-    sessionId: v.string(),            // Session tracking (REQUIRED)
-    createdAt: v.number(),            // Creation timestamp (REQUIRED)
+    address: v.optional(v.string()),  // Developer wallet (optional)
+    name: v.string(),                 // Key name
+    key: v.string(),                  // API key
+    isActive: v.boolean(),            // Key status
+    usageCount: v.optional(v.number()), // Times used
+    sessionId: v.optional(v.string()),  // Session tracking
+    createdAt: v.number(),            // Creation timestamp
     lastUsed: v.optional(v.number()), // Last usage
+    totalUsage: v.optional(v.number()), // Aggregate usage
   })
     .index("by_address", ["address"])
     .index("by_key", ["key"]),
