@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from 'convex/react';
+import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAccount } from 'wagmi';
 import GlassCard from './GlassCard';
@@ -7,14 +7,31 @@ import GlassCard from './GlassCard';
 const ChatPage: React.FC = () => {
   const { address } = useAccount();
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const routeInference = useAction(api.inference.route);
   
   // Queries
   const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle message submission
-    setMessage('');
+    if (!message.trim() || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await routeInference({
+        prompt: message,
+        address: address || "anonymous",
+      });
+
+      // For now just log the AI response
+      console.log("AI Response:", response);
+      setMessage('');
+    } catch (error) {
+      console.error("Chat error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
