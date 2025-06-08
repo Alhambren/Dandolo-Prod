@@ -55,6 +55,7 @@ export const getNetworkStats = query({
     avgResponseTime: v.number(),
     networkUptime: v.number(),
     activeUsers: v.number(),
+    avgUptime: v.number(),
   }),
   handler: async (ctx) => {
     const providers = await ctx.db
