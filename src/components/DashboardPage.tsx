@@ -19,7 +19,7 @@ const DashboardPage: React.FC = () => {
 
   // Queries
   const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
-  const userPoints = useQuery(api.userPoints.getUserPoints, address ? { address } : "skip");
+  const userPoints = useQuery(api.points.getUserPoints, address ? { address } : "skip");
   const systemStats = useQuery(api.analytics.getSystemStats);
   const providers = useQuery(api.providers.list);
   const currentProvider = providers?.find(p => p.address === address);
