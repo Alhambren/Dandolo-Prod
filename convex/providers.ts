@@ -35,8 +35,9 @@ export const validateVeniceApiKey = action({
             return sum + (model.model_spec?.availableContextTokens || 0);
           }, 0) || 0;
 
-        // 1 VCU = 135.27 context tokens
-        const totalVCU = Math.round(totalContextTokens / 135.27);
+        // Adjust VCU calculation. 1 VCU equals 270.54 context tokens
+        // instead of 135.27 due to doubled token usage.
+        const totalVCU = Math.round(totalContextTokens / 270.54);
 
         return {
           isValid: true,
