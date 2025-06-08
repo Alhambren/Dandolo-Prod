@@ -593,23 +593,25 @@ export const getProviderStats = query({
     const provider = await ctx.db
       .query("providers")
       .filter((q) => q.eq(q.field("address"), args.address))
-      .first() as { totalPrompts?: number; uptime?: number } | null;
+      .first();
 
-    if (!provider) return;
+    if (!provider) {
+      return {
+        totalPrompts: 0,
+        uptime: 0,
+        points: 0,
+      };
+    }
 
     const points = await ctx.db
       .query("userPoints")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
-    const totalPrompts = (provider.totalPrompts ?? 0) + args.promptsServed;
-    const uptime = ((provider.uptime ?? 0) * 0.95) + (args.isHealthy ? 100 * 0.05 : 0);
-    const pointsValue = points?.points ?? 0;
-
     return {
-      totalPrompts,
-      uptime,
-      points: pointsValue,
+      totalPrompts: provider.totalPrompts ?? 0,
+      uptime: provider.uptime ?? 0,
+      points: points?.points ?? 0,
     };
   },
 });
