@@ -103,7 +103,7 @@ http.route({
       return new Response(JSON.stringify({
         balance: stats.points,
         prompts_today: stats.promptsToday,
-        prompts_remaining: stats.promptsRemaining,
+        prompts_remaining: stats.pointsRemaining,
         points_today: stats.pointsToday,
         points_this_week: stats.pointsThisWeek,
       }), {
