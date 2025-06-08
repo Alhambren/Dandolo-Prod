@@ -295,6 +295,26 @@ export const getStats = query({
   },
 });
 
+export const getProviderHealth = query({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) return null;
+
+    const recentCheck = await ctx.db
+      .query("healthChecks")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .order("desc")
+      .first();
+
+    return {
+      lastCheck: recentCheck?.timestamp || provider.lastHealthCheck,
+      isHealthy: provider.isActive,
+      avgResponseTime: provider.avgResponseTime,
+    };
+  },
+});
+
 // Get all providers (without API keys)
 export const list = query({
   args: {},
@@ -428,29 +448,37 @@ export const getTopProviders = query({
   handler: async (ctx, args) => {
     const providers = await ctx.db
       .query("providers")
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
     const providersWithPoints = await Promise.all(
       providers.map(async (provider) => {
         const points = await ctx.db
           .query("providerPoints")
-          .filter((q) => q.eq(q.field("providerId"), provider._id))
+          .withIndex("by_provider", (q) => q.eq("providerId", provider._id))
           .first();
-        
+
         return {
-          _id: provider._id,
-          name: provider.name,
-          prompts24h: provider.totalPrompts, // Simplified for MVP
-          vcuEarned7d: points?.points ?? 0, // Points as proxy for VCU
+          ...provider,
+          points: points?.points ?? 0,
+          veniceApiKey: undefined,
+          apiKeyHash: undefined,
         };
       })
     );
-    
-    // Sort by points and return top N
+
     return providersWithPoints
-      .sort((a, b) => b.vcuEarned7d - a.vcuEarned7d)
-      .slice(0, args.limit);
+      .sort((a, b) => b.points - a.points)
+      .slice(0, args.limit)
+      .map(p => ({
+        _id: p._id,
+        name: p.name,
+        address: p.address,
+        isActive: p.isActive,
+        vcuBalance: p.vcuBalance,
+        totalPrompts: p.totalPrompts,
+        uptime: p.uptime,
+      }));
   },
 });
 
