@@ -18,7 +18,7 @@ const Dashboard: React.FC = () => {
   const generateApiKey = useMutation(api.developers.generateApiKey);
   const rateLimitStatus = useQuery(api.rateLimit.getRateLimitStatus, address ? { address } : "skip");
   const validateVeniceKey = useAction(api.providers.validateVeniceApiKey);
-  const networkStats = useQuery(api.stats.getNetworkStats, {});
+  const networkStats = useQuery(api.stats.getNetworkStats);
   const providers = useQuery(api.providers.listActive, {});
 
   const handleApiKeyGeneration = async () => {
