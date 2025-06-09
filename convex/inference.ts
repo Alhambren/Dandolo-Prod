@@ -189,62 +189,76 @@ export const route = action({
     model: v.string(),
   }),
   handler: async (ctx, args): Promise<RouteResponse> => {
-    // Rate limit check
-    const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
-      address: args.address,
+    console.log("Inference route called with:", {
+      prompt: args.prompt.substring(0, 50) + "...",
+      model: args.model,
+      intentType: args.intentType,
     });
 
-    if (!rateLimitCheck.allowed) {
-      throw new Error(`Daily limit reached (${rateLimitCheck.current}/50)`);
-    }
-
-    // Get active providers
-    const providers = (await ctx.runQuery(internal.providers.listActiveInternal)) as Provider[];
-
-    if (providers.length === 0) {
-      throw new Error("No providers available");
-    }
-
-    // Select random provider
-    const selectedProvider: Provider = providers[Math.floor(Math.random() * providers.length)];
-
-    const startTime = Date.now();
-
     try {
-      // Call Venice.ai with intent type
-      const veniceResponse = await callVeniceAI(
-        args.prompt,
-        selectedProvider.veniceApiKey,
-        args.model,
-        args.intentType
-      );
-      const responseTime = Date.now() - startTime;
-
-      // Log usage (anonymous metrics only)
-      await ctx.runMutation(api.inference.logUsage, {
-        address: args.address ?? 'anonymous',
-        providerId: selectedProvider._id,
-        model: args.model || veniceResponse.model,
-        tokens: veniceResponse.tokens,
-        createdAt: Date.now(),
-        latencyMs: responseTime,
+      // Rate limit check
+      const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+        address: args.address,
       });
 
-      // Award provider points
-      await ctx.runMutation(api.providers.incrementPromptCount, {
-        providerId: selectedProvider._id,
-      });
+      if (!rateLimitCheck.allowed) {
+        throw new Error(`Daily limit reached (${rateLimitCheck.current}/50)`);
+      }
 
-      return {
-        response: veniceResponse.text,
-        provider: selectedProvider.name,
-        tokens: veniceResponse.tokens,
-        cost: veniceResponse.cost,
-        responseTime,
-        model: args.model || veniceResponse.model,
-      };
+      // Get active providers
+      const providers = (await ctx.runQuery(internal.providers.listActiveInternal)) as Provider[];
+      console.log(`Found ${providers.length} active providers`);
+
+      if (providers.length === 0) {
+        throw new Error("No providers available. Please register a provider first.");
+      }
+
+      // Select random provider
+      const selectedProvider: Provider = providers[Math.floor(Math.random() * providers.length)];
+      console.log(`Selected provider: ${selectedProvider.name}`);
+
+      const startTime = Date.now();
+
+      try {
+        // Call Venice.ai with intent type
+        const veniceResponse = await callVeniceAI(
+          args.prompt,
+          selectedProvider.veniceApiKey,
+          args.model,
+          args.intentType
+        );
+        const responseTime = Date.now() - startTime;
+
+        // Log usage (anonymous metrics only)
+        await ctx.runMutation(api.inference.logUsage, {
+          address: args.address ?? 'anonymous',
+          providerId: selectedProvider._id,
+          model: args.model || veniceResponse.model,
+          tokens: veniceResponse.tokens,
+          createdAt: Date.now(),
+          latencyMs: responseTime,
+        });
+
+        // Award provider points
+        await ctx.runMutation(api.providers.incrementPromptCount, {
+          providerId: selectedProvider._id,
+        });
+
+        return {
+          response: veniceResponse.text,
+          provider: selectedProvider.name,
+          tokens: veniceResponse.tokens,
+          cost: veniceResponse.cost,
+          responseTime,
+          model: args.model || veniceResponse.model,
+        };
+      } catch (error) {
+        console.error("Venice AI call failed:", error);
+        throw new Error(`Venice AI error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } catch (error) {
-      throw new Error(`Inference failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Inference route error:", error);
+      throw error;
     }
   },
 });
