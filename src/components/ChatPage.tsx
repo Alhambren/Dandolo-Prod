@@ -6,7 +6,7 @@
 // Outputs: Rendered chat interface
 // Assumptions: Browser environment with localStorage available
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAccount } from 'wagmi';
@@ -54,14 +54,6 @@ interface ChatIntent {
   model?: string;
 }
 
-// Available intents. Models can be swapped later via config.
-const CHAT_INTENTS: ChatIntent[] = [
-  { type: 'chat', label: 'General Chat', icon: '💬', model: 'gpt-3.5-turbo' },
-  { type: 'code', label: 'Code Generation', icon: '💻', model: 'codellama' },
-  { type: 'image', label: 'Image Generation', icon: '🎨', model: 'stable-diffusion' },
-  { type: 'analysis', label: 'Data Analysis', icon: '📊', model: 'gpt-4' },
-];
-
 /**
  * ChatPage component renders the main chat UI with folders, chats, and messages.
  * It stores chats locally in the browser and supports multiple intent types.
@@ -73,7 +65,7 @@ const ChatPage: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
-  const [selectedIntent, setSelectedIntent] = useState<ChatIntent>(CHAT_INTENTS[0]);
+  const [selectedIntent, setSelectedIntent] = useState<ChatIntent>({ type: 'chat', label: 'General Chat', icon: '💬', model: 'gpt-3.5-turbo' });
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -84,6 +76,8 @@ const ChatPage: React.FC = () => {
 
   const routeInference = useAction(api.inference.route);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
+  const fetchModels = useAction(api.models.fetchAndCategorizeModels);
+  const [availableModels, setAvailableModels] = useState<any>(null);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -123,6 +117,95 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chats, activeChat]);
+
+  // Add debugging useEffect after the other useEffects
+  useEffect(() => {
+    console.log("Current chats:", chats);
+    console.log("Active chat:", activeChat);
+    const current = getCurrentChat();
+    console.log("Current chat messages:", current?.messages);
+  }, [chats, activeChat]);
+
+  // Fetch available models periodically
+  useEffect(() => {
+    // Fetch models on component mount
+    fetchModels().then(setAvailableModels).catch(console.error);
+    
+    // Refresh models every 30 minutes
+    const interval = setInterval(() => {
+      fetchModels().then(setAvailableModels).catch(console.error);
+    }, 30 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Dynamic intent selection based on available models
+  const CHAT_INTENTS = useMemo(() => {
+    const intents = [
+      { 
+        type: 'chat' as const, 
+        label: 'General Chat', 
+        icon: '💬', 
+        model: availableModels?.text?.[0]?.id || 'gpt-3.5-turbo' 
+      },
+      { 
+        type: 'code' as const, 
+        label: 'Code Generation', 
+        icon: '💻', 
+        model: availableModels?.code?.[0]?.id || 'codellama' 
+      },
+      { 
+        type: 'image' as const, 
+        label: 'Image Generation', 
+        icon: '🎨', 
+        model: availableModels?.image?.[0]?.id || 'dalle-3' 
+      },
+      { 
+        type: 'analysis' as const, 
+        label: 'Data Analysis', 
+        icon: '📊', 
+        model: availableModels?.text?.find((m: { id: string }) => m.id.includes('gpt-4'))?.id || 'gpt-4' 
+      },
+    ];
+    
+    // Only show intents that have available models
+    return intents.filter(intent => {
+      switch (intent.type) {
+        case 'image':
+          return availableModels?.image?.length > 0;
+        case 'code':
+          return availableModels?.code?.length > 0;
+        default:
+          return true;
+      }
+    });
+  }, [availableModels]);
+
+  // Show model info in UI
+  const currentModelInfo = useMemo(() => {
+    if (!availableModels) return null;
+    
+    let models;
+    switch (selectedIntent.type) {
+      case 'code':
+        models = availableModels.code;
+        break;
+      case 'image':
+        models = availableModels.image;
+        break;
+      case 'analysis':
+        models = availableModels.text.filter((m: any) => m.id.includes('gpt-4'));
+        break;
+      default:
+        models = availableModels.text;
+    }
+    
+    return models?.find((m: any) => m.id === selectedIntent.model) || models?.[0];
+  }, [selectedIntent, availableModels]);
+
+  // Update all references to promptsRemaining
+  const canSendMessage = userStats && userStats.pointsRemaining > 0;
+  const pointsRemaining = userStats?.pointsRemaining ?? 0;
 
   // ----- Helper functions -----
 
@@ -231,35 +314,56 @@ const ChatPage: React.FC = () => {
     if (!message.trim() || isLoading) return;
 
     const currentChat = getCurrentChat();
-
-    // Create new chat if switching intent type within an existing chat
+    
+    // Check if we need to create a new chat due to model change
     if (currentChat && currentChat.intentType !== selectedIntent.type) {
-      toast.info('Creating new chat for different model type');
+      toast.info("Creating new chat for different model type");
       createNewChat();
       return;
     }
 
-    // If no chat exists yet, create one
-    if (!activeChat) {
-      createNewChat();
+    // Store the message before clearing it
+    const userMessageContent = message;
+    
+    // Create new chat if none exists
+    let chatId = activeChat;
+    if (!chatId) {
+      const newChat: Chat = {
+        id: `chat_${Date.now()}`,
+        title: generateChatTitle(userMessageContent),
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        model: selectedIntent.model,
+        intentType: selectedIntent.type,
+      };
+      
+      setChats(prev => [...prev, newChat]);
+      setActiveChat(newChat.id);
+      chatId = newChat.id;
     }
 
+    // Add user message
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
-      content: message,
+      content: userMessageContent,
       role: 'user',
       timestamp: Date.now(),
       intentType: selectedIntent.type,
     };
-
-    // Update current chat with user message
-    const updatedChats = chats.map((chat) => {
-      if (chat.id === activeChat) {
+    
+    // Clear input and set loading
+    setMessage('');
+    setIsLoading(true);
+    
+    // Update chat with user message
+    setChats(prevChats => prevChats.map(chat => {
+      if (chat.id === chatId) {
         const updatedMessages = [...chat.messages, userMessage];
-        const title = chat.messages.length === 0 ? generateChatTitle(message) : chat.title;
-        return {
-          ...chat,
-          messages: updatedMessages,
+        const title = chat.messages.length === 0 ? generateChatTitle(userMessageContent) : chat.title;
+        return { 
+          ...chat, 
+          messages: updatedMessages, 
           updatedAt: Date.now(),
           title,
           model: selectedIntent.model,
@@ -267,19 +371,24 @@ const ChatPage: React.FC = () => {
         };
       }
       return chat;
-    });
-
-    setChats(updatedChats);
-    setMessage('');
-    setIsLoading(true);
+    }));
 
     try {
+      console.log("Calling routeInference with:", {
+        prompt: userMessageContent,
+        address: address || "anonymous",
+        model: selectedIntent.model,
+      });
+      
       const response = await routeInference({
-        prompt: message,
-        address: address || 'anonymous',
+        prompt: userMessageContent,
+        address: address || "anonymous",
         model: selectedIntent.model,
       });
 
+      console.log("Got response:", response);
+
+      // Add AI response
       const aiMessage: Message = {
         id: `msg_${Date.now()}_ai`,
         content: response.response,
@@ -291,19 +400,44 @@ const ChatPage: React.FC = () => {
         responseTime: response.responseTime,
         intentType: selectedIntent.type,
       };
-
-      // Append AI message to chat
-      setChats(
-        chats.map((chat) =>
-          chat.id === activeChat
-            ? { ...chat, messages: [...chat.messages, userMessage, aiMessage], updatedAt: Date.now() }
-            : chat
-        )
-      );
-
+      
+      // Update chats with the AI response
+      setChats(prevChats => prevChats.map(chat => {
+        if (chat.id === chatId) {
+          return { 
+            ...chat, 
+            messages: [...chat.messages, aiMessage], 
+            updatedAt: Date.now() 
+          };
+        }
+        return chat;
+      }));
+      
       toast.success(`Response from ${response.provider} (${response.responseTime}ms)`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to get response');
+      console.error("Chat error:", error);
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: `msg_${Date.now()}_error`,
+        content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
+        role: 'assistant',
+        timestamp: Date.now(),
+        intentType: selectedIntent.type,
+      };
+      
+      setChats(prevChats => prevChats.map(chat => {
+        if (chat.id === chatId) {
+          return { 
+            ...chat, 
+            messages: [...chat.messages, errorMessage], 
+            updatedAt: Date.now() 
+          };
+        }
+        return chat;
+      }));
+      
+      toast.error(error instanceof Error ? error.message : "Failed to get response");
     } finally {
       setIsLoading(false);
     }
@@ -645,12 +779,25 @@ const ChatPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-gray-300">Remaining Today</p>
-                  <p className="text-2xl font-bold">{userStats?.promptsRemaining || 50}</p>
+                  <p className="text-2xl font-bold">{userStats?.pointsRemaining || 50}</p>
                 </div>
               </div>
             </GlassCard>
           </div>
         </div>
+      </div>
+
+      {/* Add model info display */}
+      {currentModelInfo && (
+        <div className="text-xs text-gray-500 mt-1">
+          Using: {currentModelInfo.name}
+          {currentModelInfo.contextLength && ` (${currentModelInfo.contextLength} tokens)`}
+        </div>
+      )}
+
+      {/* Update points display */}
+      <div className="text-sm text-gray-500">
+        <p className="text-2xl font-bold">{userStats?.pointsRemaining || 50}</p>
       </div>
     </div>
   );

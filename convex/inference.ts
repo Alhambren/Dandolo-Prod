@@ -4,11 +4,62 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 // Venice.ai API integration - direct routing
-async function callVeniceAI(prompt: string, apiKey: string, model?: string) {
-  const veniceModel = mapToVeniceModel(model);
+async function callVeniceAI(prompt: string, apiKey: string, model?: string, intentType?: string) {
+  // First, detect if this is an image generation request
+  const isImageRequest = intentType === 'image' || 
+                        model?.toLowerCase().includes('dalle') ||
+                        model?.toLowerCase().includes('stable') ||
+                        model?.toLowerCase().includes('image');
   
+  if (isImageRequest) {
+    try {
+      // Try image generation endpoint
+      const response = await fetch("https://api.venice.ai/api/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          model: model || "dalle-3",
+          n: 1,
+          size: "1024x1024",
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data && data.data[0]) {
+          return {
+            text: `![Generated Image](${data.data[0].url})\n\n*Generated image: ${prompt}*`,
+            tokens: 100,
+            model: model || "dalle-3",
+            cost: calculateCost(100, model || "dalle-3"),
+          };
+        }
+      }
+    } catch (error) {
+      console.log("Image generation failed, falling back to text");
+    }
+  }
+  
+  // Use chat completions for everything else (including image fallback)
   try {
-    // PRIVACY: Direct routing to Venice.ai, no logging of content
+    const isCodeRequest = intentType === 'code' || model?.toLowerCase().includes('code');
+    const systemPrompt = isCodeRequest 
+      ? "You are an expert programmer. Generate clean, well-commented code."
+      : isImageRequest 
+      ? "The user requested an image. Since image generation is not available, provide a detailed text description of what the image would look like."
+      : undefined;
+
+    const messages = systemPrompt 
+      ? [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt }
+        ]
+      : [{ role: "user", content: prompt }];
+
     const response = await fetch("https://api.venice.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -16,15 +67,10 @@ async function callVeniceAI(prompt: string, apiKey: string, model?: string) {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: veniceModel,
-        messages: [
-          {
-            role: "user",
-            content: prompt // Routed directly, never stored
-          }
-        ],
+        model: model || "gpt-3.5-turbo",
+        messages: messages,
         max_tokens: 1000,
-        temperature: 0.7,
+        temperature: isCodeRequest ? 0.3 : 0.7,
         stream: false
       }),
     });
@@ -38,12 +84,11 @@ async function callVeniceAI(prompt: string, apiKey: string, model?: string) {
     return {
       text: data.choices[0].message.content,
       tokens: data.usage?.total_tokens || 0,
-      model: data.model || veniceModel,
-      cost: calculateCost(data.usage?.total_tokens || 0, veniceModel),
+      model: data.model || model || "gpt-3.5-turbo",
+      cost: calculateCost(data.usage?.total_tokens || 0, data.model || model),
     };
   } catch (error) {
-    // PRIVACY: Only log error type, never prompt content
-    console.error("Venice API routing failed:", { model: veniceModel, error: error instanceof Error ? error.message : String(error) });
+    console.error("Venice API call failed:", error);
     throw error;
   }
 }
