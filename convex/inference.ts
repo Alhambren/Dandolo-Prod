@@ -4,93 +4,124 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 // Venice.ai API integration - direct routing
-async function callVeniceAI(prompt: string, apiKey: string, model?: string, intentType?: string) {
-  // First, detect if this is an image generation request
-  const isImageRequest = intentType === 'image' || 
-                        model?.toLowerCase().includes('dalle') ||
-                        model?.toLowerCase().includes('stable') ||
-                        model?.toLowerCase().includes('image');
-  
+async function callVeniceAI(
+  prompt: string,
+  apiKey: string,
+  model?: string,
+  intentType?: string
+) {
+  // Image generation detection - check intent type first
+  const isImageRequest =
+    intentType === 'image' ||
+    prompt.toLowerCase().includes('image') ||
+    prompt.toLowerCase().includes('picture') ||
+    prompt.toLowerCase().includes('draw') ||
+    prompt.toLowerCase().includes('create') ||
+    prompt.toLowerCase().includes('generate');
+
   if (isImageRequest) {
     try {
-      // Try image generation endpoint
-      const response = await fetch("https://api.venice.ai/api/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          model: model || "dalle-3",
-          n: 1,
-          size: "1024x1024",
-        }),
-      });
+      // Try DALL-E 3 endpoint
+      const response = await fetch(
+        "https://api.venice.ai/api/v1/images/generations",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            prompt: prompt,
+            model: "dall-e-3",
+            n: 1,
+            size: "1024x1024",
+            quality: "standard",
+          }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
-        if (data.data && data.data[0]) {
+        if (data.data && data.data[0] && data.data[0].url) {
           return {
-            text: `![Generated Image](${data.data[0].url})\n\n*Generated image: ${prompt}*`,
+            text: `![Generated Image](${data.data[0].url})\n\n*Created: "${prompt}"*`,
             tokens: 100,
-            model: model || "dalle-3",
-            cost: calculateCost(100, model || "dalle-3"),
+            model: "dall-e-3",
+            cost: calculateCost(100, "dall-e-3"),
           };
         }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Image generation error:", errorData);
       }
     } catch (error) {
-      console.log("Image generation failed, falling back to text");
+      console.error("Image generation failed:", error);
     }
   }
-  
-  // Use chat completions for everything else (including image fallback)
-  try {
-    const isCodeRequest = intentType === 'code' || model?.toLowerCase().includes('code');
-    const systemPrompt = isCodeRequest 
-      ? "You are an expert programmer. Generate clean, well-commented code."
-      : isImageRequest 
-      ? "The user requested an image. Since image generation is not available, provide a detailed text description of what the image would look like."
-      : undefined;
 
-    const messages = systemPrompt 
-      ? [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: prompt }
-        ]
-      : [{ role: "user", content: prompt }];
+  // Handle code generation with proper system prompt
+  const isCodeRequest = intentType === 'code';
+  const isAnalysisRequest = intentType === 'analysis';
 
-    const response = await fetch("https://api.venice.ai/api/v1/chat/completions", {
+  let systemPrompt: string | undefined = undefined;
+  if (isCodeRequest) {
+    systemPrompt =
+      "You are an expert programmer. Generate clean, well-commented code with explanations.";
+  } else if (isAnalysisRequest) {
+    systemPrompt =
+      "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
+  } else if (isImageRequest) {
+    systemPrompt =
+      "The user requested an image but image generation failed. Provide a detailed text description of what the image would look like.";
+  }
+
+  const messages = systemPrompt
+    ? [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ]
+    : [{ role: "user", content: prompt }];
+
+  // Use appropriate model based on intent
+  let selectedModel = model || "gpt-3.5-turbo";
+  if (intentType === 'analysis' && !model) {
+    selectedModel = "gpt-4"; // Use GPT-4 for analysis
+  }
+
+  const response = await fetch(
+    "https://api.venice.ai/api/v1/chat/completions",
+    {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: model || "gpt-3.5-turbo",
+        model: selectedModel,
         messages: messages,
-        max_tokens: 1000,
-        temperature: isCodeRequest ? 0.3 : 0.7,
-        stream: false
+        max_tokens: isCodeRequest ? 2000 : 1000,
+        temperature: isCodeRequest ? 0.3 : isAnalysisRequest ? 0.7 : 0.8,
+        stream: false,
       }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Venice API error: ${response.status} ${response.statusText}`);
     }
+  );
 
-    const data = await response.json();
-    
-    return {
-      text: data.choices[0].message.content,
-      tokens: data.usage?.total_tokens || 0,
-      model: data.model || model || "gpt-3.5-turbo",
-      cost: calculateCost(data.usage?.total_tokens || 0, data.model || model),
-    };
-  } catch (error) {
-    console.error("Venice API call failed:", error);
-    throw error;
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Venice API error: ${response.status} - ${error}`);
   }
+
+  const data = await response.json();
+
+  return {
+    text: data.choices[0].message.content,
+    tokens: data.usage?.total_tokens || 0,
+    model: data.model || selectedModel,
+    cost: calculateCost(
+      data.usage?.total_tokens || 0,
+      data.model || selectedModel
+    ),
+  };
 }
 
 // Map user-friendly model names to Venice.ai model IDs
@@ -147,6 +178,7 @@ export const route = action({
     prompt: v.string(),
     address: v.optional(v.string()),
     model: v.optional(v.string()),
+    intentType: v.optional(v.string()), // Add this
   },
   returns: v.object({
     response: v.string(),
@@ -179,8 +211,13 @@ export const route = action({
     const startTime = Date.now();
 
     try {
-      // Call Venice.ai
-      const veniceResponse = await callVeniceAI(args.prompt, selectedProvider.veniceApiKey, args.model);
+      // Call Venice.ai with intent type
+      const veniceResponse = await callVeniceAI(
+        args.prompt,
+        selectedProvider.veniceApiKey,
+        args.model,
+        args.intentType
+      );
       const responseTime = Date.now() - startTime;
 
       // Log usage (anonymous metrics only)

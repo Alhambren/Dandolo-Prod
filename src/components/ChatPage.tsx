@@ -139,47 +139,35 @@ const ChatPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Dynamic intent selection based on available models
+  // Always show all intent options with smart model selection
   const CHAT_INTENTS = useMemo(() => {
-    const intents = [
-      { 
-        type: 'chat' as const, 
-        label: 'General Chat', 
-        icon: '💬', 
-        model: availableModels?.text?.[0]?.id || 'gpt-3.5-turbo' 
+    return [
+      {
+        type: 'chat' as const,
+        label: 'General Chat',
+        icon: '💬',
+        model: 'gpt-3.5-turbo' // Always available
       },
-      { 
-        type: 'code' as const, 
-        label: 'Code Generation', 
-        icon: '💻', 
-        model: availableModels?.code?.[0]?.id || 'codellama' 
+      {
+        type: 'code' as const,
+        label: 'Code Assistant',
+        icon: '💻',
+        model: 'gpt-3.5-turbo' // Fallback to GPT with code prompting
       },
-      { 
-        type: 'image' as const, 
-        label: 'Image Generation', 
-        icon: '🎨', 
-        model: availableModels?.image?.[0]?.id || 'dalle-3' 
+      {
+        type: 'image' as const,
+        label: 'Image Creation',
+        icon: '🎨',
+        model: 'dalle-3' // Venice supports DALL-E 3
       },
-      { 
-        type: 'analysis' as const, 
-        label: 'Data Analysis', 
-        icon: '📊', 
-        model: availableModels?.text?.find((m: { id: string }) => m.id.includes('gpt-4'))?.id || 'gpt-4' 
+      {
+        type: 'analysis' as const,
+        label: 'Deep Analysis',
+        icon: '📊',
+        model: 'gpt-4' // Premium analysis
       },
     ];
-    
-    // Only show intents that have available models
-    return intents.filter(intent => {
-      switch (intent.type) {
-        case 'image':
-          return availableModels?.image?.length > 0;
-        case 'code':
-          return availableModels?.code?.length > 0;
-        default:
-          return true;
-      }
-    });
-  }, [availableModels]);
+  }, []); // No dependencies - always show all options
 
   // Show model info in UI
   const currentModelInfo = useMemo(() => {
@@ -314,10 +302,10 @@ const ChatPage: React.FC = () => {
     if (!message.trim() || isLoading) return;
 
     const currentChat = getCurrentChat();
-    
+
     // Check if we need to create a new chat due to model change
     if (currentChat && currentChat.intentType !== selectedIntent.type) {
-      toast.info("Creating new chat for different model type");
+      toast.info("Creating new chat for different task type");
       createNewChat();
       return;
     }
@@ -374,16 +362,12 @@ const ChatPage: React.FC = () => {
     }));
 
     try {
-      console.log("Calling routeInference with:", {
-        prompt: userMessageContent,
-        address: address || "anonymous",
-        model: selectedIntent.model,
-      });
-      
+      // Pass intent type to the inference router
       const response = await routeInference({
         prompt: userMessageContent,
         address: address || "anonymous",
         model: selectedIntent.model,
+        intentType: selectedIntent.type,
       });
 
       console.log("Got response:", response);
@@ -695,7 +679,7 @@ const ChatPage: React.FC = () => {
                     onClick={() => {
                       setSelectedIntent(intent);
                       if (currentChat && currentChat.intentType && currentChat.intentType !== intent.type) {
-                        toast.info('Model type changed. Next message will start a new chat.');
+                        toast.info('Task type changed. Next message will start a new chat.');
                       }
                     }}
                     className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${
@@ -711,10 +695,9 @@ const ChatPage: React.FC = () => {
               </div>
               {currentChat && currentChat.intentType && currentChat.intentType !== selectedIntent.type && (
                 <div className="mt-2 text-sm text-yellow-400">
-                  ⚠️ Current chat uses {
+                  ⚠️ Current chat is for {
                     CHAT_INTENTS.find((i) => i.type === currentChat.intentType)?.label
-                  }
-                  . Next message will create a new chat.
+                  }. Next message will create a new chat.
                 </div>
               )}
             </div>
