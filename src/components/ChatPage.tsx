@@ -1,3 +1,11 @@
+// ChatPage.tsx
+// Comprehensive chat interface with model-aware chat management, folder system,
+// search, and user statistics. Handles different intent types (chat, code, image,
+// analysis) and stores data in local storage.
+// Inputs: None (component uses Convex actions and hooks)
+// Outputs: Rendered chat interface
+// Assumptions: Browser environment with localStorage available
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -5,6 +13,7 @@ import { useAccount } from 'wagmi';
 import GlassCard from './GlassCard';
 import { toast } from 'sonner';
 
+// Message data structure for each chat message
 interface Message {
   id: string;
   content: string;
@@ -14,16 +23,30 @@ interface Message {
   provider?: string;
   tokens?: number;
   responseTime?: number;
+  intentType?: string; // the model intent type used for this message
 }
 
-interface ChatFolder {
+// Chat data structure representing a conversation thread
+interface Chat {
   id: string;
-  name: string;
+  title: string;
   messages: Message[];
   createdAt: number;
   updatedAt: number;
+  folderId?: string; // optional folder association
+  model?: string;
+  intentType?: string;
 }
 
+// Folder for organizing chats
+interface Folder {
+  id: string;
+  name: string;
+  isExpanded: boolean;
+  createdAt: number;
+}
+
+// Intent definition used to select AI model / capability
 interface ChatIntent {
   type: 'chat' | 'code' | 'image' | 'analysis';
   label: string;
@@ -31,113 +54,224 @@ interface ChatIntent {
   model?: string;
 }
 
+// Available intents. Models can be swapped later via config.
 const CHAT_INTENTS: ChatIntent[] = [
   { type: 'chat', label: 'General Chat', icon: '💬', model: 'gpt-3.5-turbo' },
-  { type: 'code', label: 'Code Generation', icon: '🖥️', model: 'codellama' },
+  { type: 'code', label: 'Code Generation', icon: '💻', model: 'codellama' },
   { type: 'image', label: 'Image Generation', icon: '🎨', model: 'stable-diffusion' },
   { type: 'analysis', label: 'Data Analysis', icon: '📊', model: 'gpt-4' },
 ];
 
+/**
+ * ChatPage component renders the main chat UI with folders, chats, and messages.
+ * It stores chats locally in the browser and supports multiple intent types.
+ */
 const ChatPage: React.FC = () => {
   const { address } = useAccount();
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [folders, setFolders] = useState<ChatFolder[]>([]);
-  const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [activeChat, setActiveChat] = useState<string | null>(null);
   const [selectedIntent, setSelectedIntent] = useState<ChatIntent>(CHAT_INTENTS[0]);
-  const [showFolders, setShowFolders] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [draggedChat, setDraggedChat] = useState<string | null>(null);
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const [renamingChat, setRenamingChat] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const routeInference = useAction(api.inference.route);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
 
-  // Load chats from localStorage on mount
+  // Load data from localStorage on mount
   useEffect(() => {
-    const savedFolders = localStorage.getItem('dandolo_chat_folders');
-    if (savedFolders) {
-      const parsed: ChatFolder[] = JSON.parse(savedFolders);
-      setFolders(parsed);
+    const savedChats = localStorage.getItem('dandolo_chats');
+    const savedFolders = localStorage.getItem('dandolo_folders');
 
-      if (parsed.length > 0) {
-        const mostRecent = parsed.sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        setActiveFolder(mostRecent.id);
-        setMessages(mostRecent.messages);
+    if (savedChats) {
+      const parsedChats = JSON.parse(savedChats) as Chat[];
+      setChats(parsedChats);
+
+      // Load most recent chat if available
+      if (parsedChats.length > 0) {
+        const mostRecent = parsedChats.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        setActiveChat(mostRecent.id);
       }
+    }
+
+    if (savedFolders) {
+      setFolders(JSON.parse(savedFolders) as Folder[]);
     }
   }, []);
 
-  // Auto-scroll when messages change
+  // Persist chats and folders to localStorage when changed
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (chats.length > 0) {
+      localStorage.setItem('dandolo_chats', JSON.stringify(chats));
+    }
+  }, [chats]);
 
-  // Persist folders to localStorage
   useEffect(() => {
     if (folders.length > 0) {
-      localStorage.setItem('dandolo_chat_folders', JSON.stringify(folders));
+      localStorage.setItem('dandolo_folders', JSON.stringify(folders));
     }
   }, [folders]);
 
-  const createNewFolder = () => {
-    const newFolder: ChatFolder = {
-      id: `folder_${Date.now()}`,
-      name: `Chat ${new Date().toLocaleDateString()}`,
+  // Auto-scroll to latest message whenever messages or active chat changes
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chats, activeChat]);
+
+  // ----- Helper functions -----
+
+  // Create a new empty chat and set it active
+  const createNewChat = () => {
+    const newChat: Chat = {
+      id: `chat_${Date.now()}`,
+      title: 'New Chat',
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      model: selectedIntent.model,
+      intentType: selectedIntent.type,
+    };
+
+    setChats([...chats, newChat]);
+    setActiveChat(newChat.id);
+  };
+
+  // Create a new folder with provided name
+  const createNewFolder = () => {
+    if (!newFolderName.trim()) return;
+
+    const newFolder: Folder = {
+      id: `folder_${Date.now()}`,
+      name: newFolderName,
+      isExpanded: true,
+      createdAt: Date.now(),
     };
 
     setFolders([...folders, newFolder]);
-    setActiveFolder(newFolder.id);
-    setMessages([]);
+    setNewFolderName('');
+    setShowNewFolderInput(false);
   };
 
-  const updateActiveFolder = (newMessages: Message[]) => {
-    if (!activeFolder) {
-      createNewFolder();
-      return;
-    }
-
-    const updated = folders.map((f) =>
-      f.id === activeFolder ? { ...f, messages: newMessages, updatedAt: Date.now() } : f
-    );
-
-    setFolders(updated);
-  };
-
+  // Delete folder and move contained chats to root
   const deleteFolder = (folderId: string) => {
-    const updated = folders.filter((f) => f.id !== folderId);
-    setFolders(updated);
+    const updatedChats = chats.map((chat) =>
+      chat.folderId === folderId ? { ...chat, folderId: undefined } : chat
+    );
+    setChats(updatedChats);
+    setFolders(folders.filter((f) => f.id !== folderId));
+  };
 
-    if (activeFolder === folderId) {
-      if (updated.length > 0) {
-        setActiveFolder(updated[0].id);
-        setMessages(updated[0].messages);
-      } else {
-        setActiveFolder(null);
-        setMessages([]);
-      }
+  // Delete chat and update active chat accordingly
+  const deleteChat = (chatId: string) => {
+    const remaining = chats.filter((c) => c.id !== chatId);
+    setChats(remaining);
+    if (activeChat === chatId) {
+      setActiveChat(remaining.length > 0 ? remaining[0].id : null);
     }
   };
+
+  // Rename chat or folder utilities
+  const renameChat = (chatId: string, newTitle: string) => {
+    setChats(chats.map((chat) => (chat.id === chatId ? { ...chat, title: newTitle } : chat)));
+    setRenamingChat(null);
+  };
+
+  const renameFolder = (folderId: string, newName: string) => {
+    setFolders(folders.map((folder) => (folder.id === folderId ? { ...folder, name: newName } : folder)));
+    setRenamingFolder(null);
+  };
+
+  const toggleFolder = (folderId: string) => {
+    setFolders(
+      folders.map((folder) =>
+        folder.id === folderId ? { ...folder, isExpanded: !folder.isExpanded } : folder
+      )
+    );
+  };
+
+  // Drag and drop support for moving chats between folders
+  const handleDragStart = (chatId: string) => {
+    setDraggedChat(chatId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, folderId?: string) => {
+    e.preventDefault();
+    if (!draggedChat) return;
+
+    setChats(
+      chats.map((chat) => (chat.id === draggedChat ? { ...chat, folderId } : chat))
+    );
+    setDraggedChat(null);
+  };
+
+  // Retrieve active chat object
+  const getCurrentChat = () => chats.find((c) => c.id === activeChat);
+
+  // Generate a simple title from first message content
+  const generateChatTitle = (content: string) => {
+    const maxLength = 30;
+    const cleaned = content.replace(/\n/g, ' ').trim();
+    return cleaned.length > maxLength ? `${cleaned.substring(0, maxLength)}...` : cleaned;
+  };
+
+  // ----- Message handling -----
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isLoading) return;
+
+    const currentChat = getCurrentChat();
+
+    // Create new chat if switching intent type within an existing chat
+    if (currentChat && currentChat.intentType !== selectedIntent.type) {
+      toast.info('Creating new chat for different model type');
+      createNewChat();
+      return;
+    }
+
+    // If no chat exists yet, create one
+    if (!activeChat) {
+      createNewChat();
+    }
 
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
       content: message,
       role: 'user',
       timestamp: Date.now(),
+      intentType: selectedIntent.type,
     };
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    updateActiveFolder(updatedMessages);
+    // Update current chat with user message
+    const updatedChats = chats.map((chat) => {
+      if (chat.id === activeChat) {
+        const updatedMessages = [...chat.messages, userMessage];
+        const title = chat.messages.length === 0 ? generateChatTitle(message) : chat.title;
+        return {
+          ...chat,
+          messages: updatedMessages,
+          updatedAt: Date.now(),
+          title,
+          model: selectedIntent.model,
+          intentType: selectedIntent.type,
+        };
+      }
+      return chat;
+    });
 
-    setIsLoading(true);
+    setChats(updatedChats);
     setMessage('');
+    setIsLoading(true);
 
     try {
       const response = await routeInference({
@@ -155,90 +289,281 @@ const ChatPage: React.FC = () => {
         provider: response.provider,
         tokens: response.tokens,
         responseTime: response.responseTime,
+        intentType: selectedIntent.type,
       };
 
-      const finalMessages = [...updatedMessages, aiMessage];
-      setMessages(finalMessages);
-      updateActiveFolder(finalMessages);
+      // Append AI message to chat
+      setChats(
+        chats.map((chat) =>
+          chat.id === activeChat
+            ? { ...chat, messages: [...chat.messages, userMessage, aiMessage], updatedAt: Date.now() }
+            : chat
+        )
+      );
 
       toast.success(`Response from ${response.provider} (${response.responseTime}ms)`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to get response');
-      console.error('Chat error:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Filter chats based on search query across titles and messages
+  const filteredChats = chats.filter(
+    (chat) =>
+      searchQuery === '' ||
+      chat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      chat.messages.some((msg) => msg.content.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Retrieve chats in a specific folder (or root if folderId undefined)
+  const getChatsInFolder = (folderId?: string) => filteredChats.filter((chat) => chat.folderId === folderId);
+
+  const currentChat = getCurrentChat();
+
+  // ----- Render -----
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white" data-testid="chat-page">
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Folders Sidebar */}
-          <div className={`md:col-span-1 ${showFolders ? 'block' : 'hidden md:block'}`}>
-            <GlassCard className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold">Chat History</h2>
-                <button
-                  onClick={createNewFolder}
-                  className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-                >
-                  New Chat
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {folders.length === 0 ? (
-                  <p className="text-gray-400 text-sm">No chats yet</p>
-                ) : (
-                  folders
-                    .sort((a, b) => b.updatedAt - a.updatedAt)
-                    .map((folder) => (
-                      <div
-                        key={folder.id}
-                        className={`p-2 rounded cursor-pointer ${
-                          activeFolder === folder.id ? 'bg-white/20' : 'bg-white/10 hover:bg-white/15'
-                        }`}
-                        onClick={() => {
-                          setActiveFolder(folder.id);
-                          setMessages(folder.messages);
-                        }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm truncate">{folder.name}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteFolder(folder.id);
-                            }}
-                            className="text-red-400 hover:text-red-300 text-xs"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <span className="text-xs text-gray-400">{folder.messages.length} messages</span>
-                      </div>
-                    ))
-                )}
-              </div>
-
-              <div className="mt-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
-                <p className="text-xs text-yellow-200">
-                  🔒 All chats are stored locally in your browser. Nothing is saved on our servers.
-                </p>
-              </div>
-            </GlassCard>
+      <div className="flex h-screen">
+        {/* Sidebar */}
+        <div className="w-64 bg-black/50 border-r border-white/10 flex flex-col">
+          {/* New Chat Button */}
+          <div className="p-4">
+            <button
+              onClick={createNewChat}
+              className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium flex items-center justify-center gap-2"
+            >
+              <span>✏️</span> New chat
+            </button>
           </div>
 
-          {/* Chat Interface */}
-          <div className="md:col-span-2">
-            <GlassCard className="p-4 h-[600px] flex flex-col" data-testid="chat-container">
-              {/* Intent Selector */}
-              <div className="mb-4 flex flex-wrap gap-2">
+          {/* Search */}
+          <div className="px-4 pb-4">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search chats"
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 pl-10"
+              />
+              <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
+            </div>
+          </div>
+
+          {/* Chat List */}
+          <div className="flex-1 overflow-y-auto px-4">
+            {/* Root level chats */}
+            {getChatsInFolder(undefined).map((chat) => (
+              <div
+                key={chat.id}
+                draggable
+                onDragStart={() => handleDragStart(chat.id)}
+                className={`group relative p-2 rounded-lg cursor-pointer mb-1 ${
+                  activeChat === chat.id ? 'bg-white/20' : 'bg-white/5 hover:bg-white/10'
+                }`}
+                onClick={() => setActiveChat(chat.id)}
+              >
+                {renamingChat === chat.id ? (
+                  <input
+                    type="text"
+                    defaultValue={chat.title}
+                    onBlur={(e) => renameChat(chat.id, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        renameChat(chat.id, (e.target as HTMLInputElement).value);
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full bg-transparent text-white outline-none"
+                    autoFocus
+                  />
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm truncate">{chat.title}</span>
+                    <div className="hidden group-hover:flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRenamingChat(chat.id);
+                        }}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteChat(chat.id);
+                        }}
+                        className="text-gray-400 hover:text-red-400"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Folders */}
+            {folders.map((folder) => (
+              <div key={folder.id} className="mb-2">
+                <div
+                  className="group flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, folder.id)}
+                >
+                  {renamingFolder === folder.id ? (
+                    <input
+                      type="text"
+                      defaultValue={folder.name}
+                      onBlur={(e) => renameFolder(folder.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          renameFolder(folder.id, (e.target as HTMLInputElement).value);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 bg-transparent text-white outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 flex-1" onClick={() => toggleFolder(folder.id)}>
+                        <span>{folder.isExpanded ? '📂' : '📁'}</span>
+                        <span className="text-sm">{folder.name}</span>
+                      </div>
+                      <div className="hidden group-hover:flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenamingFolder(folder.id);
+                          }}
+                          className="text-gray-400 hover:text-white"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteFolder(folder.id);
+                          }}
+                          className="text-gray-400 hover:text-red-400"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Chats in folder */}
+                {folder.isExpanded && (
+                  <div className="ml-4 mt-1">
+                    {getChatsInFolder(folder.id).map((chat) => (
+                      <div
+                        key={chat.id}
+                        draggable
+                        onDragStart={() => handleDragStart(chat.id)}
+                        className={`group relative p-2 rounded-lg cursor-pointer mb-1 ${
+                          activeChat === chat.id ? 'bg-white/20' : 'bg-white/5 hover:bg-white/10'
+                        }`}
+                        onClick={() => setActiveChat(chat.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm truncate">{chat.title}</span>
+                          <div className="hidden group-hover:flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingChat(chat.id);
+                              }}
+                              className="text-gray-400 hover:text-white"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteChat(chat.id);
+                              }}
+                              className="text-gray-400 hover:text-red-400"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* New Folder */}
+            <div className="mt-4 mb-2">
+              {showNewFolderInput ? (
+                <div className="flex items-center gap-2 p-2">
+                  <span>📁</span>
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onBlur={() => {
+                      if (newFolderName.trim()) createNewFolder();
+                      else {
+                        setShowNewFolderInput(false);
+                        setNewFolderName('');
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') createNewFolder();
+                      if (e.key === 'Escape') {
+                        setNewFolderName('');
+                        setShowNewFolderInput(false);
+                      }
+                    }}
+                    placeholder="Folder name"
+                    className="flex-1 bg-transparent text-white outline-none text-sm"
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowNewFolderInput(true)}
+                  className="flex items-center gap-2 p-2 w-full text-gray-400 hover:text-white text-sm"
+                >
+                  <span>➕</span> New folder
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Storage Notice */}
+          <div className="p-4 border-t border-white/10">
+            <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-3">
+              <p className="text-xs text-yellow-200">🔒 All chats are stored locally in your browser</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex">
+          <div className="flex-1 flex flex-col">
+            {/* Intent Selector */}
+            <div className="p-4 border-b border-white/10">
+              <div className="flex flex-wrap gap-2">
                 {CHAT_INTENTS.map((intent) => (
                   <button
                     key={intent.type}
-                    onClick={() => setSelectedIntent(intent)}
+                    onClick={() => {
+                      setSelectedIntent(intent);
+                      if (currentChat && currentChat.intentType && currentChat.intentType !== intent.type) {
+                        toast.info('Model type changed. Next message will start a new chat.');
+                      }
+                    }}
                     className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${
                       selectedIntent.type === intent.type
                         ? 'bg-blue-500 text-white'
@@ -250,31 +575,41 @@ const ChatPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {currentChat && currentChat.intentType && currentChat.intentType !== selectedIntent.type && (
+                <div className="mt-2 text-sm text-yellow-400">
+                  ⚠️ Current chat uses {
+                    CHAT_INTENTS.find((i) => i.type === currentChat.intentType)?.label
+                  }
+                  . Next message will create a new chat.
+                </div>
+              )}
+            </div>
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto mb-4 space-y-4" data-testid="chat-messages">
-                {messages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[80%] p-3 rounded-lg ${
-                        msg.role === 'user'
-                          ? 'bg-blue-500/20 border border-blue-500/30'
-                          : 'bg-white/10 border border-white/20'
-                      }`}
-                    >
-                      <p className="text-sm">{msg.content}</p>
-                      {msg.role === 'assistant' && (
-                        <div className="mt-2 text-xs text-gray-400">
-                          {msg.provider} • {msg.model} • {msg.tokens} tokens • {msg.responseTime}ms
-                        </div>
-                      )}
-                    </div>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {currentChat?.messages.map((msg) => (
+                <div key={msg.id} className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : ''}`}>
+                  <div
+                    className={`max-w-[80%] p-4 rounded-lg ${
+                      msg.role === 'user'
+                        ? 'bg-blue-500/20 border border-blue-500/30'
+                        : 'bg-white/10 border border-white/20'
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    {msg.role === 'assistant' && (
+                      <div className="mt-2 text-xs text-gray-400">
+                        {msg.provider} • {msg.model} • {msg.tokens} tokens • {msg.responseTime}ms
+                      </div>
+                    )}
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
 
-              {/* Input */}
+            {/* Input */}
+            <div className="p-4 border-t border-white/10">
               <form onSubmit={handleSubmit} className="flex gap-2">
                 <input
                   type="text"
@@ -282,24 +617,22 @@ const ChatPage: React.FC = () => {
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder={`Type your ${selectedIntent.label.toLowerCase()} request...`}
                   className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                  data-testid="chat-input"
                   disabled={isLoading}
                 />
                 <button
                   type="submit"
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50"
-                  data-testid="send-button"
+                  className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
                   disabled={isLoading || !message.trim()}
                 >
-                  {isLoading ? 'Sending...' : 'Send'}
+                  Send
                 </button>
               </form>
-            </GlassCard>
+            </div>
           </div>
 
           {/* Stats Sidebar */}
-          <div className="md:col-span-1">
-            <GlassCard className="p-4" data-testid="user-stats">
+          <div className="w-64 bg-black/50 border-l border-white/10 p-4">
+            <GlassCard className="p-4">
               <h2 className="text-xl font-bold mb-4">Your Stats</h2>
               <div className="space-y-4">
                 <div>
