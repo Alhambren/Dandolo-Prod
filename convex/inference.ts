@@ -10,56 +10,65 @@ async function callVeniceAI(
   model?: string,
   intentType?: string
 ) {
-  // Image generation detection - check intent type first
-  const isImageRequest =
-    intentType === 'image' ||
-    prompt.toLowerCase().includes('image') ||
-    prompt.toLowerCase().includes('picture') ||
-    prompt.toLowerCase().includes('draw') ||
-    prompt.toLowerCase().includes('create') ||
-    prompt.toLowerCase().includes('generate');
+  console.log("CallVeniceAI:", {
+    prompt: prompt.substring(0, 50),
+    model,
+    intentType,
+    isImageRequest: intentType === 'image',
+  });
 
-  if (isImageRequest) {
+  // Image generation detection
+  if (intentType === 'image') {
+    console.log("Processing image generation request");
+
     try {
-      // Try DALL-E 3 endpoint
-      const response = await fetch(
-        "https://api.venice.ai/api/v1/images/generations",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            prompt: prompt,
-            model: "dall-e-3",
-            n: 1,
-            size: "1024x1024",
-            quality: "standard",
-          }),
-        }
-      );
+      // Venice.ai OpenAI-compatible image endpoint
+      const imageEndpoint = "https://api.venice.ai/v1/images/generations";
+      console.log("Calling image endpoint:", imageEndpoint);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data && data.data[0] && data.data[0].url) {
-          return {
-            text: `![Generated Image](${data.data[0].url})\n\n*Created: "${prompt}"*`,
-            tokens: 100,
-            model: "dall-e-3",
-            cost: calculateCost(100, "dall-e-3"),
-          };
+      const imageResponse = await fetch(imageEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          n: 1,
+          size: "1024x1024",
+        }),
+      });
+
+      console.log("Image response status:", imageResponse.status);
+      const responseText = await imageResponse.text();
+      console.log("Image response body:", responseText);
+
+      if (imageResponse.ok) {
+        try {
+          const imageData = JSON.parse(responseText);
+          console.log("Parsed image data:", imageData);
+
+          if (imageData.data && imageData.data[0] && imageData.data[0].url) {
+            return {
+              text: `![Generated Image](${imageData.data[0].url})\n\n*"${prompt}"*`,
+              tokens: 100,
+              model: "dall-e",
+              cost: calculateCost(100, "dall-e"),
+            };
+          }
+        } catch (parseError) {
+          console.error("Failed to parse image response:", parseError);
         }
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Image generation error:", errorData);
       }
+
+      // If image generation fails, fall back to text description
+      console.log("Image generation failed, falling back to text description");
     } catch (error) {
-      console.error("Image generation failed:", error);
+      console.error("Image generation error:", error);
     }
   }
 
-  // Handle code generation with proper system prompt
+  // Text generation (for all non-image requests or fallback)
   const isCodeRequest = intentType === 'code';
   const isAnalysisRequest = intentType === 'analysis';
 
@@ -70,9 +79,11 @@ async function callVeniceAI(
   } else if (isAnalysisRequest) {
     systemPrompt =
       "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
-  } else if (isImageRequest) {
+  } else if (intentType === 'image') {
+    // Fallback for failed image generation
     systemPrompt =
-      "The user requested an image but image generation failed. Provide a detailed text description of what the image would look like.";
+      "The user requested an image but generation is currently unavailable. Create a vivid, detailed text description of: " +
+      prompt;
   }
 
   const messages = systemPrompt
@@ -88,8 +99,11 @@ async function callVeniceAI(
     selectedModel = "gpt-4"; // Use GPT-4 for analysis
   }
 
+  const textEndpoint = "https://api.venice.ai/v1/chat/completions";
+  console.log("Calling Venice text completion with model:", selectedModel);
+
   const response = await fetch(
-    "https://api.venice.ai/api/v1/chat/completions",
+    textEndpoint,
     {
       method: "POST",
       headers: {

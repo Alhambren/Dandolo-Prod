@@ -14,12 +14,11 @@ import GlassCard from './GlassCard';
 import { toast } from 'sonner';
 
 /**
- * Helper to render message content with basic markdown image support.
- * Splits the content into text and image parts and renders images with
- * graceful error handling.
+ * Helper to render message content. Supports basic markdown image syntax and
+ * graceful error handling when an image fails to load.
  */
 const renderMessageContent = (content: string) => {
-  // Quick check to avoid unnecessary work for plain text
+  // Check for markdown image pattern before doing any heavy work
   if (content.includes('![')) {
     const parts = content.split(/(\!\[.*?\]\(.*?\))/g);
 
@@ -36,20 +35,23 @@ const renderMessageContent = (content: string) => {
                   src={imageUrl}
                   alt={altText}
                   className="max-w-full rounded-lg"
+                  style={{ maxHeight: '400px', objectFit: 'contain' }}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className =
-                      'text-red-400 text-sm p-2 bg-red-500/10 rounded';
-                    errorDiv.textContent =
-                      '⚠️ Image failed to load: ' + imageUrl;
-                    target.parentNode?.appendChild(errorDiv);
+                    const errorDiv = target.nextElementSibling as HTMLDivElement;
+                    if (errorDiv) {
+                      errorDiv.style.display = 'block';
+                    }
                   }}
                 />
+                <div className="hidden text-red-400 text-sm p-2 bg-red-500/10 rounded mt-2">
+                  ⚠️ Image failed to load
+                </div>
               </div>
             );
           }
+          // Regular text
           return part ? (
             <span key={index} className="whitespace-pre-wrap">
               {part}
@@ -60,6 +62,7 @@ const renderMessageContent = (content: string) => {
     );
   }
 
+  // No images detected, return plain text
   return <p className="whitespace-pre-wrap">{content}</p>;
 };
 
