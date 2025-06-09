@@ -125,20 +125,30 @@ export const fetchAndCategorizeModels = action({
     })),
   }),
   handler: async (ctx) => {
+    console.log("Fetching models from Venice.ai...");
     const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-    
+    console.log(`Found ${providers.length} providers for model fetch`);
+
     if (providers.length === 0) {
+      console.log("No providers available, returning default models");
       return {
-        text: [],
-        code: [],
-        image: [],
+        text: [
+          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
+          { id: "gpt-4", name: "GPT-4" },
+        ],
+        code: [
+          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo (Code)" },
+        ],
+        image: [
+          { id: "dalle-3", name: "DALL-E 3" },
+        ],
         multimodal: [],
       };
     }
 
     // Use the first active provider's API key
     const apiKey = providers[0].veniceApiKey;
-    
+
     try {
       const response = await fetch("https://api.venice.ai/api/v1/models", {
         headers: {
@@ -147,6 +157,7 @@ export const fetchAndCategorizeModels = action({
       });
 
       if (!response.ok) {
+        console.error(`Venice API returned ${response.status}: ${await response.text()}`);
         throw new Error(`Failed to fetch models: ${response.status}`);
       }
 
@@ -207,8 +218,8 @@ export const fetchAndCategorizeModels = action({
 
       return categorized;
     } catch (error) {
-      console.error("Failed to fetch models:", error);
-      
+      console.error("Model fetch error:", error);
+
       // Return fallback models
       return {
         text: [
@@ -216,7 +227,7 @@ export const fetchAndCategorizeModels = action({
           { id: "gpt-4", name: "GPT-4" },
         ],
         code: [
-          { id: "codellama", name: "CodeLlama" },
+          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo (Code)" },
         ],
         image: [
           { id: "dalle-3", name: "DALL-E 3" },
