@@ -13,6 +13,56 @@ import { useAccount } from 'wagmi';
 import GlassCard from './GlassCard';
 import { toast } from 'sonner';
 
+/**
+ * Helper to render message content with basic markdown image support.
+ * Splits the content into text and image parts and renders images with
+ * graceful error handling.
+ */
+const renderMessageContent = (content: string) => {
+  // Quick check to avoid unnecessary work for plain text
+  if (content.includes('![')) {
+    const parts = content.split(/(\!\[.*?\]\(.*?\))/g);
+
+    return (
+      <div className="space-y-2">
+        {parts.map((part, index) => {
+          const imageMatch = part.match(/!\[(.*?)\]\((.*?)\)/);
+          if (imageMatch) {
+            const altText = imageMatch[1];
+            const imageUrl = imageMatch[2];
+            return (
+              <div key={index} className="my-2">
+                <img
+                  src={imageUrl}
+                  alt={altText}
+                  className="max-w-full rounded-lg"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className =
+                      'text-red-400 text-sm p-2 bg-red-500/10 rounded';
+                    errorDiv.textContent =
+                      '⚠️ Image failed to load: ' + imageUrl;
+                    target.parentNode?.appendChild(errorDiv);
+                  }}
+                />
+              </div>
+            );
+          }
+          return part ? (
+            <span key={index} className="whitespace-pre-wrap">
+              {part}
+            </span>
+          ) : null;
+        })}
+      </div>
+    );
+  }
+
+  return <p className="whitespace-pre-wrap">{content}</p>;
+};
+
 // Message data structure for each chat message
 interface Message {
   id: string;
@@ -705,7 +755,10 @@ const ChatPage: React.FC = () => {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4">
               {currentChat?.messages.map((msg) => (
-                <div key={msg.id} className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : ''}`}>
+                <div
+                  key={msg.id}
+                  className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : ''}`}
+                >
                   <div
                     className={`max-w-[80%] p-4 rounded-lg ${
                       msg.role === 'user'
@@ -713,7 +766,7 @@ const ChatPage: React.FC = () => {
                         : 'bg-white/10 border border-white/20'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    {renderMessageContent(msg.content)}
                     {msg.role === 'assistant' && (
                       <div className="mt-2 text-xs text-gray-400">
                         {msg.provider} • {msg.model} • {msg.tokens} tokens • {msg.responseTime}ms
