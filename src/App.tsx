@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { useQuery } from 'convex/react';
-import { api } from '../convex/_generated/api';
 import { Toaster } from "sonner";
 import HomePage from './components/HomePage';
 import ChatPage from './components/ChatPage';
@@ -11,7 +9,6 @@ import { WalletConnectButton } from './components/WalletConnectButton';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'home' | 'chat' | 'providers' | 'dashboard' | 'developers'>('home');
-  const systemStats = useQuery(api.stats.getNetworkStats, {});
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
