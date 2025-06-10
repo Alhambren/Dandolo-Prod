@@ -96,7 +96,9 @@ function analyzePromptIntent(prompt: string): {
       promptLower.includes("system design") ||
       promptLower.includes("optimization");
     return {
-      suggestedModel: isComplex ? "gpt-4" : "gpt-3.5-turbo",
+      suggestedModel: isComplex
+        ? "dolphin-mixtral-8x7b"
+        : "llama-3.2-3b-instruct",
       confidence: 0.9,
       reasoning: "Code-related task detected",
     };
@@ -107,7 +109,7 @@ function analyzePromptIntent(prompt: string): {
     complexPatterns.some((p) => p.test(promptLower))
   ) {
     return {
-      suggestedModel: "gpt-4",
+      suggestedModel: "dolphin-mixtral-8x7b",
       confidence: 0.85,
       reasoning: "Complex analysis or reasoning required",
     };
@@ -115,14 +117,14 @@ function analyzePromptIntent(prompt: string): {
 
   if (prompt.length > 500) {
     return {
-      suggestedModel: "gpt-4",
+      suggestedModel: "dolphin-mixtral-8x7b",
       confidence: 0.7,
       reasoning: "Long prompt suggests complex task",
     };
   }
 
   return {
-    suggestedModel: "gpt-3.5-turbo",
+    suggestedModel: "llama-3.2-3b-instruct",
     confidence: 0.8,
     reasoning: "Standard conversational query",
   };
@@ -133,8 +135,8 @@ function analyzePromptIntent(prompt: string): {
  */
 function calculateVCUCost(tokens: number, model: string): number {
   const vcuPricing: Record<string, number> = {
-    "gpt-4": 30,
-    "gpt-3.5-turbo": 2,
+    "dolphin-mixtral-8x7b": 30,
+    "llama-3.2-3b-instruct": 2,
     "claude-3-sonnet-20240229": 15,
     "claude-3-haiku-20240307": 2.5,
     "meta-llama/Llama-2-70b-chat-hf": 10,
@@ -224,7 +226,7 @@ async function callVeniceAI(
   if (intentType === "code" || model?.includes("code")) {
     systemPrompt =
       "You are an expert programmer. Generate clean, well-commented code with explanations.";
-  } else if (intentType === "analysis" || model === "gpt-4") {
+  } else if (intentType === "analysis" || model === "dolphin-mixtral-8x7b") {
     systemPrompt =
       "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
   } else if (intentType === "image-fallback") {
@@ -240,6 +242,12 @@ async function callVeniceAI(
     : [{ role: "user", content: prompt }];
 
   const selectedModel = model || analyzePromptIntent(prompt).suggestedModel;
+  const modelMap: Record<string, string> = {
+    "gpt-3.5-turbo": "llama-3.2-3b-instruct",
+    "gpt-4": "dolphin-mixtral-8x7b",
+    "gpt-4-vision": "fluently-xl",
+  };
+  const veniceModel = modelMap[selectedModel] || selectedModel;
 
   const response = await fetch(
     "https://api.venice.ai/v1/chat/completions",
@@ -250,7 +258,7 @@ async function callVeniceAI(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: selectedModel,
+        model: veniceModel,
         messages,
         max_tokens: intentType === "code" ? 2000 : 1000,
         temperature:
@@ -264,22 +272,33 @@ async function callVeniceAI(
     },
   );
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Venice API error: ${response.status} - ${error}`);
+  try {
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Venice API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    const totalTokens = data.usage?.total_tokens || 0;
+    const vcuCost = calculateVCUCost(totalTokens, veniceModel);
+
+    return {
+      text: data.choices[0].message.content,
+      tokens: totalTokens,
+      model: data.model || veniceModel,
+      cost: vcuCost,
+      vcuUsed: vcuCost,
+    };
+  } catch (err) {
+    console.error("Text generation error:", err);
+    return {
+      text: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
+      tokens: 0,
+      model: veniceModel,
+      cost: 0,
+      vcuUsed: 0,
+    };
   }
-
-  const data = await response.json();
-  const totalTokens = data.usage?.total_tokens || 0;
-  const vcuCost = calculateVCUCost(totalTokens, selectedModel);
-
-  return {
-    text: data.choices[0].message.content,
-    tokens: totalTokens,
-    model: data.model || selectedModel,
-    cost: vcuCost,
-    vcuUsed: vcuCost,
-  };
 }
 
 /** Provider record used during routing */

@@ -6,11 +6,23 @@ import { Id } from "./_generated/dataModel";
 // Default models always available
 const DEFAULT_MODELS = {
   text: [
-    { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", contextLength: 4096 },
-    { id: "gpt-4", name: "GPT-4", contextLength: 8192 },
+    {
+      id: "llama-3.2-3b-instruct",
+      name: "Llama 3.2 3B Instruct",
+      contextLength: 8192,
+    },
+    {
+      id: "dolphin-mixtral-8x7b",
+      name: "Dolphin Mixtral 8x7B",
+      contextLength: 8192,
+    },
   ],
   code: [
-    { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo (Code)", contextLength: 4096 },
+    {
+      id: "deepseek-coder-v2-lite",
+      name: "DeepSeek Coder V2 Lite",
+      contextLength: 16384,
+    },
     { id: "codellama-34b", name: "CodeLlama 34B", contextLength: 4096 },
   ],
   image: [
@@ -18,7 +30,7 @@ const DEFAULT_MODELS = {
     { id: "dalle-3", name: "DALL-E 3" },
   ],
   multimodal: [
-    { id: "gpt-4-vision", name: "GPT-4 Vision", contextLength: 8192 },
+    { id: "fluently-xl", name: "Fluently XL", contextLength: 8192 },
   ],
 };
 
@@ -66,9 +78,24 @@ export const getAvailableModels = query({
 
     // Return default models if cache is stale/empty
     return [
-      { id: "gpt-4", name: "GPT-4", available: true, lastUpdated: Date.now() },
-      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", available: true, lastUpdated: Date.now() },
-      { id: "claude-3-sonnet", name: "Claude 3 Sonnet", available: true, lastUpdated: Date.now() },
+      {
+        id: "dolphin-mixtral-8x7b",
+        name: "Dolphin Mixtral 8x7B",
+        available: true,
+        lastUpdated: Date.now(),
+      },
+      {
+        id: "llama-3.2-3b-instruct",
+        name: "Llama 3.2 3B Instruct",
+        available: true,
+        lastUpdated: Date.now(),
+      },
+      {
+        id: "claude-3-sonnet",
+        name: "Claude 3 Sonnet",
+        available: true,
+        lastUpdated: Date.now(),
+      },
       { id: "fluently-xl", name: "Fluently XL", available: true, lastUpdated: Date.now() },
     ];
   },
@@ -281,7 +308,7 @@ export const getBestModelForIntent = query({
             m.id.toLowerCase().includes("deepseek") ||
             m.id.toLowerCase().includes("starcoder"),
         );
-        return codeModels[0]?.id || "gpt-3.5-turbo";
+        return codeModels[0]?.id || "deepseek-coder-v2-lite";
 
       case "image":
         const imageModels = models.filter(
@@ -296,19 +323,21 @@ export const getBestModelForIntent = query({
       case "analysis":
         const analysisModels = models.filter(
           (m) =>
-            m.id.toLowerCase().includes("gpt-4") ||
+            m.id.toLowerCase().includes("mixtral") ||
+            m.id.toLowerCase().includes("dolphin") ||
             m.id.toLowerCase().includes("claude"),
         );
-        return analysisModels[0]?.id || "gpt-4";
+        return analysisModels[0]?.id || "dolphin-mixtral-8x7b";
 
       default:
         // For general chat, prefer fast models
         const chatModels = models.filter(
           (m) =>
-            m.id.toLowerCase().includes("turbo") ||
+            m.id.toLowerCase().includes("llama") ||
+            m.id.toLowerCase().includes("mixtral") ||
             m.id.toLowerCase().includes("haiku"),
         );
-        return chatModels[0]?.id || models[0]?.id || "gpt-3.5-turbo";
+        return chatModels[0]?.id || models[0]?.id || "llama-3.2-3b-instruct";
     }
   },
 });
