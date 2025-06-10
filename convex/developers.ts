@@ -44,8 +44,6 @@ export const generateAgentKey = mutation({
       name: args.name,
       isActive: true,
       createdAt: Date.now(),
-      keyType: "agent",
-      description: args.description,
       usageCount: 0,
       totalUsage: 0,
     });
@@ -72,14 +70,15 @@ export const getUserApiKeys = query({
 });
 
 // Validate API key (for API requests)
+// Validate API key (for API requests)
 export const validateApiKey = query({
-  args: { 
-    address: v.string(),
+  args: {
+    apiKey: v.string(),
   },
   handler: async (ctx, args) => {
     const keyRecord = await ctx.db
       .query("apiKeys")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .withIndex("by_key", (q) => q.eq("key", args.apiKey))
       .first();
 
     if (!keyRecord || !keyRecord.isActive) {
