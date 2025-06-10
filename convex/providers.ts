@@ -352,10 +352,16 @@ export const listActive = query({
 export const listActiveInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
+    try {
+      const providers = await ctx.db
+        .query("providers")
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+      return providers || [];
+    } catch (error) {
+      console.error("Error fetching active providers:", error);
+      return [];
+    }
   },
 });
 
