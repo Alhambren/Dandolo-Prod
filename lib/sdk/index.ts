@@ -154,6 +154,16 @@ export class DandoloSDK {
     return Promise.all(promises);
   }
 
+  // Generate embeddings for a piece of text
+  async embed(text: string): Promise<number[]> {
+    const response = await this.makeRequest('/api/v1/embed', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+    const data = await response.json();
+    return data.embedding as number[];
+  }
+
   async getBalance(): Promise<BalanceResponse> {
     const response = await this.makeRequest('/api/v1/balance', {
       method: 'GET',

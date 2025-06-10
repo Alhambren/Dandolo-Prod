@@ -104,6 +104,14 @@ export default defineSchema({
   })
     .index("by_address", ["address"])
     .index("by_key", ["key"]),
+  // EMBEDDINGS: Stored text embeddings
+  embeddings: defineTable({
+    text: v.string(),
+    embedding: v.array(v.number()),
+    createdAt: v.number(),
+  }).index("by_created", ["createdAt"]),
+
+
 
   // MODEL CACHE: Venice.ai model availability
   modelCache: defineTable({
