@@ -674,3 +674,11 @@ export const updateProviderStats = internalMutation({
     await ctx.db.patch(args.providerId, updates);
   },
 });
+
+// Internal query to fetch a provider by ID
+export const getById = internalQuery({
+  args: { id: v.id("providers") },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.id);
+  },
+});
