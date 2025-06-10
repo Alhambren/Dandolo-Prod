@@ -73,6 +73,23 @@ export default defineSchema({
     .index("by_address", ["address"])
     .index("by_created", ["createdAt"]),
 
+  // INFERENCES: Track detailed inference metrics
+  inferences: defineTable({
+    providerId: v.id("providers"),
+    model: v.string(),
+    intent: v.string(),
+    promptTokens: v.number(),
+    completionTokens: v.number(),
+    totalTokens: v.number(),
+    vcuCost: v.number(),
+    sessionId: v.string(),
+    isAnonymous: v.boolean(),
+    timestamp: v.number(),
+  })
+    .index("by_provider", ["providerId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_session", ["sessionId"]),
+
   // POINTS HISTORY: Track point awards
   points_history: defineTable({
     address: v.string(),
