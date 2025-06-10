@@ -23,7 +23,7 @@ async function callVeniceAI(
 
     try {
       // Venice.ai OpenAI-compatible image endpoint
-      const imageEndpoint = "https://api.venice.ai/v1/images/generations";
+      const imageEndpoint = "https://api.venice.ai/api/v1/image/generate";
       console.log("Calling image endpoint:", imageEndpoint);
 
       const imageResponse = await fetch(imageEndpoint, {
