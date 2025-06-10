@@ -67,42 +67,42 @@ async function callVeniceAI(
   let selectedModel = model;
   if (!selectedModel) {
     if (intentType === "image") {
-      selectedModel =
-        availableModels.find((m) =>
-          m.id.toLowerCase().includes("fluently") ||
-          m.id.toLowerCase().includes("dalle") ||
-          m.id.toLowerCase().includes("stable") ||
-          m.id.toLowerCase().includes("image")
-        )?.id ||
-        availableModels[0]?.id ||
-        "fluently-xl";
+      // Choose any available image model
+      selectedModel = availableModels.find((m) =>
+        m.id.toLowerCase().includes("fluently") ||
+        m.id.toLowerCase().includes("dalle") ||
+        m.id.toLowerCase().includes("stable") ||
+        m.id.toLowerCase().includes("image")
+      )?.id;
     } else if (intentType === "code") {
-      selectedModel =
-        availableModels.find((m) =>
-          m.id.toLowerCase().includes("code") ||
-          m.id.toLowerCase().includes("deepseek") ||
-          m.id.toLowerCase().includes("starcoder")
-        )?.id ||
-        availableModels[0]?.id ||
-        "llama-3.2-3b-instruct";
+      // Choose any available code model
+      selectedModel = availableModels.find((m) =>
+        m.id.toLowerCase().includes("code") ||
+        m.id.toLowerCase().includes("deepseek") ||
+        m.id.toLowerCase().includes("starcoder")
+      )?.id;
     } else if (intentType === "analysis") {
-      selectedModel =
-        availableModels.find((m) =>
-          m.id.toLowerCase().includes("mixtral") ||
-          m.id.toLowerCase().includes("dolphin") ||
-          m.id.toLowerCase().includes("claude")
-        )?.id ||
-        availableModels[0]?.id ||
-        "dolphin-mixtral-8x7b";
-    } else {
+      // Choose any available analysis model
+      selectedModel = availableModels.find((m) =>
+        m.id.toLowerCase().includes("mixtral") ||
+        m.id.toLowerCase().includes("dolphin") ||
+        m.id.toLowerCase().includes("claude")
+      )?.id;
+    }
+
+    // Fallback to first available or safe default
+    if (!selectedModel) {
       selectedModel = availableModels[0]?.id || "llama-3.2-3b-instruct";
     }
   }
 
+  // Ensure selectedModel is defined for subsequent calls
+  const finalModel = selectedModel || "llama-3.2-3b-instruct";
+
   // Image generation handling
   if (
     intentType === "image" ||
-    (selectedModel && selectedModel.toLowerCase().includes("fluently"))
+    finalModel.toLowerCase().includes("fluently")
   ) {
     try {
       const imageEndpoint = "https://api.venice.ai/api/v1/image/generate";
@@ -113,7 +113,7 @@ async function callVeniceAI(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: selectedModel,
+          model: finalModel,
           prompt,
           width: 1024,
           height: 1024,
@@ -127,11 +127,11 @@ async function callVeniceAI(
         const imageData = await imageResponse.json();
         if (imageData.images && imageData.images.length > 0) {
           const imageUrl = imageData.images[0];
-          const vcuCost = calculateVCUCost(100, selectedModel);
+          const vcuCost = calculateVCUCost(100, finalModel);
           return {
             text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
             tokens: 100,
-            model: selectedModel,
+            model: finalModel,
             cost: vcuCost,
             vcuUsed: vcuCost,
           };
@@ -147,7 +147,7 @@ async function callVeniceAI(
   let systemPrompt: string | undefined;
   if (
     intentType === "code" ||
-    (selectedModel && selectedModel.toLowerCase().includes("code"))
+    finalModel.toLowerCase().includes("code")
   ) {
     systemPrompt =
       "You are an expert programmer. Generate clean, well-commented code with explanations.";
@@ -173,7 +173,7 @@ async function callVeniceAI(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: selectedModel,
+      model: finalModel,
       messages,
       max_tokens: intentType === "code" ? 2000 : 1000,
       temperature:
@@ -194,12 +194,12 @@ async function callVeniceAI(
 
     const data = await response.json();
     const totalTokens = data.usage?.total_tokens || 0;
-    const vcuCost = calculateVCUCost(totalTokens, selectedModel);
+    const vcuCost = calculateVCUCost(totalTokens, finalModel);
 
     return {
       text: data.choices[0].message.content,
       tokens: totalTokens,
-      model: data.model || selectedModel,
+      model: data.model || finalModel,
       cost: vcuCost,
       vcuUsed: vcuCost,
     };
@@ -208,7 +208,7 @@ async function callVeniceAI(
     return {
       text: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
       tokens: 0,
-      model: selectedModel,
+      model: finalModel,
       cost: 0,
       vcuUsed: 0,
     };
