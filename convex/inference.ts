@@ -221,8 +221,16 @@ async function callVeniceAI(
     }
   }
 
+
   // ----- Text generation -----
   let systemPrompt: string | undefined;
+  if (intentType === "vision") {
+    systemPrompt =
+      "You are a computer vision assistant. Analyze the provided image and respond.";
+  } else if (intentType === "audio") {
+    systemPrompt =
+      "You are an audio assistant. Transcribe or summarize the provided audio.";
+  }
   if (intentType === "code" || model?.includes("code")) {
     systemPrompt =
       "You are an expert programmer. Generate clean, well-commented code with explanations.";

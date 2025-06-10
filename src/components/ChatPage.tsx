@@ -101,7 +101,7 @@ interface Folder {
 
 // Intent definition used to select AI model / capability
 interface ChatIntent {
-  type: 'chat' | 'code' | 'image' | 'analysis';
+  type: 'chat' | 'code' | 'image' | 'vision' | 'audio' | 'analysis';
   label: string;
   icon: string;
   model?: string;
@@ -126,6 +126,10 @@ const ChatPage: React.FC = () => {
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [renamingChat, setRenamingChat] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // File upload support for vision and audio intents
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const routeInference = useAction(api.inference.route);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
@@ -214,6 +218,18 @@ const ChatPage: React.FC = () => {
         model: 'dalle-3' // Venice supports DALL-E 3
       },
       {
+        type: 'vision' as const,
+        label: 'Image Analysis',
+        icon: '👁️',
+        model: 'llava-v1.6-mistral-7b'
+      },
+      {
+        type: 'audio' as const,
+        label: 'Voice Chat',
+        icon: '🎤',
+        model: 'whisper-large-v3'
+      },
+      {
         type: 'analysis' as const,
         label: 'Deep Analysis',
         icon: '📊',
@@ -233,6 +249,12 @@ const ChatPage: React.FC = () => {
         break;
       case 'image':
         models = availableModels.image;
+        break;
+      case 'vision':
+        models = availableModels.multimodal;
+        break;
+      case 'audio':
+        models = availableModels.text;
         break;
       case 'analysis':
         models = availableModels.text.filter((m: any) => m.id.includes('gpt-4'));
@@ -348,11 +370,38 @@ const ChatPage: React.FC = () => {
     return cleaned.length > maxLength ? `${cleaned.substring(0, maxLength)}...` : cleaned;
   };
 
+  // ----- File handling for vision/audio -----
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (selectedIntent.type === 'vision' && !file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    if (selectedIntent.type === 'audio' && !file.type.startsWith('audio/')) {
+      toast.error('Please upload an audio file');
+      return;
+    }
+
+    setUploadedFile(file);
+    toast.success(`File uploaded: ${file.name}`);
+  };
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   // ----- Message handling -----
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || isLoading) return;
+    if ((!message.trim() && !uploadedFile) || isLoading) return;
 
     const currentChat = getCurrentChat();
 
@@ -363,8 +412,24 @@ const ChatPage: React.FC = () => {
       return;
     }
 
-    // Store the message before clearing it
-    const userMessageContent = message;
+    let userMessageContent = message;
+
+    // Attach file data if uploaded for vision or audio
+    if (uploadedFile) {
+      try {
+        const base64Data = await fileToBase64(uploadedFile);
+        if (selectedIntent.type === 'vision') {
+          userMessageContent = `[Image: ${uploadedFile.name}]\n${message || 'What do you see in this image?'}`;
+          // TODO: send base64Data to API when backend supports it
+        } else if (selectedIntent.type === 'audio') {
+          userMessageContent = `[Audio: ${uploadedFile.name}]\n${message || 'Transcribe this audio'}`;
+          // TODO: send base64Data to API when backend supports it
+        }
+      } catch (err) {
+        toast.error('Failed to process file');
+        return;
+      }
+    }
     
     // Create new chat if none exists
     let chatId = activeChat;
@@ -477,6 +542,8 @@ const ChatPage: React.FC = () => {
       toast.error(error instanceof Error ? error.message : "Failed to get response");
     } finally {
       setIsLoading(false);
+      setUploadedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -731,6 +798,7 @@ const ChatPage: React.FC = () => {
                     key={intent.type}
                     onClick={() => {
                       setSelectedIntent(intent);
+                      setUploadedFile(null);
                       if (currentChat && currentChat.intentType && currentChat.intentType !== intent.type) {
                         toast.info('Task type changed. Next message will start a new chat.');
                       }
@@ -746,6 +814,22 @@ const ChatPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {(selectedIntent.type === 'vision' || selectedIntent.type === 'audio') && (
+                <div className="mt-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileUpload}
+                    accept={selectedIntent.type === 'vision' ? 'image/*' : 'audio/*'}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label htmlFor="file-upload" className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg cursor-pointer hover:bg-white/20">
+                    <span>📎</span>
+                    <span>{uploadedFile ? uploadedFile.name : `Upload ${selectedIntent.type === 'vision' ? 'image' : 'audio'}`}</span>
+                  </label>
+                </div>
+              )}
               {currentChat && currentChat.intentType && currentChat.intentType !== selectedIntent.type && (
                 <div className="mt-2 text-sm text-yellow-400">
                   ⚠️ Current chat is for {
@@ -795,7 +879,7 @@ const ChatPage: React.FC = () => {
                 <button
                   type="submit"
                   className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
-                  disabled={isLoading || !message.trim()}
+                  disabled={isLoading || (!message.trim() && !uploadedFile)}
                 >
                   Send
                 </button>
