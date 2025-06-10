@@ -242,27 +242,29 @@ const ChatPage: React.FC = () => {
       });
     }
 
-    if (availableModels?.text?.some((m: any) => m.id.includes('whisper'))) {
+    const audioModel = availableModels?.text?.find(
+      (m: any) =>
+        m.id.toLowerCase().includes('whisper') ||
+        m.id.toLowerCase().includes('audio')
+    );
+    if (audioModel) {
       intents.push({
         type: 'audio',
         label: 'Voice Chat',
         icon: '🎤',
-        model: availableModels.text.find((m: any) => m.id.includes('whisper'))?.id,
+        model: audioModel.id,
       });
     }
 
-    if (availableModels?.text?.length > 1) {
+    const analysisModel =
+      availableModels?.text?.find((m: any) => m.contextLength > 100000) ||
+      availableModels?.text?.[0];
+    if (analysisModel) {
       intents.push({
         type: 'analysis',
         label: 'Deep Analysis',
         icon: '📊',
-        model:
-          availableModels.text.find(
-            (m: any) =>
-              m.id.includes('mixtral') ||
-              m.id.includes('gpt-4') ||
-              m.contextLength > 8192,
-          )?.id || availableModels.text[0].id,
+        model: analysisModel.id,
       });
     }
 

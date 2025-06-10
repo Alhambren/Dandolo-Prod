@@ -146,33 +146,29 @@ export const fetchAndCategorizeModels = action({
         };
 
         models.forEach((model: any) => {
-          const modelId = model.id.toLowerCase();
           const modelInfo = {
             id: model.id,
             name: model.id,
-            contextLength: model.context_length,
+            contextLength: model.model_spec?.availableContextTokens || 0,
+            type: model.type,
           };
 
-          if (
-            modelId.includes("image") ||
-            modelId.includes("dalle") ||
-            modelId.includes("stable") ||
-            modelId.includes("fluently")
-          ) {
+          if (model.type === "image") {
             categorized.image.push(modelInfo);
-          } else if (
-            modelId.includes("code") ||
-            modelId.includes("deepseek") ||
-            modelId.includes("starcoder")
-          ) {
-            categorized.code.push(modelInfo);
-          } else if (
-            modelId.includes("vision") ||
-            modelId.includes("multimodal")
-          ) {
-            categorized.multimodal.push(modelInfo);
-          } else {
-            categorized.text.push(modelInfo);
+          } else if (model.type === "text") {
+            const modelId = model.id.toLowerCase();
+
+            if (
+              modelId.includes("code") ||
+              modelId.includes("deepseek") ||
+              modelId.includes("starcoder")
+            ) {
+              categorized.code.push(modelInfo);
+            } else if (model.model_spec?.capabilities?.supportsVision) {
+              categorized.multimodal.push(modelInfo);
+            } else {
+              categorized.text.push(modelInfo);
+            }
           }
         });
 

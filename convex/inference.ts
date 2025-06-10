@@ -49,95 +49,130 @@ async function callVeniceAI(
     intentType,
   });
 
-  // Fetch current available models from Venice
+  // Always fetch fresh model list to stay fully dynamic
   let availableModels: any[] = [];
   try {
     const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
-    if (modelsResponse.ok) {
-      const modelsData = await modelsResponse.json();
-      availableModels = modelsData.data || [];
+
+    if (!modelsResponse.ok) {
+      console.error("Failed to fetch models:", modelsResponse.status);
+      throw new Error(`Venice API error: ${modelsResponse.status}`);
     }
+
+    const modelsData = await modelsResponse.json();
+    availableModels = modelsData.data || [];
+    console.log(
+      "Available models from Venice:",
+      availableModels.map((m: any) => ({ id: m.id, type: m.type }))
+    );
   } catch (error) {
     console.error("Failed to fetch models:", error);
+    throw new Error("Cannot proceed without model list");
   }
 
-  // Dynamic model selection based on available models and intent
+  if (availableModels.length === 0) {
+    throw new Error("No models available from Venice.ai");
+  }
+
+  // Dynamic model selection with validation
   let selectedModel = model;
+
+  if (selectedModel) {
+    const exists = availableModels.some((m) => m.id === selectedModel);
+    if (!exists) {
+      console.warn(`Model ${selectedModel} not found, selecting dynamically`);
+      selectedModel = undefined;
+    }
+  }
+
   if (!selectedModel) {
     if (intentType === "image") {
-      // Choose any available image model
-      selectedModel = availableModels.find((m) =>
-        m.id.toLowerCase().includes("fluently") ||
-        m.id.toLowerCase().includes("dalle") ||
-        m.id.toLowerCase().includes("stable") ||
-        m.id.toLowerCase().includes("image")
-      )?.id;
+      selectedModel = availableModels.find((m) => m.type === "image")?.id;
     } else if (intentType === "code") {
-      // Choose any available code model
-      selectedModel = availableModels.find((m) =>
-        m.id.toLowerCase().includes("code") ||
-        m.id.toLowerCase().includes("deepseek") ||
-        m.id.toLowerCase().includes("starcoder")
+      selectedModel = availableModels.find(
+        (m) =>
+          m.type === "text" &&
+          (m.id.toLowerCase().includes("code") ||
+            m.id.toLowerCase().includes("deepseek") ||
+            m.id.toLowerCase().includes("starcoder"))
       )?.id;
     } else if (intentType === "analysis") {
-      // Choose any available analysis model
-      selectedModel = availableModels.find((m) =>
-        m.id.toLowerCase().includes("mixtral") ||
-        m.id.toLowerCase().includes("dolphin") ||
-        m.id.toLowerCase().includes("claude")
+      selectedModel = availableModels.find(
+        (m) =>
+          m.type === "text" &&
+          ((m.model_spec?.availableContextTokens || 0) > 100000 ||
+            m.id.toLowerCase().includes("mixtral") ||
+            m.id.toLowerCase().includes("dolphin"))
       )?.id;
     }
 
-    // Fallback to first available or safe default
     if (!selectedModel) {
-      selectedModel = availableModels[0]?.id || "llama-3.2-3b-instruct";
+      selectedModel = availableModels.find((m) => m.type === "text")?.id;
+    }
+
+    if (!selectedModel) {
+      selectedModel = availableModels[0].id;
     }
   }
 
-  // Ensure selectedModel is defined for subsequent calls
-  const finalModel = selectedModel || "llama-3.2-3b-instruct";
+  const finalModel = selectedModel;
+  console.log("Selected model:", finalModel, "for intent:", intentType);
 
-  // Image generation handling
-  if (
-    intentType === "image" ||
-    finalModel.toLowerCase().includes("fluently")
-  ) {
+  const isImageModel =
+    availableModels.find((m) => m.id === finalModel)?.type === "image";
+
+  // Image generation
+  if (isImageModel || intentType === "image") {
     try {
-      const imageEndpoint = "https://api.venice.ai/api/v1/image/generate";
-      const imageResponse = await fetch(imageEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: finalModel,
-          prompt,
-          width: 1024,
-          height: 1024,
-          steps: 20,
-          cfg_scale: 7.5,
-          return_binary: false,
-        }),
-      });
+      const imageModel = isImageModel
+        ? finalModel
+        : availableModels.find((m) => m.type === "image")?.id;
 
-      if (imageResponse.ok) {
-        const imageData = await imageResponse.json();
-        if (imageData.images && imageData.images.length > 0) {
-          const imageUrl = imageData.images[0];
-          const vcuCost = calculateVCUCost(100, finalModel);
-          return {
-            text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
-            tokens: 100,
-            model: finalModel,
-            cost: vcuCost,
-            vcuUsed: vcuCost,
-          };
+      if (!imageModel) {
+        console.log(
+          "No image model available, falling back to text description"
+        );
+      } else {
+        const imageResponse = await fetch(
+          "https://api.venice.ai/api/v1/image/generate",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: imageModel,
+              prompt,
+              width: 1024,
+              height: 1024,
+              steps: 20,
+              cfg_scale: 7.5,
+              return_binary: false,
+            }),
+          }
+        );
+
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json();
+          if (imageData.images && imageData.images.length > 0) {
+            const imageUrl = imageData.images[0];
+            const vcuCost = calculateVCUCost(100, imageModel);
+            return {
+              text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
+              tokens: 100,
+              model: imageModel,
+              cost: vcuCost,
+              vcuUsed: vcuCost,
+            };
+          }
+        } else {
+          const errorText = await imageResponse.text();
+          console.error("Image generation failed:", errorText);
         }
       }
-      console.log("Image generation failed, falling back to text");
     } catch (err) {
       console.error("Image generation error:", err);
     }
@@ -145,16 +180,13 @@ async function callVeniceAI(
 
   // Text generation with dynamic system prompts
   let systemPrompt: string | undefined;
-  if (
-    intentType === "code" ||
-    finalModel.toLowerCase().includes("code")
-  ) {
+  if (intentType === "code") {
     systemPrompt =
       "You are an expert programmer. Generate clean, well-commented code with explanations.";
   } else if (intentType === "analysis") {
     systemPrompt =
       "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
-  } else if (intentType === "image") {
+  } else if (intentType === "image" && !isImageModel) {
     systemPrompt =
       "The user requested an image. Create a vivid, detailed text description instead.";
   }
