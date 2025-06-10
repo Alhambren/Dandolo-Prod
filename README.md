@@ -1,16 +1,22 @@
-# Dandolo.ai MVP
-  
-This is a project built with [Chef](https://chef.convex.dev) using [Convex](https://convex.dev) as its backend.
-  
-This project is connected to the Convex deployment named [`accomplished-malamute-324`](https://dashboard.convex.dev/d/accomplished-malamute-324).
+# Dandolo.ai
+
+Experimental sovereign inference platform built on [Convex](https://convex.dev) and
+[Venice.ai](https://venice.ai). This fork introduces a streamlined UI with room
+for upcoming audio and vision features.
   
 ## Project structure
   
-The frontend code is in the `app` directory and is built with [Vite](https://vitejs.dev/).
-  
-The backend code is in the `convex` directory.
-  
-`npm run dev` will start the frontend and backend servers.
+The frontend code lives in `src` and uses [Vite](https://vitejs.dev/). The
+backend logic resides in the `convex` directory.
+
+Run `npm run dev` to start both servers during development.
+
+### Interface Highlights
+
+- **Chat** – multi-model text chat with basic folder organization.
+- **Audio Studio** – placeholder for speech-to-text and text-to-speech.
+- **Vision Lab** – placeholder for image generation and analysis.
+- **Tools Marketplace** – upcoming registry for AI tools.
 
 ## App authentication
 
