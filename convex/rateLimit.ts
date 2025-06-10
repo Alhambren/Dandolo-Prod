@@ -22,7 +22,7 @@ export const checkRateLimit = mutation({
 
     const usageToday = await ctx.db
       .query("usageLogs")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .withIndex("by_address", (q) => q.eq("address", args.address!))
       .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
       .collect();
 
@@ -58,7 +58,7 @@ export const getRateLimitStatus = query({
 
     const usageToday = await ctx.db
       .query("usageLogs")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .withIndex("by_address", (q) => q.eq("address", args.address!))
       .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
       .collect();
 
