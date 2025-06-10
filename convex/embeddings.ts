@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { action, mutation, query } from "./_generated/server";
+import { action, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 /**
@@ -56,7 +56,7 @@ export const embedText = action({
 /**
  * Store embedding in database.
  */
-export const store = mutation({
+export const store = internalMutation({
   args: {
     text: v.string(),
     embedding: v.array(v.number()),
