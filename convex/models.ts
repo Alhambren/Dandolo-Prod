@@ -108,10 +108,14 @@ export const fetchAndCategorizeModels = action({
 
       if (providers.length === 0) {
         console.log("No providers available");
-        return { text: [], code: [], image: [], multimodal: [] };
+        return {
+          text: [],
+          code: [],
+          image: [],
+          multimodal: [],
+        };
       }
 
-      // Use the first active provider's API key
       const apiKey = providers[0].veniceApiKey;
 
       try {
@@ -123,77 +127,73 @@ export const fetchAndCategorizeModels = action({
 
         if (!response.ok) {
           console.error(`Venice API returned ${response.status}`);
-          return { text: [], code: [], image: [], multimodal: [] };
+          return {
+            text: [],
+            code: [],
+            image: [],
+            multimodal: [],
+          };
         }
 
         const data = await response.json();
         const models = data.data || [];
 
-        // Categorize models based on their IDs and capabilities
         const categorized = {
-          text: [] as ModelCapability[],
-          code: [] as ModelCapability[],
-          image: [] as ModelCapability[],
-          multimodal: [] as ModelCapability[],
+          text: [] as any[],
+          code: [] as any[],
+          image: [] as any[],
+          multimodal: [] as any[],
         };
 
         models.forEach((model: any) => {
           const modelId = model.id.toLowerCase();
-          const modelInfo: ModelCapability = {
+          const modelInfo = {
             id: model.id,
             name: model.id,
             contextLength: model.context_length,
           };
 
-          // Dynamic categorization based on model ID patterns
           if (
             modelId.includes("image") ||
             modelId.includes("dalle") ||
-            modelId.includes("stable-diffusion") ||
-            modelId.includes("midjourney") ||
+            modelId.includes("stable") ||
             modelId.includes("fluently")
           ) {
             categorized.image.push(modelInfo);
           } else if (
             modelId.includes("code") ||
-            modelId.includes("codellama") ||
             modelId.includes("deepseek") ||
             modelId.includes("starcoder")
           ) {
             categorized.code.push(modelInfo);
           } else if (
             modelId.includes("vision") ||
-            modelId.includes("multimodal") ||
-            modelId.includes("gpt-4v")
+            modelId.includes("multimodal")
           ) {
             categorized.multimodal.push(modelInfo);
           } else {
-            // Default to text models
             categorized.text.push(modelInfo);
           }
-        });
-
-        // No models found for some categories is acceptable
-
-        // Store in database for quick access
-        await ctx.runMutation(api.models.updateModelCache, {
-          models: models.map((m: any) => ({
-            id: m.id,
-            name: m.id,
-            available: true,
-            lastUpdated: Date.now(),
-          })),
-          timestamp: Date.now(),
         });
 
         return categorized;
       } catch (error) {
         console.error("Model fetch error:", error);
-        return { text: [], code: [], image: [], multimodal: [] };
+        return {
+          text: [],
+          code: [],
+          image: [],
+          multimodal: [],
+        };
       }
     } catch (error) {
       console.error("Provider fetch error:", error);
-      return { text: [], code: [], image: [], multimodal: [] };
+      return {
+        text: [],
+        code: [],
+        image: [],
+        multimodal: [],
+      };
     }
   },
 });
