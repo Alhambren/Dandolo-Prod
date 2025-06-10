@@ -1,5 +1,8 @@
 {
-  "buildCommand": "npx convex deploy --yes && node node_modules/vite/bin/vite.js build",
+  "buildCommand": "NODE_ENV=production npx convex deploy --yes && NODE_ENV=production node node_modules/vite/bin/vite.js build",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
