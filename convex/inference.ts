@@ -7,7 +7,7 @@
 
 import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 /** Venice.ai model definition returned by the models endpoint. */
@@ -56,9 +56,11 @@ interface VeniceImageResponse {
 }
 
 /** Provider record stored in Convex. */
+// Provider record as returned from the database. veniceApiKey is optional when
+// fetched via the public query so we treat it as such here.
 interface Provider {
   _id: Id<"providers">;
-  veniceApiKey: string;
+  veniceApiKey?: string;
   name: string;
   isActive: boolean;
 }
@@ -140,7 +142,8 @@ async function callVeniceAI(
   apiKey: string,
   messages: VeniceMessage[],
   intent: "chat" | "code" | "image" | "analysis"
-): Promise<{ response: string; model: string; tokens: number }> {
+): Promise<{ response: string; model: string; tokens: number; responseTime: number }> {
+  const startTime = Date.now();
   try {
     // Fetch available models for selection
     const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
@@ -185,6 +188,7 @@ async function callVeniceAI(
         response: imageData.data[0]?.url || "Failed to generate image",
         model,
         tokens: 1,
+        responseTime: Date.now() - startTime,
       };
     }
 
@@ -215,6 +219,7 @@ async function callVeniceAI(
       response: data.choices[0]?.message?.content || "No response generated",
       model: data.model || model,
       tokens: data.usage?.total_tokens || 0,
+      responseTime: Date.now() - startTime,
     };
   } catch (error) {
     console.error("Venice API call failed:", error);
@@ -223,11 +228,16 @@ async function callVeniceAI(
 }
 
 /** Return type for the route action. */
-type RouteReturnType = {
+// Response returned to router.ts after routing a request
+export type RouteReturnType = {
   response: string;
   model: string;
   tokens: number;
   providerId: Id<"providers">;
+  provider: string;
+  cost: number;
+  responseTime: number;
+  pointsAwarded: number;
 };
 
 /**
@@ -256,27 +266,36 @@ export const route = action({
     model: v.string(),
     tokens: v.number(),
     providerId: v.id("providers"),
+    provider: v.string(),
+    cost: v.number(),
+    responseTime: v.number(),
+    pointsAwarded: v.number(),
   }),
   handler: async (ctx, args): Promise<RouteReturnType> => {
     try {
-      const providers: Provider[] = await ctx.runQuery(api.providers.listActive);
+      const providers: Provider[] = await ctx.runQuery(
+        internal.providers.listActiveInternal
+      );
 
       if (providers.length === 0) {
         throw new Error("No active providers available");
       }
 
-      const randomProvider: Provider =
-        providers[Math.floor(Math.random() * providers.length)];
+      const validProviders = providers.filter((p) => p.veniceApiKey);
 
-      if (!randomProvider.veniceApiKey) {
-        throw new Error("Selected provider has no API key");
+      if (validProviders.length === 0) {
+        throw new Error("No providers with valid API keys available");
       }
 
-      const { response, model: usedModel, tokens } = await callVeniceAI(
-        randomProvider.veniceApiKey,
-        args.messages,
-        args.intent
-      );
+      const randomProvider: Provider =
+        validProviders[Math.floor(Math.random() * validProviders.length)];
+
+      const { response, model: usedModel, tokens, responseTime } =
+        await callVeniceAI(
+          randomProvider.veniceApiKey as string,
+          args.messages,
+          args.intent
+        );
 
       const vcuCost = calculateVCUCost(tokens, usedModel);
 
@@ -292,14 +311,14 @@ export const route = action({
         isAnonymous: args.isAnonymous,
       });
 
+      let pointsAwarded = 0;
       if (tokens > 0) {
         const points = Math.floor(tokens / 100);
         if (points > 0) {
-          await ctx.runMutation(api.points.awardPoints, {
+          await ctx.runMutation(api.points.awardPromptPoints, {
             providerId: randomProvider._id,
-            points,
-            reason: `Processed ${tokens} tokens`,
           });
+          pointsAwarded = points;
         }
       }
 
@@ -308,6 +327,10 @@ export const route = action({
         model: usedModel,
         tokens,
         providerId: randomProvider._id,
+        provider: randomProvider.name,
+        cost: vcuCost,
+        responseTime,
+        pointsAwarded,
       };
     } catch (error) {
       console.error("Inference routing error:", error);
