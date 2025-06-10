@@ -320,6 +320,24 @@ export const getBestModelForIntent = query({
         );
         return imageModels[0]?.id || "fluently-xl";
 
+      case "vision":
+        const visionModels = models.filter(
+          (m) =>
+            m.id.toLowerCase().includes("llava") ||
+            m.id.toLowerCase().includes("vision") ||
+            m.id.toLowerCase().includes("gpt-4v"),
+        );
+        return visionModels[0]?.id || "llava-v1.6-mistral-7b";
+
+      case "audio":
+        const audioModels = models.filter(
+          (m) =>
+            m.id.toLowerCase().includes("whisper") ||
+            m.id.toLowerCase().includes("audio") ||
+            m.id.toLowerCase().includes("speech"),
+        );
+        return audioModels[0]?.id || "whisper-large-v3";
+
       case "analysis":
         const analysisModels = models.filter(
           (m) =>
