@@ -3,36 +3,6 @@ import { query, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-// Default models always available
-const DEFAULT_MODELS = {
-  text: [
-    {
-      id: "llama-3.2-3b-instruct",
-      name: "Llama 3.2 3B Instruct",
-      contextLength: 8192,
-    },
-    {
-      id: "dolphin-mixtral-8x7b",
-      name: "Dolphin Mixtral 8x7B",
-      contextLength: 8192,
-    },
-  ],
-  code: [
-    {
-      id: "deepseek-coder-v2-lite",
-      name: "DeepSeek Coder V2 Lite",
-      contextLength: 16384,
-    },
-    { id: "codellama-34b", name: "CodeLlama 34B", contextLength: 4096 },
-  ],
-  image: [
-    { id: "fluently-xl", name: "Fluently XL" },
-    { id: "dalle-3", name: "DALL-E 3" },
-  ],
-  multimodal: [
-    { id: "fluently-xl", name: "Fluently XL", contextLength: 8192 },
-  ],
-};
 
 // Cache TTL in milliseconds (5 minutes)
 const CACHE_TTL = 5 * 60 * 1000;
@@ -62,44 +32,19 @@ export interface ModelCapability {
 // Query to get cached models (read-only)
 export const getAvailableModels = query({
   args: {},
-  returns: v.array(v.object({
-    id: v.string(),
-    name: v.string(),
-    available: v.boolean(),
-    lastUpdated: v.number(),
-  })),
   handler: async (ctx) => {
-    // Get cached models from database
     const cached = await ctx.db.query("modelCache").first();
 
     if (cached && Date.now() - cached.lastUpdated < CACHE_TTL) {
       return cached.models;
     }
 
-    // Return default models if cache is stale/empty
-    return [
-      {
-        id: "dolphin-mixtral-8x7b",
-        name: "Dolphin Mixtral 8x7B",
-        available: true,
-        lastUpdated: Date.now(),
-      },
-      {
-        id: "llama-3.2-3b-instruct",
-        name: "Llama 3.2 3B Instruct",
-        available: true,
-        lastUpdated: Date.now(),
-      },
-      {
-        id: "claude-3-sonnet",
-        name: "Claude 3 Sonnet",
-        available: true,
-        lastUpdated: Date.now(),
-      },
-      { id: "fluently-xl", name: "Fluently XL", available: true, lastUpdated: Date.now() },
-    ];
+    // Return empty array if no cache - will be populated by action
+    return [];
   },
 });
+
+// Fetch and categorize models from Venice.ai
 
 // Action to refresh model cache (can call mutations)
 export const refreshModelCache = action({
@@ -154,35 +99,6 @@ export const refreshModelCache = action({
 // Fetch models from Venice.ai and categorize by capability
 export const fetchAndCategorizeModels = action({
   args: {},
-  returns: v.object({
-    text: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        contextLength: v.optional(v.number()),
-      }),
-    ),
-    code: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        contextLength: v.optional(v.number()),
-      }),
-    ),
-    image: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-      }),
-    ),
-    multimodal: v.array(
-      v.object({
-        id: v.string(),
-        name: v.string(),
-        contextLength: v.optional(v.number()),
-      }),
-    ),
-  }),
   handler: async (ctx) => {
     console.log("Fetching models from Venice.ai...");
 
@@ -191,8 +107,8 @@ export const fetchAndCategorizeModels = action({
       console.log(`Found ${providers.length} providers for model fetch`);
 
       if (providers.length === 0) {
-        console.log("No providers available, returning default models");
-        return DEFAULT_MODELS;
+        console.log("No providers available");
+        return { text: [], code: [], image: [], multimodal: [] };
       }
 
       // Use the first active provider's API key
@@ -207,7 +123,7 @@ export const fetchAndCategorizeModels = action({
 
         if (!response.ok) {
           console.error(`Venice API returned ${response.status}`);
-          return DEFAULT_MODELS;
+          return { text: [], code: [], image: [], multimodal: [] };
         }
 
         const data = await response.json();
@@ -257,12 +173,7 @@ export const fetchAndCategorizeModels = action({
           }
         });
 
-        // Ensure we have at least some models in each category
-        if (categorized.text.length === 0) categorized.text = DEFAULT_MODELS.text;
-        if (categorized.code.length === 0) categorized.code = DEFAULT_MODELS.code;
-        if (categorized.image.length === 0) categorized.image = DEFAULT_MODELS.image;
-        if (categorized.multimodal.length === 0)
-          categorized.multimodal = DEFAULT_MODELS.multimodal;
+        // No models found for some categories is acceptable
 
         // Store in database for quick access
         await ctx.runMutation(api.models.updateModelCache, {
@@ -278,11 +189,11 @@ export const fetchAndCategorizeModels = action({
         return categorized;
       } catch (error) {
         console.error("Model fetch error:", error);
-        return DEFAULT_MODELS;
+        return { text: [], code: [], image: [], multimodal: [] };
       }
     } catch (error) {
       console.error("Provider fetch error:", error);
-      return DEFAULT_MODELS;
+      return { text: [], code: [], image: [], multimodal: [] };
     }
   },
 });

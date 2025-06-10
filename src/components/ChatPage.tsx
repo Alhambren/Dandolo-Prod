@@ -118,7 +118,11 @@ const ChatPage: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
-  const [selectedIntent, setSelectedIntent] = useState<ChatIntent>({ type: 'chat', label: 'General Chat', icon: '💬', model: 'gpt-3.5-turbo' });
+  const [selectedIntent, setSelectedIntent] = useState<ChatIntent>({
+    type: 'chat',
+    label: 'General Chat',
+    icon: '💬',
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -183,60 +187,87 @@ const ChatPage: React.FC = () => {
     console.log("Current chat messages:", current?.messages);
   }, [chats, activeChat]);
 
-  // Fetch available models periodically
+  // Fetch available models on mount and periodically
   useEffect(() => {
-    // Fetch models on component mount
-    fetchModels().then(setAvailableModels).catch(console.error);
-    
-    // Refresh models every 30 minutes
-    const interval = setInterval(() => {
-      fetchModels().then(setAvailableModels).catch(console.error);
-    }, 30 * 60 * 1000);
-    
+    const loadModels = async () => {
+      try {
+        const models = await fetchModels();
+        setAvailableModels(models);
+        console.log('Loaded models:', models);
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+      }
+    };
+
+    loadModels();
+    const interval = setInterval(loadModels, 5 * 60 * 1000); // Refresh every 5 minutes
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchModels]);
 
   // Always show all intent options with smart model selection
   const CHAT_INTENTS = useMemo(() => {
-    return [
-      {
-        type: 'chat' as const,
-        label: 'General Chat',
-        icon: '💬',
-        model: 'gpt-3.5-turbo' // Always available
-      },
-      {
-        type: 'code' as const,
+    const intents: ChatIntent[] = [];
+
+    intents.push({
+      type: 'chat',
+      label: 'General Chat',
+      icon: '💬',
+      model: availableModels?.text?.[0]?.id,
+    });
+
+    if (availableModels?.code?.length > 0) {
+      intents.push({
+        type: 'code',
         label: 'Code Assistant',
         icon: '💻',
-        model: 'gpt-3.5-turbo' // Fallback to GPT with code prompting
-      },
-      {
-        type: 'image' as const,
+        model: availableModels.code[0].id,
+      });
+    }
+
+    if (availableModels?.image?.length > 0) {
+      intents.push({
+        type: 'image',
         label: 'Image Creation',
         icon: '🎨',
-        model: 'dalle-3' // Venice supports DALL-E 3
-      },
-      {
-        type: 'vision' as const,
+        model: availableModels.image[0].id,
+      });
+    }
+
+    if (availableModels?.multimodal?.length > 0) {
+      intents.push({
+        type: 'vision',
         label: 'Image Analysis',
         icon: '👁️',
-        model: 'llava-v1.6-mistral-7b'
-      },
-      {
-        type: 'audio' as const,
+        model: availableModels.multimodal[0].id,
+      });
+    }
+
+    if (availableModels?.text?.some((m: any) => m.id.includes('whisper'))) {
+      intents.push({
+        type: 'audio',
         label: 'Voice Chat',
         icon: '🎤',
-        model: 'whisper-large-v3'
-      },
-      {
-        type: 'analysis' as const,
+        model: availableModels.text.find((m: any) => m.id.includes('whisper'))?.id,
+      });
+    }
+
+    if (availableModels?.text?.length > 1) {
+      intents.push({
+        type: 'analysis',
         label: 'Deep Analysis',
         icon: '📊',
-        model: 'gpt-4' // Premium analysis
-      },
-    ];
-  }, []); // No dependencies - always show all options
+        model:
+          availableModels.text.find(
+            (m: any) =>
+              m.id.includes('mixtral') ||
+              m.id.includes('gpt-4') ||
+              m.contextLength > 8192,
+          )?.id || availableModels.text[0].id,
+      });
+    }
+
+    return intents;
+  }, [availableModels]);
 
   // Show model info in UI
   const currentModelInfo = useMemo(() => {
@@ -484,7 +515,6 @@ const ChatPage: React.FC = () => {
       const response = await routeInference({
         prompt: userMessageContent,
         address: address || "anonymous",
-        model: selectedIntent.model,
         intentType: selectedIntent.type,
       });
 
