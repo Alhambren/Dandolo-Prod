@@ -27,6 +27,33 @@ export const generateApiKey = mutation({
   },
 });
 
+
+export const generateAgentKey = mutation({
+  args: {
+    address: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Generate agent API key with ak_ prefix
+    const apiKey = "ak_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+    await ctx.db.insert("apiKeys", {
+      address: args.address,
+      key: apiKey,
+      name: args.name,
+      isActive: true,
+      createdAt: Date.now(),
+      keyType: "agent",
+      description: args.description,
+      usageCount: 0,
+      totalUsage: 0,
+    });
+
+    return apiKey;
+  },
+});
+
 // Get user's API keys
 export const getUserApiKeys = query({
   args: {

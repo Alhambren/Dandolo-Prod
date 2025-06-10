@@ -200,30 +200,30 @@ export const selectProvider = query({
   },
 });
 
-// MVP: Award points for serving prompts
 export const awardProviderPoints = mutation({
   args: {
     providerId: v.id("providers"),
     promptsServed: v.number(),
+    tokensProcessed: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
     if (!provider) return;
-    
-    // MVP POINTS: 100 points per prompt served
-    const pointsEarned = args.promptsServed * 100;
-    
-    // Update provider stats
+
+    // New point system: 1 point per 100 tokens processed
+    const pointsEarned = args.tokensProcessed
+      ? Math.floor(args.tokensProcessed / 100)
+      : args.promptsServed * 100;
+
     await ctx.db.patch(args.providerId, {
       totalPrompts: (provider.totalPrompts ?? 0) + args.promptsServed,
     });
-    
-    // Update or create points record
+
     const pointsRecord = await ctx.db
       .query("providerPoints")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
       .first();
-      
+
     if (pointsRecord) {
       await ctx.db.patch(pointsRecord._id, {
         points: (pointsRecord.points ?? 0) + pointsEarned,
