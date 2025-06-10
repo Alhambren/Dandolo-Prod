@@ -1,31 +1,184 @@
 import { v } from "convex/values";
-import { action, query, mutation } from "./_generated/server";
+import { action, mutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-// Venice.ai API integration - direct routing
+/**
+ * Analyze the prompt to guess the intent and choose an appropriate model.
+ * Returns the suggested model, confidence score, and reasoning.
+ */
+function analyzePromptIntent(prompt: string): {
+  suggestedModel: string;
+  confidence: number;
+  reasoning: string;
+} {
+  const promptLower = prompt.toLowerCase();
+
+  // Patterns to detect code-related requests
+  const codePatterns = [
+    /write.*code/i,
+    /implement/i,
+    /function/i,
+    /algorithm/i,
+    /debug/i,
+    /fix.*bug/i,
+    /error/i,
+    /syntax/i,
+    /program/i,
+    /script/i,
+    /```/,
+    /class\s+\w+/,
+    /def\s+\w+/,
+    /function\s+\w+/,
+    /const\s+\w+/,
+  ];
+
+  // Patterns for image generation requests
+  const imagePatterns = [
+    /generate.*image/i,
+    /create.*image/i,
+    /draw/i,
+    /sketch/i,
+    /design/i,
+    /illustration/i,
+    /picture/i,
+    /photo/i,
+    /artwork/i,
+    /visual/i,
+    /imagine/i,
+    /depict/i,
+    /render/i,
+    /portrait/i,
+    /landscape/i,
+  ];
+
+  // Patterns for analysis or deep reasoning
+  const analysisPatterns = [
+    /analyze/i,
+    /compare/i,
+    /evaluate/i,
+    /assess/i,
+    /examine/i,
+    /research/i,
+    /investigate/i,
+    /study/i,
+    /report/i,
+    /summarize/i,
+    /explain.*detail/i,
+    /deep.*dive/i,
+    /comprehensive/i,
+    /thorough/i,
+  ];
+
+  const complexPatterns = [
+    /philosophy/i,
+    /ethics/i,
+    /quantum/i,
+    /theoretical/i,
+    /abstract/i,
+    /complex/i,
+    /advanced/i,
+    /mathematical proof/i,
+    /dissertation/i,
+  ];
+
+  if (imagePatterns.some((p) => p.test(promptLower))) {
+    return {
+      suggestedModel: "fluently-xl",
+      confidence: 0.95,
+      reasoning: "Image generation request detected",
+    };
+  }
+
+  if (codePatterns.some((p) => p.test(promptLower))) {
+    const isComplex =
+      promptLower.includes("architect") ||
+      promptLower.includes("system design") ||
+      promptLower.includes("optimization");
+    return {
+      suggestedModel: isComplex ? "gpt-4" : "gpt-3.5-turbo",
+      confidence: 0.9,
+      reasoning: "Code-related task detected",
+    };
+  }
+
+  if (
+    analysisPatterns.some((p) => p.test(promptLower)) ||
+    complexPatterns.some((p) => p.test(promptLower))
+  ) {
+    return {
+      suggestedModel: "gpt-4",
+      confidence: 0.85,
+      reasoning: "Complex analysis or reasoning required",
+    };
+  }
+
+  if (prompt.length > 500) {
+    return {
+      suggestedModel: "gpt-4",
+      confidence: 0.7,
+      reasoning: "Long prompt suggests complex task",
+    };
+  }
+
+  return {
+    suggestedModel: "gpt-3.5-turbo",
+    confidence: 0.8,
+    reasoning: "Standard conversational query",
+  };
+}
+
+/**
+ * Calculate VCU cost for a given token count and model.
+ */
+function calculateVCUCost(tokens: number, model: string): number {
+  const vcuPricing: Record<string, number> = {
+    "gpt-4": 30,
+    "gpt-3.5-turbo": 2,
+    "claude-3-sonnet-20240229": 15,
+    "claude-3-haiku-20240307": 2.5,
+    "meta-llama/Llama-2-70b-chat-hf": 10,
+    "mistralai/Mixtral-8x7B-Instruct-v0.1": 7,
+    "codellama/CodeLlama-34b-Instruct-hf": 10,
+    "deepseek-ai/deepseek-coder-33b-instruct": 8,
+    "fluently-xl": 5,
+    "dalle-3": 20,
+  };
+
+  const rate = vcuPricing[model] || 2;
+  return Math.ceil((tokens / 1000) * rate);
+}
+
+/**
+ * Wrapper around Venice.ai to handle model selection, images, and cost tracking.
+ */
 async function callVeniceAI(
   prompt: string,
   apiKey: string,
   model?: string,
-  intentType?: string
+  intentType?: string,
 ) {
   console.log("CallVeniceAI:", {
     prompt: prompt.substring(0, 50),
     model,
     intentType,
-    isImageRequest: intentType === 'image',
   });
 
-  // Image generation detection
-  if (intentType === 'image') {
-    console.log("Processing image generation request");
+  // If model is not provided, infer from the prompt.
+  if (!model && !intentType) {
+    const analysis = analyzePromptIntent(prompt);
+    model = analysis.suggestedModel;
+    console.log("Dynamic model selection:", analysis);
+  }
 
+  // ----- Image generation -----
+  if (
+    intentType === "image" ||
+    model === "fluently-xl" ||
+    model === "dalle-3"
+  ) {
     try {
-      // Venice.ai OpenAI-compatible image endpoint
       const imageEndpoint = "https://api.venice.ai/api/v1/image/generate";
-      console.log("Calling image endpoint:", imageEndpoint);
-
       const imageResponse = await fetch(imageEndpoint, {
         method: "POST",
         headers: {
@@ -33,57 +186,50 @@ async function callVeniceAI(
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          prompt: prompt,
-          n: 1,
-          size: "1024x1024",
+          model: model || "fluently-xl",
+          prompt,
+          width: 1024,
+          height: 1024,
+          steps: 20,
+          cfg_scale: 7.5,
+          return_binary: false,
         }),
       });
 
-      console.log("Image response status:", imageResponse.status);
-      const responseText = await imageResponse.text();
-      console.log("Image response body:", responseText);
-
       if (imageResponse.ok) {
-        try {
-          const imageData = JSON.parse(responseText);
-          console.log("Parsed image data:", imageData);
-
-          if (imageData.data && imageData.data[0] && imageData.data[0].url) {
-            return {
-              text: `![Generated Image](${imageData.data[0].url})\n\n*"${prompt}"*`,
-              tokens: 100,
-              model: "dall-e",
-              cost: calculateCost(100, "dall-e"),
-            };
-          }
-        } catch (parseError) {
-          console.error("Failed to parse image response:", parseError);
+        const imageData = await imageResponse.json();
+        if (imageData.images && imageData.images.length > 0) {
+          const imageUrl = imageData.images[0];
+          const vcuCost = calculateVCUCost(100, model || "fluently-xl");
+          return {
+            text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
+            tokens: 100,
+            model: model || "fluently-xl",
+            cost: vcuCost,
+            vcuUsed: vcuCost,
+          };
         }
       }
 
-      // If image generation fails, fall back to text description
-      console.log("Image generation failed, falling back to text description");
-    } catch (error) {
-      console.error("Image generation error:", error);
+      console.log("Image generation failed, using text fallback");
+      intentType = "image-fallback";
+    } catch (err) {
+      console.error("Image generation error:", err);
+      intentType = "image-fallback";
     }
   }
 
-  // Text generation (for all non-image requests or fallback)
-  const isCodeRequest = intentType === 'code';
-  const isAnalysisRequest = intentType === 'analysis';
-
-  let systemPrompt: string | undefined = undefined;
-  if (isCodeRequest) {
+  // ----- Text generation -----
+  let systemPrompt: string | undefined;
+  if (intentType === "code" || model?.includes("code")) {
     systemPrompt =
       "You are an expert programmer. Generate clean, well-commented code with explanations.";
-  } else if (isAnalysisRequest) {
+  } else if (intentType === "analysis" || model === "gpt-4") {
     systemPrompt =
       "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
-  } else if (intentType === 'image') {
-    // Fallback for failed image generation
+  } else if (intentType === "image-fallback") {
     systemPrompt =
-      "The user requested an image but generation is currently unavailable. Create a vivid, detailed text description of: " +
-      prompt;
+      "The user requested an image. Create a vivid, detailed text description instead.";
   }
 
   const messages = systemPrompt
@@ -93,17 +239,10 @@ async function callVeniceAI(
       ]
     : [{ role: "user", content: prompt }];
 
-  // Use appropriate model based on intent
-  let selectedModel = model || "gpt-3.5-turbo";
-  if (intentType === 'analysis' && !model) {
-    selectedModel = "gpt-4"; // Use GPT-4 for analysis
-  }
-
-  const textEndpoint = "https://api.venice.ai/v1/chat/completions";
-  console.log("Calling Venice text completion with model:", selectedModel);
+  const selectedModel = model || analyzePromptIntent(prompt).suggestedModel;
 
   const response = await fetch(
-    textEndpoint,
+    "https://api.venice.ai/v1/chat/completions",
     {
       method: "POST",
       headers: {
@@ -112,12 +251,17 @@ async function callVeniceAI(
       },
       body: JSON.stringify({
         model: selectedModel,
-        messages: messages,
-        max_tokens: isCodeRequest ? 2000 : 1000,
-        temperature: isCodeRequest ? 0.3 : isAnalysisRequest ? 0.7 : 0.8,
+        messages,
+        max_tokens: intentType === "code" ? 2000 : 1000,
+        temperature:
+          intentType === "code"
+            ? 0.3
+            : intentType === "analysis"
+            ? 0.7
+            : 0.8,
         stream: false,
       }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -126,56 +270,25 @@ async function callVeniceAI(
   }
 
   const data = await response.json();
+  const totalTokens = data.usage?.total_tokens || 0;
+  const vcuCost = calculateVCUCost(totalTokens, selectedModel);
 
   return {
     text: data.choices[0].message.content,
-    tokens: data.usage?.total_tokens || 0,
+    tokens: totalTokens,
     model: data.model || selectedModel,
-    cost: calculateCost(
-      data.usage?.total_tokens || 0,
-      data.model || selectedModel
-    ),
+    cost: vcuCost,
+    vcuUsed: vcuCost,
   };
 }
 
-// Map user-friendly model names to Venice.ai model IDs
-function mapToVeniceModel(model?: string): string {
-  const modelMap: Record<string, string> = {
-    "gpt-4": "gpt-4",
-    "gpt-3.5-turbo": "gpt-3.5-turbo",
-    "claude-3-sonnet": "claude-3-sonnet-20240229",
-    "claude-3-haiku": "claude-3-haiku-20240307",
-    "llama-3": "meta-llama/Llama-2-70b-chat-hf",
-    "mixtral": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    "codellama": "codellama/CodeLlama-34b-Instruct-hf",
-    "deepseek-coder": "deepseek-ai/deepseek-coder-33b-instruct"
-  };
-  
-  return modelMap[model || "gpt-3.5-turbo"] || "gpt-3.5-turbo";
-}
-
-// Calculate cost based on token usage and model
-function calculateCost(tokens: number, model: string): number {
-  // Venice.ai pricing (approximate, in VCU)
-  const pricing: Record<string, number> = {
-    "gpt-4": 0.03,
-    "gpt-3.5-turbo": 0.002,
-    "claude-3-sonnet-20240229": 0.015,
-    "claude-3-haiku-20240307": 0.0025,
-    "meta-llama/Llama-2-70b-chat-hf": 0.01,
-    "mistralai/Mixtral-8x7B-Instruct-v0.1": 0.007,
-    "codellama/CodeLlama-34b-Instruct-hf": 0.01,
-    "deepseek-ai/deepseek-coder-33b-instruct": 0.008
-  };
-  
-  const rate = pricing[model] || 0.002;
-  return Math.ceil(tokens * rate * 1000); // Convert to micro-VCU
-}
-
+/** Provider record used during routing */
 interface Provider {
   _id: Id<"providers">;
   name: string;
   veniceApiKey: string;
+  vcuBalance?: number;
+  totalPrompts?: number;
 }
 
 interface RouteResponse {
@@ -185,14 +298,19 @@ interface RouteResponse {
   cost: number;
   responseTime: number;
   model: string;
+  vcuUsed?: number;
 }
 
+/**
+ * Route a prompt through the best available provider. Falls back to a demo
+ * message when no providers are registered.
+ */
 export const route = action({
   args: {
     prompt: v.string(),
     address: v.optional(v.string()),
     model: v.optional(v.string()),
-    intentType: v.optional(v.string()), // Add this
+    intentType: v.optional(v.string()),
   },
   returns: v.object({
     response: v.string(),
@@ -201,16 +319,16 @@ export const route = action({
     cost: v.number(),
     responseTime: v.number(),
     model: v.string(),
+    vcuUsed: v.optional(v.number()),
   }),
   handler: async (ctx, args): Promise<RouteResponse> => {
-    console.log("Inference route called with:", {
+    console.log("Inference route called:", {
       prompt: args.prompt.substring(0, 50) + "...",
       model: args.model,
       intentType: args.intentType,
     });
 
     try {
-      // Rate limit check
       const rateLimitCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
         address: args.address,
       });
@@ -219,44 +337,100 @@ export const route = action({
         throw new Error(`Daily limit reached (${rateLimitCheck.current}/50)`);
       }
 
-      // Get active providers
-      const providers = (await ctx.runQuery(internal.providers.listActiveInternal)) as Provider[];
+      const providers = (await ctx.runQuery(
+        internal.providers.listActiveInternal,
+      )) as Provider[];
       console.log(`Found ${providers.length} active providers`);
 
       if (providers.length === 0) {
-        throw new Error("No providers available. Please register a provider first.");
+        console.log("No providers - using demo mode");
+        const demoMessages: Record<string, string> = {
+          image:
+            "🎨 Image generation requires a registered provider with Venice.ai API key.\n\nTo enable:\n1. Go to Dashboard\n2. Get your Venice.ai API key\n3. Register as a provider\n\nThen you can generate amazing images!",
+          code:
+            `💻 Code generation requires a registered provider.\n\nYour request: "${args.prompt}"\n\nTo enable real code generation:\n1. Register as a provider in Dashboard\n2. Add your Venice.ai API key\n\nI'll then help you write any code!`,
+          analysis:
+            `📊 Deep analysis requires a registered provider.\n\nYour query: "${args.prompt}"\n\nTo enable:\n1. Get a Venice.ai API key\n2. Register in Dashboard\n\nThen I can provide comprehensive analysis!`,
+          default:
+            `🤖 Demo Mode Active\n\nYour message: "${args.prompt}"\n\nTo enable real AI responses:\n1. Visit venice.ai for an API key\n2. Go to Dashboard → Register as Provider\n3. Add your API key\n\nOnce registered, I'll provide intelligent responses using Venice.ai!`,
+        };
+
+        const plower = args.prompt.toLowerCase();
+        const messageType =
+          args.intentType ||
+          (plower.includes("image")
+            ? "image"
+            : plower.includes("code")
+            ? "code"
+            : plower.includes("analy")
+            ? "analysis"
+            : "default");
+
+        return {
+          response:
+            demoMessages[messageType as keyof typeof demoMessages] ||
+            demoMessages.default,
+          provider: "Demo Mode",
+          tokens: 50,
+          cost: 0,
+          responseTime: 100,
+          model: "demo",
+          vcuUsed: 0,
+        };
       }
 
-      // Select random provider
-      const selectedProvider: Provider = providers[Math.floor(Math.random() * providers.length)];
-      console.log(`Selected provider: ${selectedProvider.name}`);
+      // Choose provider with best VCU-to-usage ratio
+      const selectedProvider = providers.reduce((best, current) => {
+        const bestScore =
+          (best.vcuBalance || 0) / (1 + (best.totalPrompts || 0));
+        const currentScore =
+          (current.vcuBalance || 0) / (1 + (current.totalPrompts || 0));
+        return currentScore > bestScore ? current : best;
+      });
+
+      console.log(
+        `Selected provider: ${selectedProvider.name} (VCU: ${
+          selectedProvider.vcuBalance || 0
+        })`,
+      );
 
       const startTime = Date.now();
 
       try {
-        // Call Venice.ai with intent type
         const veniceResponse = await callVeniceAI(
           args.prompt,
           selectedProvider.veniceApiKey,
           args.model,
-          args.intentType
+          args.intentType,
         );
+
         const responseTime = Date.now() - startTime;
 
-        // Log usage (anonymous metrics only)
         await ctx.runMutation(api.inference.logUsage, {
-          address: args.address ?? 'anonymous',
+          address: args.address ?? "anonymous",
           providerId: selectedProvider._id,
-          model: args.model || veniceResponse.model,
+          model: veniceResponse.model,
           tokens: veniceResponse.tokens,
           createdAt: Date.now(),
           latencyMs: responseTime,
         });
 
-        // Award provider points
         await ctx.runMutation(api.providers.incrementPromptCount, {
           providerId: selectedProvider._id,
         });
+
+        if (
+          veniceResponse.vcuUsed !== undefined &&
+          selectedProvider.vcuBalance !== undefined
+        ) {
+          await ctx.runMutation(internal.providers.updateVCUBalance, {
+            providerId: selectedProvider._id,
+            vcuBalance: Math.max(
+              0,
+              (selectedProvider.vcuBalance || 0) - veniceResponse.vcuUsed,
+            ),
+          });
+        }
 
         return {
           response: veniceResponse.text,
@@ -264,11 +438,14 @@ export const route = action({
           tokens: veniceResponse.tokens,
           cost: veniceResponse.cost,
           responseTime,
-          model: args.model || veniceResponse.model,
+          model: veniceResponse.model,
+          vcuUsed: veniceResponse.vcuUsed,
         };
       } catch (error) {
         console.error("Venice AI call failed:", error);
-        throw new Error(`Venice AI error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+          `AI service error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
       }
     } catch (error) {
       console.error("Inference route error:", error);
@@ -277,18 +454,22 @@ export const route = action({
   },
 });
 
+/**
+ * Log usage of the inference endpoint. Provider ID is optional to support demo
+ * mode when no providers are registered.
+ */
 export const logUsage = mutation({
   args: {
     address: v.optional(v.string()),
-    providerId: v.id("providers"),
+    providerId: v.optional(v.id("providers")),
     model: v.string(),
     tokens: v.number(),
     createdAt: v.number(),
     latencyMs: v.number(),
   },
-  handler: async (ctx, args): Promise<any> => {
+  handler: async (ctx, args): Promise<void> => {
     await ctx.db.insert("usageLogs", {
-      address: args.address ?? 'anonymous',
+      address: args.address ?? "anonymous",
       providerId: args.providerId,
       model: args.model,
       tokens: args.tokens,
@@ -297,5 +478,3 @@ export const logUsage = mutation({
     });
   },
 });
-
-
