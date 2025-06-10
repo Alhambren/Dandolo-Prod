@@ -29,15 +29,50 @@ export interface BalanceResponse {
   prompts_remaining: number;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatCompletionRequest {
+  messages: ChatMessage[];
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
+  stream?: boolean;
+}
+
+export interface ChatCompletionResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+  choices: Array<{
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+    index: number;
+  }>;
+}
+
 export class DandoloSDK {
   private apiKey: string;
   private baseUrl: string;
+  private isAgentKey: boolean;
   private wallet?: string;
 
   constructor(config: DandoloConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl || 'https://accomplished-malamute-324.convex.cloud';
     this.wallet = config.wallet;
+    this.isAgentKey = config.apiKey.startsWith("ak_");
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
@@ -61,13 +96,43 @@ export class DandoloSDK {
     return response;
   }
 
-  async prompt(request: PromptRequest): Promise<PromptResponse> {
-    const response = await this.makeRequest('/api/v1/prompt', {
+
+  // New method for chat completions
+  async chatCompletion(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
+    const response = await this.makeRequest('/api/v1/chat/completions', {
       method: 'POST',
       body: JSON.stringify(request),
     });
-
     return response.json();
+  }
+
+  // Convenience method for maintaining conversation
+  async continueConversation(messages: ChatMessage[], newMessage: string, model?: string): Promise<ChatCompletionResponse> {
+    const updatedMessages = [
+      ...messages,
+      { role: 'user' as const, content: newMessage }
+    ];
+    return this.chatCompletion({
+      messages: updatedMessages,
+      model: model || 'gpt-3.5-turbo',
+    });
+  }
+  async prompt(request: PromptRequest): Promise<PromptResponse> {
+    const chatResponse = await this.chatCompletion({
+      messages: [{ role: "user", content: request.message }],
+      model: request.model,
+      max_tokens: request.max_tokens,
+    });
+
+    return {
+      id: chatResponse.id,
+      text: chatResponse.choices[0].message.content,
+      provider: "Dandolo Network",
+      tokens: chatResponse.usage.total_tokens,
+      cost: 0,
+      response_time: 0,
+      model: chatResponse.model,
+    };
   }
 
   async promptStream(request: PromptRequest): Promise<AsyncIterable<{ text: string }>> {
@@ -96,6 +161,19 @@ export class DandoloSDK {
 
     return response.json();
   }
+  async getRateLimitStatus(): Promise<{
+    limit: number;
+    remaining: number;
+    reset: Date;
+  }> {
+    const balance = await this.getBalance();
+    return {
+      limit: this.isAgentKey ? 5000 : 500,
+      remaining: balance.prompts_remaining,
+      reset: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    };
+  }
+
 
   // Utility method to check if API key is valid
   async validateApiKey(): Promise<boolean> {

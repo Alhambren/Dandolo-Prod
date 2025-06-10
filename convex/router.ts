@@ -72,6 +72,116 @@ http.route({
   }),
 });
 
+// API endpoint for chat completions (multi-turn)
+http.route({
+  path: "/api/v1/chat/completions",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+      const { messages, model, temperature, max_tokens, stream } = body;
+
+      // Validate messages array
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return new Response(JSON.stringify({ error: "Messages array is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const apiKey = authHeader.substring(7);
+
+      // Check if it's an agent key (ak_) or developer key (dk_)
+      const isAgentKey = apiKey.startsWith("ak_");
+      const keyType = isAgentKey ? "agent" : "developer";
+
+      // Validate API key
+      const keyRecord = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
+      if (!keyRecord) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Check rate limits (higher for agents)
+      const dailyLimit = isAgentKey ? 5000 : 500;
+      const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+        address: keyRecord.address,
+        limit: dailyLimit,
+      });
+
+      if (!rateLimit.allowed) {
+        return new Response(JSON.stringify({
+          error: "Rate limit exceeded",
+          limit: dailyLimit,
+          reset: rateLimit.resetTime,
+        }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Route to inference with full message history
+      const result = await ctx.runAction(api.inference.routeCompletion, {
+        messages,
+        model: model || "gpt-3.5-turbo",
+        temperature,
+        max_tokens,
+        address: keyRecord.address,
+        keyType,
+      });
+
+      // Update API key usage
+      await ctx.runMutation(api.developers.updateApiKeyUsage, { apiKey });
+
+      // Log usage metrics
+      await ctx.runMutation(api.analytics.logUsage, {
+        address: keyRecord.address,
+        model: result.model,
+        tokens: result.usage.total_tokens,
+        latencyMs: result.responseTime,
+      });
+
+      // Return OpenAI-compatible response
+      return new Response(JSON.stringify({
+        id: `chatcmpl-${Date.now()}`,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model: result.model,
+        usage: result.usage,
+        choices: [{
+          message: {
+            role: "assistant",
+            content: result.content,
+          },
+          finish_reason: "stop",
+          index: 0,
+        }],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Chat completions error:", error);
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Internal server error",
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 // API endpoint for balance check
 http.route({
   path: "/api/v1/balance",
