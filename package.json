@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npx convex deploy --yes && npx vite build",
+    "build": "NODE_ENV=production npx convex deploy --yes && NODE_ENV=production npx vite build",
     "lint": "tsc -p convex --noEmit --pretty false && tsc -p . --noEmit --pretty false && convex dev --once && npx vite build",
     "test": "cypress run",
     "test:open": "cypress open"
