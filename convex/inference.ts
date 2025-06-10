@@ -231,6 +231,12 @@ export const route = action({
     sessionId: v.string(),
     isAnonymous: v.boolean(),
   },
+  returns: v.object({
+    response: v.string(),
+    model: v.string(),
+    tokens: v.number(),
+    providerId: v.id("providers"),
+  }),
   handler: async (ctx, args) => {
     // Retrieve active providers
     const providers = await ctx.runQuery(api.providers.listActive);
@@ -302,11 +308,13 @@ export const recordInference = mutation({
     sessionId: v.string(),
     isAnonymous: v.boolean(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.insert("inferences", {
       ...args,
       timestamp: Date.now(),
     });
+    return null;
   },
 });
 
@@ -315,6 +323,13 @@ export const recordInference = mutation({
  */
 export const getStats = query({
   args: {},
+  returns: v.object({
+    totalInferences: v.number(),
+    totalTokens: v.number(),
+    totalVCU: v.number(),
+    byIntent: v.record(v.string(), v.number()),
+    byModel: v.record(v.string(), v.number()),
+  }),
   handler: async (ctx) => {
     const inferences = await ctx.db.query("inferences").collect();
 
