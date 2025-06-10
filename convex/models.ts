@@ -3,17 +3,24 @@ import { query, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-// Fallback model list if API fails
-const FALLBACK_MODELS = [
-  { id: "gpt-4", name: "GPT-4" },
-  { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-  { id: "claude-3-sonnet-20240229", name: "Claude 3 Sonnet" },
-  { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" },
-  { id: "meta-llama/Llama-2-70b-chat-hf", name: "Llama 3" },
-  { id: "mistralai/Mixtral-8x7B-Instruct-v0.1", name: "Mixtral" },
-  { id: "codellama/CodeLlama-34b-Instruct-hf", name: "CodeLlama" },
-  { id: "deepseek-ai/deepseek-coder-33b-instruct", name: "DeepSeek Coder" }
-];
+// Default models always available
+const DEFAULT_MODELS = {
+  text: [
+    { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", contextLength: 4096 },
+    { id: "gpt-4", name: "GPT-4", contextLength: 8192 },
+  ],
+  code: [
+    { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo (Code)", contextLength: 4096 },
+    { id: "codellama-34b", name: "CodeLlama 34B", contextLength: 4096 },
+  ],
+  image: [
+    { id: "fluently-xl", name: "Fluently XL" },
+    { id: "dalle-3", name: "DALL-E 3" },
+  ],
+  multimodal: [
+    { id: "gpt-4-vision", name: "GPT-4 Vision", contextLength: 8192 },
+  ],
+};
 
 // Cache TTL in milliseconds (5 minutes)
 const CACHE_TTL = 5 * 60 * 1000;
@@ -21,6 +28,8 @@ const CACHE_TTL = 5 * 60 * 1000;
 interface Model {
   id: string;
   name: string;
+  available?: boolean;
+  lastUpdated?: number;
 }
 
 interface Provider {
@@ -33,7 +42,7 @@ interface Provider {
 export interface ModelCapability {
   id: string;
   name: string;
-  type: 'text' | 'code' | 'image' | 'multimodal';
+  type?: 'text' | 'code' | 'image' | 'multimodal';
   contextLength?: number;
   pricing?: number;
 }
@@ -45,23 +54,24 @@ export const getAvailableModels = query({
     id: v.string(),
     name: v.string(),
     available: v.boolean(),
-    lastUpdated: v.number()
+    lastUpdated: v.number(),
   })),
   handler: async (ctx) => {
     // Get cached models from database
     const cached = await ctx.db.query("modelCache").first();
-    
-    if (cached && Date.now() - cached.lastUpdated < 5 * 60 * 1000) {
+
+    if (cached && Date.now() - cached.lastUpdated < CACHE_TTL) {
       return cached.models;
     }
-    
-    // Return fallback models if cache is stale/empty
+
+    // Return default models if cache is stale/empty
     return [
       { id: "gpt-4", name: "GPT-4", available: true, lastUpdated: Date.now() },
       { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", available: true, lastUpdated: Date.now() },
-      { id: "claude-3-sonnet", name: "Claude 3 Sonnet", available: true, lastUpdated: Date.now() }
+      { id: "claude-3-sonnet", name: "Claude 3 Sonnet", available: true, lastUpdated: Date.now() },
+      { id: "fluently-xl", name: "Fluently XL", available: true, lastUpdated: Date.now() },
     ];
-  }
+  },
 });
 
 // Action to refresh model cache (can call mutations)
@@ -69,171 +79,183 @@ export const refreshModelCache = action({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
-    
-    for (const provider of providers) {
-      try {
-        const response: Response = await fetch("https://api.venice.ai/api/v1/models", {
-          headers: { "Authorization": `Bearer ${provider.veniceApiKey}` }
-        });
-        
-        if (response.ok) {
-          const data: any = await response.json();
-          const models = data.data.map((model: any) => ({
-            id: model.id,
-            name: model.id,
-            available: true,
-            lastUpdated: Date.now()
-          }));
-          
-          await ctx.runMutation(api.models.updateModelCache, {
-            models,
-            timestamp: Date.now()
-          });
-          return null;
-        }
-      } catch (error) {
-        continue;
+    try {
+      const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+
+      if (providers.length === 0) {
+        console.log("No providers available for model refresh");
+        return null;
       }
+
+      for (const provider of providers) {
+        try {
+          const response = await fetch("https://api.venice.ai/api/v1/models", {
+            headers: { Authorization: `Bearer ${provider.veniceApiKey}` },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const models = data.data.map((model: any) => ({
+              id: model.id,
+              name: model.id,
+              available: true,
+              lastUpdated: Date.now(),
+            }));
+
+            await ctx.runMutation(api.models.updateModelCache, {
+              models,
+              timestamp: Date.now(),
+            });
+            return null;
+          }
+        } catch (error) {
+          console.error(
+            "Error fetching models from provider:",
+            provider.name,
+            error,
+          );
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error("Model cache refresh error:", error);
     }
     return null;
-  }
+  },
 });
 
 // Fetch models from Venice.ai and categorize by capability
 export const fetchAndCategorizeModels = action({
   args: {},
   returns: v.object({
-    text: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      contextLength: v.optional(v.number()),
-    })),
-    code: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      contextLength: v.optional(v.number()),
-    })),
-    image: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-    })),
-    multimodal: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      contextLength: v.optional(v.number()),
-    })),
+    text: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      }),
+    ),
+    code: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      }),
+    ),
+    image: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+      }),
+    ),
+    multimodal: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      }),
+    ),
   }),
   handler: async (ctx) => {
     console.log("Fetching models from Venice.ai...");
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-    console.log(`Found ${providers.length} providers for model fetch`);
-
-    if (providers.length === 0) {
-      console.log("No providers available, returning default models");
-      return {
-        text: [
-          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-          { id: "gpt-4", name: "GPT-4" },
-        ],
-        code: [
-          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo (Code)" },
-        ],
-        image: [
-          { id: "dalle-3", name: "DALL-E 3" },
-        ],
-        multimodal: [],
-      };
-    }
-
-    // Use the first active provider's API key
-    const apiKey = providers[0].veniceApiKey;
 
     try {
-      const response = await fetch("https://api.venice.ai/api/v1/models", {
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-        },
-      });
+      const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+      console.log(`Found ${providers.length} providers for model fetch`);
 
-      if (!response.ok) {
-        console.error(`Venice API returned ${response.status}: ${await response.text()}`);
-        throw new Error(`Failed to fetch models: ${response.status}`);
+      if (providers.length === 0) {
+        console.log("No providers available, returning default models");
+        return DEFAULT_MODELS;
       }
 
-      const data = await response.json();
-      const models = data.data || [];
+      // Use the first active provider's API key
+      const apiKey = providers[0].veniceApiKey;
 
-      // Categorize models based on their IDs and capabilities
-      const categorized = {
-        text: [] as ModelCapability[],
-        code: [] as ModelCapability[],
-        image: [] as ModelCapability[],
-        multimodal: [] as ModelCapability[],
-      };
+      try {
+        const response = await fetch("https://api.venice.ai/api/v1/models", {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+        });
 
-      models.forEach((model: any) => {
-        const modelId = model.id.toLowerCase();
-        let modelInfo: ModelCapability = {
-          id: model.id,
-          name: model.id,
-          contextLength: model.context_length,
-          type: 'text',
+        if (!response.ok) {
+          console.error(`Venice API returned ${response.status}`);
+          return DEFAULT_MODELS;
+        }
+
+        const data = await response.json();
+        const models = data.data || [];
+
+        // Categorize models based on their IDs and capabilities
+        const categorized = {
+          text: [] as ModelCapability[],
+          code: [] as ModelCapability[],
+          image: [] as ModelCapability[],
+          multimodal: [] as ModelCapability[],
         };
 
-        // Dynamic categorization based on model ID patterns
-        if (modelId.includes('image') || 
-            modelId.includes('dalle') || 
-            modelId.includes('stable-diffusion') ||
-            modelId.includes('midjourney')) {
-          modelInfo = { ...modelInfo, type: 'image' };
-          categorized.image.push(modelInfo);
-        } else if (modelId.includes('code') || 
-                   modelId.includes('codellama') || 
-                   modelId.includes('deepseek') ||
-                   modelId.includes('starcoder')) {
-          modelInfo = { ...modelInfo, type: 'code' };
-          categorized.code.push(modelInfo);
-        } else if (modelId.includes('vision') || 
-                   modelId.includes('multimodal') ||
-                   modelId.includes('gpt-4v')) {
-          modelInfo = { ...modelInfo, type: 'multimodal' };
-          categorized.multimodal.push(modelInfo);
-        } else {
-          // Default to text models
-          categorized.text.push(modelInfo);
-        }
-      });
+        models.forEach((model: any) => {
+          const modelId = model.id.toLowerCase();
+          const modelInfo: ModelCapability = {
+            id: model.id,
+            name: model.id,
+            contextLength: model.context_length,
+          };
 
-      // Store in database for quick access
-      await ctx.runMutation(api.models.updateModelCache, {
-        models: models.map((m: any) => ({
-          id: m.id,
-          name: m.id,
-          available: true,
-          lastUpdated: Date.now(),
-        })),
-        timestamp: Date.now(),
-      });
+          // Dynamic categorization based on model ID patterns
+          if (
+            modelId.includes("image") ||
+            modelId.includes("dalle") ||
+            modelId.includes("stable-diffusion") ||
+            modelId.includes("midjourney") ||
+            modelId.includes("fluently")
+          ) {
+            categorized.image.push(modelInfo);
+          } else if (
+            modelId.includes("code") ||
+            modelId.includes("codellama") ||
+            modelId.includes("deepseek") ||
+            modelId.includes("starcoder")
+          ) {
+            categorized.code.push(modelInfo);
+          } else if (
+            modelId.includes("vision") ||
+            modelId.includes("multimodal") ||
+            modelId.includes("gpt-4v")
+          ) {
+            categorized.multimodal.push(modelInfo);
+          } else {
+            // Default to text models
+            categorized.text.push(modelInfo);
+          }
+        });
 
-      return categorized;
+        // Ensure we have at least some models in each category
+        if (categorized.text.length === 0) categorized.text = DEFAULT_MODELS.text;
+        if (categorized.code.length === 0) categorized.code = DEFAULT_MODELS.code;
+        if (categorized.image.length === 0) categorized.image = DEFAULT_MODELS.image;
+        if (categorized.multimodal.length === 0)
+          categorized.multimodal = DEFAULT_MODELS.multimodal;
+
+        // Store in database for quick access
+        await ctx.runMutation(api.models.updateModelCache, {
+          models: models.map((m: any) => ({
+            id: m.id,
+            name: m.id,
+            available: true,
+            lastUpdated: Date.now(),
+          })),
+          timestamp: Date.now(),
+        });
+
+        return categorized;
+      } catch (error) {
+        console.error("Model fetch error:", error);
+        return DEFAULT_MODELS;
+      }
     } catch (error) {
-      console.error("Model fetch error:", error);
-
-      // Return fallback models
-      return {
-        text: [
-          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-          { id: "gpt-4", name: "GPT-4" },
-        ],
-        code: [
-          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo (Code)" },
-        ],
-        image: [
-          { id: "dalle-3", name: "DALL-E 3" },
-        ],
-        multimodal: [],
-      };
+      console.error("Provider fetch error:", error);
+      return DEFAULT_MODELS;
     }
   },
 });
@@ -246,43 +268,45 @@ export const getBestModelForIntent = query({
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
     const cached = await ctx.db.query("modelCache").first();
-    
-    if (!cached || Date.now() - cached.lastUpdated > 3600000) { // 1 hour cache
-      return null; // Trigger refresh
-    }
 
-    const models = cached.models.filter(m => m.available);
-    
+    // Use defaults if no cache
+    const models = cached?.models || [];
+
     // Dynamic model selection based on intent
     switch (args.intentType) {
-      case 'code':
-        const codeModels = models.filter(m => 
-          m.id.toLowerCase().includes('code') ||
-          m.id.toLowerCase().includes('deepseek') ||
-          m.id.toLowerCase().includes('starcoder')
+      case "code":
+        const codeModels = models.filter(
+          (m) =>
+            m.id.toLowerCase().includes("code") ||
+            m.id.toLowerCase().includes("deepseek") ||
+            m.id.toLowerCase().includes("starcoder"),
         );
-        return codeModels[0]?.id || models[0]?.id || "gpt-3.5-turbo";
-        
-      case 'image':
-        const imageModels = models.filter(m => 
-          m.id.toLowerCase().includes('dalle') ||
-          m.id.toLowerCase().includes('stable') ||
-          m.id.toLowerCase().includes('image')
+        return codeModels[0]?.id || "gpt-3.5-turbo";
+
+      case "image":
+        const imageModels = models.filter(
+          (m) =>
+            m.id.toLowerCase().includes("dalle") ||
+            m.id.toLowerCase().includes("stable") ||
+            m.id.toLowerCase().includes("image") ||
+            m.id.toLowerCase().includes("fluently"),
         );
-        return imageModels[0]?.id || "dalle-3";
-        
-      case 'analysis':
-        const analysisModels = models.filter(m => 
-          m.id.toLowerCase().includes('gpt-4') ||
-          m.id.toLowerCase().includes('claude')
+        return imageModels[0]?.id || "fluently-xl";
+
+      case "analysis":
+        const analysisModels = models.filter(
+          (m) =>
+            m.id.toLowerCase().includes("gpt-4") ||
+            m.id.toLowerCase().includes("claude"),
         );
         return analysisModels[0]?.id || "gpt-4";
-        
+
       default:
         // For general chat, prefer fast models
-        const chatModels = models.filter(m => 
-          m.id.toLowerCase().includes('turbo') ||
-          m.id.toLowerCase().includes('haiku')
+        const chatModels = models.filter(
+          (m) =>
+            m.id.toLowerCase().includes("turbo") ||
+            m.id.toLowerCase().includes("haiku"),
         );
         return chatModels[0]?.id || models[0]?.id || "gpt-3.5-turbo";
     }
@@ -311,7 +335,7 @@ export const trackModelHealth = mutation({
         successCount: modelHealth.successCount + (args.success ? 1 : 0),
         failureCount: modelHealth.failureCount + (args.success ? 0 : 1),
         lastError: args.success ? undefined : args.error,
-        isHealthy: args.success || modelHealth.failureCount < 3, // Mark unhealthy after 3 failures
+        isHealthy: args.success || modelHealth.failureCount < 3,
       });
     } else {
       // Create new health record
@@ -331,17 +355,19 @@ export const trackModelHealth = mutation({
 // Update model cache
 export const updateModelCache = mutation({
   args: {
-    models: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      available: v.boolean(),
-      lastUpdated: v.number(),
-    })),
+    models: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        available: v.boolean(),
+        lastUpdated: v.number(),
+      }),
+    ),
     timestamp: v.number(),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("modelCache").first();
-    
+
     if (existing) {
       await ctx.db.patch(existing._id, {
         models: args.models,
@@ -354,4 +380,4 @@ export const updateModelCache = mutation({
       });
     }
   },
-}); 
+});
