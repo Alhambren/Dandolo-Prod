@@ -348,7 +348,7 @@ export const listActive = query({
   },
 });
 
-// Internal query for active providers (with API keys for routing)
+// CRITICAL: Internal query for active providers (with API keys for routing)
 export const listActiveInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -357,9 +357,11 @@ export const listActiveInternal = internalQuery({
         .query("providers")
         .filter((q) => q.eq(q.field("isActive"), true))
         .collect();
+      
+      console.log(`listActiveInternal: Found ${providers?.length || 0} active providers`);
       return providers || [];
     } catch (error) {
-      console.error("Error fetching active providers:", error);
+      console.error("Error in listActiveInternal:", error);
       return [];
     }
   },
@@ -501,16 +503,20 @@ export const getProvider = query({
   },
 });
 
-// Update VCU balance (placeholder for MVP)
+// CRITICAL: Update VCU balance (internal mutation)
 export const updateVCUBalance = internalMutation({
   args: {
     providerId: v.id("providers"),
     vcuBalance: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.providerId, {
-      vcuBalance: args.vcuBalance,
-    });
+    try {
+      await ctx.db.patch(args.providerId, {
+        vcuBalance: args.vcuBalance,
+      });
+    } catch (error) {
+      console.error("Error updating VCU balance:", error);
+    }
   },
 });
 
