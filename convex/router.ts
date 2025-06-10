@@ -25,7 +25,7 @@ http.route({
       }
       
       const apiKey = authHeader.substring(7);
-      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { address: apiKey });
+      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
       
       if (!keyValidation || !keyValidation.address) {
         return new Response(JSON.stringify({ error: "Invalid API key" }), {
@@ -197,7 +197,7 @@ http.route({
       }
       
       const apiKey = authHeader.substring(7);
-      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { address: apiKey });
+      const keyValidation = await ctx.runQuery(api.developers.validateApiKey, { apiKey });
       
       if (!keyValidation || !keyValidation.address) {
         return new Response(JSON.stringify({ error: "Invalid API key" }), {
