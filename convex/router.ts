@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
@@ -241,6 +241,27 @@ http.route({
     }
   }),
 });
+http.route({
+  path: "/api/v1/embed",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const { text } = await request.json();
+      if (!text) {
+        return new Response(JSON.stringify({ error: "Text is required" }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+      const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+      if (!providers.length) {
+        return new Response(JSON.stringify({ error: "No providers" }), { status: 503, headers: { "Content-Type": "application/json" } });
+      }
+      const embedding = await ctx.runAction(api.embeddings.embedText, { text, providerId: providers[0]._id });
+      return new Response(JSON.stringify({ embedding }), { status: 200, headers: { "Content-Type": "application/json" } });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+  })
+});
+
 
 http.route({
   path: "/api/stats",
