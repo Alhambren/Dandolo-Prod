@@ -166,121 +166,152 @@ async function callVeniceAI(
     intentType,
   });
 
-  // If model is not provided, infer from the prompt.
-  if (!model && !intentType) {
-    const analysis = analyzePromptIntent(prompt);
-    model = analysis.suggestedModel;
-    console.log("Dynamic model selection:", analysis);
-  }
+  try {
+    // Fetch available models from Venice to ensure we select a valid one
+    const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
 
-  // ----- Image generation -----
-  if (
-    intentType === "image" ||
-    model === "fluently-xl" ||
-    model === "dalle-3"
-  ) {
-    try {
-      const imageEndpoint = "https://api.venice.ai/api/v1/image/generate";
-      const imageResponse = await fetch(imageEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: model || "fluently-xl",
-          prompt,
-          width: 1024,
-          height: 1024,
-          steps: 20,
-          cfg_scale: 7.5,
-          return_binary: false,
-        }),
-      });
+    if (!modelsResponse.ok) {
+      throw new Error(`Failed to fetch models: ${modelsResponse.status}`);
+    }
+
+    const modelsData = await modelsResponse.json();
+    const availableModels = modelsData.data.map((m: any) => m.id);
+    console.log("Available models from Venice:", availableModels);
+
+    let selectedModel = model;
+
+    // Choose a model based on intent if none provided
+    if (!selectedModel && intentType) {
+      switch (intentType) {
+        case "image":
+          selectedModel =
+            availableModels.find((m: string) =>
+              m.includes("fluently") ||
+              m.includes("dalle") ||
+              m.includes("stable-diffusion")
+            ) || availableModels[0];
+          break;
+        case "code":
+          selectedModel =
+            availableModels.find((m: string) =>
+              m.includes("deepseek") ||
+              m.includes("code") ||
+              m.includes("starcoder")
+            ) || availableModels[0];
+          break;
+        case "vision":
+          selectedModel =
+            availableModels.find((m: string) =>
+              m.includes("vision") ||
+              m.includes("llava") ||
+              m.includes("gpt-4v")
+            ) || availableModels[0];
+          break;
+        case "audio":
+          selectedModel =
+            availableModels.find((m: string) =>
+              m.includes("whisper") ||
+              m.includes("audio") ||
+              m.includes("speech")
+            ) || availableModels[0];
+          break;
+        case "analysis":
+          selectedModel =
+            availableModels.find((m: string) =>
+              m.includes("mixtral") ||
+              m.includes("gpt-4") ||
+              m.includes("claude")
+            ) || availableModels[0];
+          break;
+        default:
+          selectedModel = availableModels[0];
+      }
+    }
+
+    if (!selectedModel) {
+      selectedModel = availableModels[0];
+    }
+
+    console.log(`Selected model: ${selectedModel} for intent: ${intentType}`);
+
+    // ----- Image generation -----
+    if (intentType === "image" && selectedModel.includes("fluently")) {
+      const imageResponse = await fetch(
+        "https://api.venice.ai/api/v1/image/generate",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: selectedModel,
+            prompt,
+            width: 1024,
+            height: 1024,
+            steps: 20,
+            cfg_scale: 7.5,
+            return_binary: false,
+          }),
+        }
+      );
 
       if (imageResponse.ok) {
         const imageData = await imageResponse.json();
         if (imageData.images && imageData.images.length > 0) {
           const imageUrl = imageData.images[0];
-          const vcuCost = calculateVCUCost(100, model || "fluently-xl");
           return {
             text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
             tokens: 100,
-            model: model || "fluently-xl",
-            cost: vcuCost,
-            vcuUsed: vcuCost,
+            model: selectedModel,
+            cost: 5,
+            vcuUsed: 5,
           };
         }
       }
-
-      console.log("Image generation failed, using text fallback");
-      intentType = "image-fallback";
-    } catch (err) {
-      console.error("Image generation error:", err);
-      intentType = "image-fallback";
     }
-  }
 
+    // ----- Text generation -----
+    let systemPrompt: string | undefined;
+    if (intentType === "vision") {
+      systemPrompt =
+        "You are a computer vision assistant. Analyze the provided image and respond.";
+    } else if (intentType === "audio") {
+      systemPrompt =
+        "You are an audio assistant. Transcribe or summarize the provided audio.";
+    }
+    if (intentType === "code" || selectedModel.includes("code")) {
+      systemPrompt =
+        "You are an expert programmer. Generate clean, well-commented code with explanations.";
+    } else if (intentType === "analysis") {
+      systemPrompt =
+        "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
+    }
 
-  // ----- Text generation -----
-  let systemPrompt: string | undefined;
-  if (intentType === "vision") {
-    systemPrompt =
-      "You are a computer vision assistant. Analyze the provided image and respond.";
-  } else if (intentType === "audio") {
-    systemPrompt =
-      "You are an audio assistant. Transcribe or summarize the provided audio.";
-  }
-  if (intentType === "code" || model?.includes("code")) {
-    systemPrompt =
-      "You are an expert programmer. Generate clean, well-commented code with explanations.";
-  } else if (intentType === "analysis" || model === "dolphin-mixtral-8x7b") {
-    systemPrompt =
-      "You are an expert analyst. Provide deep, thoughtful analysis with multiple perspectives.";
-  } else if (intentType === "image-fallback") {
-    systemPrompt =
-      "The user requested an image. Create a vivid, detailed text description instead.";
-  }
+    const messages = systemPrompt
+      ? [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ]
+      : [{ role: "user", content: prompt }];
 
-  const messages = systemPrompt
-    ? [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ]
-    : [{ role: "user", content: prompt }];
-
-  const selectedModel = model || analyzePromptIntent(prompt).suggestedModel;
-  const modelMap: Record<string, string> = {
-    "gpt-3.5-turbo": "llama-3.2-3b-instruct",
-    "gpt-4": "dolphin-mixtral-8x7b",
-    "gpt-4-vision": "fluently-xl",
-  };
-  const veniceModel = modelMap[selectedModel] || selectedModel;
-
-  const response = await fetch(
-    "https://api.venice.ai/v1/chat/completions",
-    {
+    const response = await fetch("https://api.venice.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: veniceModel,
+        model: selectedModel,
         messages,
-        max_tokens: intentType === "code" ? 2000 : 1000,
-        temperature:
-          intentType === "code"
-            ? 0.3
-            : intentType === "analysis"
-            ? 0.7
-            : 0.8,
+        max_tokens: 1000,
+        temperature: 0.7,
         stream: false,
       }),
-    },
-  );
+    });
 
-  try {
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Venice API error: ${response.status} - ${error}`);
@@ -288,24 +319,17 @@ async function callVeniceAI(
 
     const data = await response.json();
     const totalTokens = data.usage?.total_tokens || 0;
-    const vcuCost = calculateVCUCost(totalTokens, veniceModel);
 
     return {
       text: data.choices[0].message.content,
       tokens: totalTokens,
-      model: data.model || veniceModel,
-      cost: vcuCost,
-      vcuUsed: vcuCost,
+      model: data.model || selectedModel,
+      cost: Math.ceil(totalTokens / 1000),
+      vcuUsed: Math.ceil(totalTokens / 1000),
     };
-  } catch (err) {
-    console.error("Text generation error:", err);
-    return {
-      text: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
-      tokens: 0,
-      model: veniceModel,
-      cost: 0,
-      vcuUsed: 0,
-    };
+  } catch (error) {
+    console.error("Venice AI error:", error);
+    throw error;
   }
 }
 
