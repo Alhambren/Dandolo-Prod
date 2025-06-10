@@ -130,14 +130,17 @@ http.route({
         });
       }
 
-      // Route to inference with full message history
-      const result = await ctx.runAction(api.inference.routeCompletion, {
-        messages,
-        model: model || "gpt-3.5-turbo",
-        temperature,
-        max_tokens,
+      // Route to inference with the last user message
+      const lastUserMessage = messages.filter((m: any) => m.role === "user").pop();
+      if (!lastUserMessage) {
+        throw new Error("No user message found");
+      }
+
+      const result = await ctx.runAction(api.inference.route, {
+        prompt: lastUserMessage.content,
         address: keyRecord.address,
-        keyType,
+        model: model || "gpt-3.5-turbo",
+        intentType: "chat",
       });
 
       // Update API key usage
@@ -147,7 +150,7 @@ http.route({
       await ctx.runMutation(api.analytics.logUsage, {
         address: keyRecord.address,
         model: result.model,
-        tokens: result.usage.total_tokens,
+        tokens: result.tokens,
         latencyMs: result.responseTime,
       });
 
@@ -157,27 +160,36 @@ http.route({
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
         model: result.model,
-        usage: result.usage,
-        choices: [{
-          message: {
-            role: "assistant",
-            content: result.content,
+        usage: {
+          prompt_tokens: Math.floor(result.tokens * 0.7),
+          completion_tokens: Math.floor(result.tokens * 0.3),
+          total_tokens: result.tokens,
+        },
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: result.response,
+            },
+            finish_reason: "stop",
+            index: 0,
           },
-          finish_reason: "stop",
-          index: 0,
-        }],
+        ],
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
       console.error("Chat completions error:", error);
-      return new Response(JSON.stringify({
-        error: error instanceof Error ? error.message : "Internal server error",
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "Internal server error",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
   }),
 });
