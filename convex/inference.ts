@@ -286,7 +286,7 @@ export const logUsage = mutation({
     createdAt: v.number(),
     latencyMs: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     await ctx.db.insert("usageLogs", {
       address: args.address ?? 'anonymous',
       providerId: args.providerId,
@@ -298,7 +298,7 @@ export const logUsage = mutation({
   },
 });
 
-export const routeCompletion = action({
+export const routeCompletion: any = action({
   args: {
     messages: v.array(v.object({
       role: v.union(v.literal("system"), v.literal("user"), v.literal("assistant")),
@@ -329,20 +329,20 @@ export const routeCompletion = action({
     });
 
     // Get active providers
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
       throw new Error("No providers available");
     }
 
     // Select random provider
-    const selectedProvider = providers[Math.floor(Math.random() * providers.length)];
+    const selectedProvider: any = providers[Math.floor(Math.random() * providers.length)];
     console.log(`Selected provider: ${selectedProvider.name}`);
 
     const startTime = Date.now();
 
     try {
       // Call Venice.ai with full message history
-      const response = await fetch("https://api.venice.ai/v1/chat/completions", {
+      const response: Response = await fetch("https://api.venice.ai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -362,7 +362,7 @@ export const routeCompletion = action({
         throw new Error(`Venice API error: ${response.status} - ${error}`);
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
       const responseTime = Date.now() - startTime;
 
       // Award provider points (1 point per 100 tokens)

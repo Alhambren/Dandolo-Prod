@@ -12,7 +12,12 @@ export const checkRateLimit = mutation({
     const todayTimestamp = today.getTime();
 
     if (!args.address) {
-      return { allowed: false, remaining: 0, resetTime: todayTimestamp + 24 * 60 * 60 * 1000 };
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime: todayTimestamp + 24 * 60 * 60 * 1000,
+        current: 0,
+      };
     }
 
     const usageToday = await ctx.db
@@ -43,7 +48,12 @@ export const getRateLimitStatus = query({
     const todayTimestamp = today.getTime();
 
     if (!args.address) {
-      return { current: 0, remaining: 50, resetTime: todayTimestamp + 24 * 60 * 60 * 1000 };
+      return {
+        current: 0,
+        remaining: 50,
+        resetTime: todayTimestamp + 24 * 60 * 60 * 1000,
+        limit: 50,
+      };
     }
 
     const usageToday = await ctx.db
