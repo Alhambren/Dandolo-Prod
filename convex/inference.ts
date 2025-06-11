@@ -241,6 +241,64 @@ export type RouteReturnType = {
 };
 
 /**
+ * Simplified routing wrapper matching the frontend parameters.
+ * Converts a single prompt into message format and maps intent types.
+ */
+export const routeSimple = action({
+  args: {
+    prompt: v.string(),
+    address: v.string(),
+    intentType: v.optional(
+      v.union(
+        v.literal("chat"),
+        v.literal("code"),
+        v.literal("image"),
+        v.literal("analysis")
+      )
+    ),
+  },
+  returns: v.object({
+    response: v.string(),
+    model: v.string(),
+    tokens: v.number(),
+    provider: v.string(),
+    responseTime: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    try {
+      const messages = [
+        {
+          role: "user" as const,
+          content: args.prompt,
+        },
+      ];
+
+      const intent = args.intentType || "chat";
+
+      const sessionId = `session-${args.address}-${Date.now()}`;
+
+      const result = await ctx.runAction(api.inference.route, {
+        messages,
+        intent,
+        sessionId,
+        isAnonymous: args.address === "anonymous",
+      });
+
+      return {
+        response: result.response,
+        model: result.model,
+        tokens: result.tokens,
+        provider: result.provider,
+        responseTime: result.responseTime,
+      };
+    } catch (error) {
+      console.error("RouteSimple error:", error);
+      throw error;
+    }
+  },
+});
+
+/**
  * Main inference routing action. Selects a provider, forwards the request to
  * Venice.ai and records usage. Returns the generated text or image URL.
  */
@@ -274,7 +332,7 @@ export const route = action({
   handler: async (ctx, args): Promise<RouteReturnType> => {
     try {
       const providers: Provider[] = await ctx.runQuery(
-        internal.providers.listActiveInternal
+        api.providers.listActive
       );
 
       if (providers.length === 0) {
