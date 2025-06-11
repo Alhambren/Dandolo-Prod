@@ -31,6 +31,7 @@ http.route({
       // Record anonymous usage
       await ctx.runMutation(api.usageLogs.create, {
         address: sessionId,
+        providerId: result.providerId,
         model: result.model,
         tokens: result.tokens,
         latencyMs: result.responseTime,
@@ -120,6 +121,7 @@ http.route({
 
       await ctx.runMutation(api.usageLogs.create, {
         address: keyData.address || `api-${keyData._id}`,
+        providerId: result.providerId,
         model: result.model,
         tokens: result.tokens,
         latencyMs: result.responseTime,
