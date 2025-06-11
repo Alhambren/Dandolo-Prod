@@ -11,5 +11,13 @@ crons.interval(
   {}
 );
 
+// Refresh model cache every hour
+crons.interval(
+  "refresh model cache",
+  { hours: 1 },
+  internal.models.refreshModelCacheInternal,
+  {}
+);
+
 export default crons;
 

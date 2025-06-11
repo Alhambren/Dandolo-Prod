@@ -65,6 +65,140 @@ interface Provider {
   isActive: boolean;
 }
 
+// Cache for available models with expiration
+let modelCache: {
+  models: any[];
+  timestamp: number;
+} | null = null;
+
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+
+/**
+ * Fetch available models from Venice.ai with caching
+ */
+async function fetchAvailableModels(apiKey: string): Promise<any[]> {
+  // Return cached models if they're still fresh
+  if (modelCache && Date.now() - modelCache.timestamp < CACHE_DURATION) {
+    return modelCache.models;
+  }
+
+  try {
+    const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!modelsResponse.ok) {
+      console.error("Failed to fetch models:", modelsResponse.status);
+      throw new Error(`Venice API error: ${modelsResponse.status}`);
+    }
+
+    const modelsData = await modelsResponse.json();
+    const models = modelsData.data || [];
+    
+    // Update cache
+    modelCache = {
+      models,
+      timestamp: Date.now(),
+    };
+
+    console.log(
+      "Available models from Venice:",
+      models.map((m: any) => ({ id: m.id, type: m.type }))
+    );
+
+    return models;
+  } catch (error) {
+    console.error("Failed to fetch models:", error);
+    // If we have cached models, use them even if expired
+    if (modelCache) {
+      console.log("Using expired cache due to fetch error");
+      return modelCache.models;
+    }
+    throw new Error("Cannot proceed without model list");
+  }
+}
+
+/**
+ * Select the most appropriate model based on intent and availability
+ */
+function selectModel(models: any[], intentType?: string, preferredModel?: string): string[] {
+  console.log("selectModel called with intentType:", intentType, "preferredModel:", preferredModel);
+  const rankedModels: string[] = [];
+
+  // If a preferred model is specified and available, add it to the top of the list
+  if (preferredModel) {
+    const exists = models.some((m) => m.id === preferredModel);
+    if (exists) {
+      console.log("Preferred model found:", preferredModel);
+      rankedModels.push(preferredModel);
+    } else {
+      console.warn(`Preferred model ${preferredModel} not found, selecting dynamically`);
+    }
+  }
+
+  // Filter models by type and capabilities
+  const textModels = models.filter((m) => m.type === "text");
+  console.log("textModels:", textModels.map((m: any) => m.id));
+  const imageModels = models.filter((m) => m.type === "image");
+  const codeModels = textModels.filter(
+    (m) =>
+      m.id.toLowerCase().includes("code") ||
+      m.id.toLowerCase().includes("deepseek") ||
+      m.id.toLowerCase().includes("starcoder")
+  );
+  const analysisModels = textModels.filter(
+    (m) =>
+      (m.model_spec?.availableContextTokens || 0) > 100000 ||
+      m.id.toLowerCase().includes("mixtral") ||
+      m.id.toLowerCase().includes("dolphin")
+  );
+  const visionModels = textModels.filter(
+    (m) => m.id.toLowerCase().includes("qwen-2.5-vl")
+  );
+
+  // Populate rankedModels based on intent
+  if (intentType === "image" && imageModels.length > 0) {
+    rankedModels.push(...imageModels.map((m) => m.id));
+  } else if (intentType === "code" && codeModels.length > 0) {
+    rankedModels.push(...codeModels.map((m) => m.id));
+  } else if (intentType === "analysis" && analysisModels.length > 0) {
+    rankedModels.push(...analysisModels.map((m) => m.id));
+  } else if (intentType === "vision" && visionModels.length > 0) {
+    rankedModels.push(...visionModels.map((m) => m.id));
+  } else if (intentType === "chat" && textModels.length > 0) {
+    const preferredChatModel = textModels.find(m => m.id === "llama-3.2-3b");
+    if (preferredChatModel) {
+      rankedModels.push(preferredChatModel.id);
+    }
+    const otherTextModels = textModels.filter(m => m.id !== "venice-uncensored" && m.id !== (preferredChatModel?.id));
+    rankedModels.push(...otherTextModels.map((m: any) => m.id));
+    const veniceUncensored = textModels.find(m => m.id === "venice-uncensored");
+    if (veniceUncensored) {
+      rankedModels.push(veniceUncensored.id);
+    }
+  }
+
+  // Add any remaining models of the appropriate type if not already added
+  const currentRankedIds = new Set(rankedModels);
+  if (intentType === "image") {
+    imageModels.forEach(m => { if (!currentRankedIds.has(m.id)) rankedModels.push(m.id); });
+  } else if (intentType === "code") {
+    codeModels.forEach(m => { if (!currentRankedIds.has(m.id)) rankedModels.push(m.id); });
+  } else if (intentType === "analysis") {
+    analysisModels.forEach(m => { if (!currentRankedIds.has(m.id)) rankedModels.push(m.id); });
+  } else if (intentType === "vision") {
+    visionModels.forEach(m => { if (!currentRankedIds.has(m.id)) rankedModels.push(m.id); });
+  } else {
+    textModels.forEach(m => { if (!currentRankedIds.has(m.id)) rankedModels.push(m.id); });
+  }
+
+  // Ensure all models are added if specific intent models aren't found or as a general fallback
+  models.forEach(m => { if (!currentRankedIds.has(m.id)) rankedModels.push(m.id); });
+
+  console.log("Ranked models:", rankedModels);
+  return rankedModels;
+}
+
 /**
  * Select a model based on the user's intent. If no preferred model is found,
  * fall back to the first available model of the required type.
@@ -140,54 +274,73 @@ function calculateVCUCost(tokens: number, model: string): number {
  */
 async function callVeniceAI(
   apiKey: string,
-  messages: VeniceMessage[],
-  intent: "chat" | "code" | "image" | "analysis",
-): Promise<{ response: string; model: string; tokens: number; responseTime: number }> {
-  const startTime = Date.now();
-  console.log(`[callVeniceAI] Starting Venice.ai call for intent: ${intent}`);
-  try {
-    console.log("[callVeniceAI] Fetching models list...");
-    const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
+  model?: string,
+  intentType?: string,
+) {
+  console.log("CallVeniceAI:", {
+    prompt: prompt.substring(0, 50),
+    model,
+    intentType,
+  });
 
-    if (!modelsResponse.ok) {
-      console.error(
-        `[callVeniceAI] Models fetch failed: ${modelsResponse.status} ${modelsResponse.statusText}`,
-      );
-      throw new Error(`Failed to fetch models: ${modelsResponse.statusText}`);
-    }
+  // Fetch available models with caching
+  const availableModels = await fetchAvailableModels(apiKey);
 
-    const modelsData = (await modelsResponse.json()) as VeniceModelsResponse;
-    console.log(`[callVeniceAI] Got ${modelsData.data.length} models`);
-    const model = await selectModelForIntent(modelsData.data, intent);
-    console.log(`[callVeniceAI] Selected model: ${model}`);
+  // Select appropriate model
+  const finalModels = selectModel(availableModels, intentType, model);
+  console.log("Selected models:", finalModels, "for intent:", intentType);
 
-    if (intent === "image") {
-      console.log("[callVeniceAI] Calling image generation endpoint...");
-      const imageResponse = await fetch(
-        "https://api.venice.ai/api/v1/images/generations",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            prompt: messages[messages.length - 1].content,
-            n: 1,
-            size: "1024x1024",
-          }),
-        },
-      );
+  const isImageModel = availableModels.find((m) => m.id === finalModels[0])?.type === "image";
 
-      if (!imageResponse.ok) {
-        const error = await imageResponse.text();
-        throw new Error(`Venice API error: ${imageResponse.status} - ${error}`);
+  // Image generation
+  if (isImageModel || intentType === "image") {
+    try {
+      const imageModel = isImageModel
+        ? finalModels[0]
+        : availableModels.find((m) => m.type === "image")?.id;
+
+      if (!imageModel) {
+        console.log(
+          "No image model available, falling back to text description"
+        );
+      } else {
+        const imageResponse = await fetch(
+          "https://api.venice.ai/api/v1/image/generate",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey.trim()}`,
+            },
+            body: JSON.stringify({
+              model: imageModel,
+              prompt,
+              width: 1024,
+              height: 1024,
+              steps: 20,
+              cfg_scale: 7.5,
+              return_binary: false,
+            }),
+          }
+        );
+
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json();
+          if (imageData.images && imageData.images.length > 0) {
+            const imageUrl = imageData.images[0];
+            const vcuCost = calculateVCUCost(100, imageModel);
+            return {
+              text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
+              tokens: 100,
+              model: imageModel,
+              cost: vcuCost,
+              vcuUsed: vcuCost,
+            };
+          }
+        } else {
+          const errorText = await imageResponse.text();
+          console.error("Image generation failed:", errorText);
+        }
       }
 
       const imageData = (await imageResponse.json()) as VeniceImageResponse;
@@ -212,7 +365,7 @@ async function callVeniceAI(
         body: JSON.stringify({
           model,
           messages,
-          temperature: intent === "code" ? 0.3 : 0.7,
+          temperature: intentType === "code" ? 0.3 : 0.7,
           max_tokens: 2000,
         }),
       }
@@ -233,10 +386,10 @@ async function callVeniceAI(
       tokens: data.usage?.total_tokens || 0,
       responseTime: Date.now() - startTime,
     };
-  } catch (error) {
-    console.error("[callVeniceAI] Venice API call failed:", error);
-    throw error;
   }
+
+  // If all models fail
+  throw new Error("All available models failed to generate a response.");
 }
 
 /** Return type for the route action. */

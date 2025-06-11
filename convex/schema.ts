@@ -11,23 +11,20 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     veniceApiKey: v.string(),
-    apiKeyHash: v.optional(v.string()), // Made optional for legacy data
+    apiKeyHash: v.string(),
     vcuBalance: v.number(),
     isActive: v.boolean(),
-    uptime: v.number(),
     totalPrompts: v.number(),
+    avgResponseTime: v.number(),
+    status: v.union(v.literal("pending"), v.literal("active"), v.literal("inactive")),
     registrationDate: v.number(),
-    avgResponseTime: v.optional(v.number()), // Made optional for legacy data
-    status: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("inactive"))), // Made optional
     lastHealthCheck: v.optional(v.number()),
-    region: v.optional(v.string()),
-    gpuType: v.optional(v.string()),
   })
     .index("by_active", ["isActive"])
     .index("by_address", ["address"])
     .index("by_api_key_hash", ["apiKeyHash"]),
 
-  // USER POINTS: What the code expects
+  // USER POINTS: Track user rewards
   userPoints: defineTable({
     address: v.string(),
     points: v.number(),
@@ -36,67 +33,13 @@ export default defineSchema({
     lastEarned: v.number(),
   }).index("by_address", ["address"]),
 
-  // LEGACY POINTS: Keep for compatibility
-  points: defineTable({
-    userId: v.optional(v.id("users")),
-    points: v.optional(v.number()),
-    promptsToday: v.optional(v.number()),
-    pointsToday: v.optional(v.number()),
-    lastActivity: v.optional(v.number()),
-    total: v.optional(v.number()),
-    totalSpent: v.optional(v.number()),
-    address: v.optional(v.string()),
-    lastEarned: v.optional(v.number()),
-  })
-    .index("by_user", ["userId"])
-    .index("by_address", ["address"]),
-
-  // PROVIDER POINTS: Points earned by providers
+  // PROVIDER POINTS: Track provider rewards
   providerPoints: defineTable({
     providerId: v.id("providers"),
     points: v.number(),
     totalPrompts: v.number(),
     lastEarned: v.number(),
-    lastDailyReward: v.optional(v.number()),
   }).index("by_provider", ["providerId"]),
-
-  // USAGE LOGS: Anonymous metrics
-  usageLogs: defineTable({
-    address: v.string(),
-    providerId: v.optional(v.id("providers")),
-    model: v.string(),
-    tokens: v.number(),
-    latencyMs: v.number(),
-    createdAt: v.number(),
-  })
-    .index("by_provider", ["providerId"])
-    .index("by_address", ["address"])
-    .index("by_created", ["createdAt"]),
-
-  // INFERENCES: Track detailed inference metrics
-  inferences: defineTable({
-    providerId: v.id("providers"),
-    model: v.string(),
-    intent: v.string(),
-    promptTokens: v.number(),
-    completionTokens: v.number(),
-    totalTokens: v.number(),
-    vcuCost: v.number(),
-    sessionId: v.string(),
-    isAnonymous: v.boolean(),
-    timestamp: v.number(),
-  })
-    .index("by_provider", ["providerId"])
-    .index("by_timestamp", ["timestamp"])
-    .index("by_session", ["sessionId"]),
-
-  // POINTS HISTORY: Track point awards
-  points_history: defineTable({
-    address: v.string(),
-    amount: v.number(),
-    reason: v.string(),
-    ts: v.number(),
-  }).index("by_address", ["address"]),
 
   // HEALTH CHECKS: Provider monitoring
   healthChecks: defineTable({
@@ -121,34 +64,48 @@ export default defineSchema({
   })
     .index("by_address", ["address"])
     .index("by_key", ["key"]),
-  // EMBEDDINGS: Stored text embeddings
-  embeddings: defineTable({
-    text: v.string(),
-    embedding: v.array(v.number()),
-    createdAt: v.number(),
-  }).index("by_created", ["createdAt"]),
 
-
-
-  // MODEL CACHE: Venice.ai model availability
+  // MODEL CACHE: Venice.ai models
   modelCache: defineTable({
-    models: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      available: v.boolean(),
-      lastUpdated: v.number(),
-    })),
+    models: v.object({
+      text: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      code: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      image: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+      })),
+      multimodal: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      audio: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+      })),
+    }),
     lastUpdated: v.number(),
   }),
 
-  // MODEL HEALTH: Track model performance
-  modelHealth: defineTable({
-    modelId: v.string(),
-    successCount: v.number(),
-    failureCount: v.number(),
-    lastUsed: v.number(),
-    isHealthy: v.boolean(),
-    lastError: v.optional(v.string()),
-  }).index("by_model", ["modelId"]),
+  // API KEYS: Developer access
+  apiKeys: defineTable({
+    address: v.string(),
+    name: v.string(),
+    key: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    lastUsed: v.optional(v.number()),
+    totalUsage: v.number(),
+  })
+    .index("by_address", ["address"])
+    .index("by_key", ["key"]),
 });
 
