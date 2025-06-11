@@ -15,9 +15,11 @@ import type {
 } from "convex/server";
 import type * as analytics from "../analytics.js";
 import type * as api_ from "../api.js";
+import type * as apiKeys from "../apiKeys.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as developers from "../developers.js";
+import type * as embeddings from "../embeddings.js";
 import type * as http from "../http.js";
 import type * as inference from "../inference.js";
 import type * as models from "../models.js";
@@ -26,6 +28,7 @@ import type * as providers from "../providers.js";
 import type * as rateLimit from "../rateLimit.js";
 import type * as router from "../router.js";
 import type * as stats from "../stats.js";
+import type * as usageLogs from "../usageLogs.js";
 import type * as wallets from "../wallets.js";
 
 /**
@@ -39,9 +42,11 @@ import type * as wallets from "../wallets.js";
 declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   api: typeof api_;
+  apiKeys: typeof apiKeys;
   auth: typeof auth;
   crons: typeof crons;
   developers: typeof developers;
+  embeddings: typeof embeddings;
   http: typeof http;
   inference: typeof inference;
   models: typeof models;
@@ -50,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   rateLimit: typeof rateLimit;
   router: typeof router;
   stats: typeof stats;
+  usageLogs: typeof usageLogs;
   wallets: typeof wallets;
 }>;
 export declare const api: FilterApi<

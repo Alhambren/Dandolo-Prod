@@ -82,7 +82,8 @@ export const registerProvider = mutation({
     }
 
     // No duplicate API keys
-    const apiKeyHash = hashApiKey(args.veniceApiKey);
+    const cleanApiKey = args.veniceApiKey.trim().replace(/^"|"$/g, "");
+    const apiKeyHash = hashApiKey(cleanApiKey);
     const duplicateKey = await ctx.db
       .query("providers")
       .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyHash))
@@ -97,11 +98,10 @@ export const registerProvider = mutation({
       address: args.address,
       name: args.name,
       description: args.description,
-      veniceApiKey: args.veniceApiKey,
+      veniceApiKey: cleanApiKey,
       apiKeyHash: apiKeyHash,
       vcuBalance: 0,
       isActive: false,
-      uptime: 0,
       totalPrompts: 0,
       registrationDate: Date.now(),
       avgResponseTime: 0,
@@ -113,8 +113,6 @@ export const registerProvider = mutation({
       providerId: providerId,
       points: 0,
       totalPrompts: 0,
-      lastDailyReward: 0,
-      lastEarned: Date.now(),
     });
 
     return providerId;
@@ -144,7 +142,8 @@ export const registerProviderWithVCU = mutation({
     }
 
     // No duplicate API keys
-    const apiKeyHash = hashApiKey(args.veniceApiKey);
+    const cleanApiKey = args.veniceApiKey.trim().replace(/^"|"$/g, "");
+    const apiKeyHash = hashApiKey(cleanApiKey);
     const duplicateKey = await ctx.db
       .query("providers")
       .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyHash))
@@ -155,15 +154,16 @@ export const registerProviderWithVCU = mutation({
     }
 
     // Create provider with actual VCU balance
+    const cleanApiKey2 = args.veniceApiKey.trim().replace(/^"|"$/g, "");
+    const apiKeyHash2 = hashApiKey(cleanApiKey2);
     const providerId = await ctx.db.insert("providers", {
       address: walletAddress,
       name: args.name,
       description: "Venice.ai Provider",
-      veniceApiKey: args.veniceApiKey,
-      apiKeyHash: apiKeyHash,
+      veniceApiKey: cleanApiKey2,
+      apiKeyHash: apiKeyHash2,
       vcuBalance: args.vcuBalance, // Use actual VCU from validation
       isActive: true,
-      uptime: 100,
       totalPrompts: 0,
       registrationDate: Date.now(),
       avgResponseTime: 0,
@@ -175,8 +175,6 @@ export const registerProviderWithVCU = mutation({
       providerId: providerId,
       points: 0,
       totalPrompts: 0,
-      lastDailyReward: 0,
-      lastEarned: Date.now(),
     });
 
     return providerId;
@@ -228,14 +226,12 @@ export const awardProviderPoints = mutation({
       await ctx.db.patch(pointsRecord._id, {
         points: (pointsRecord.points ?? 0) + pointsEarned,
         totalPrompts: (pointsRecord.totalPrompts ?? 0) + args.promptsServed,
-        lastEarned: Date.now(),
       });
     } else {
       await ctx.db.insert("providerPoints", {
         providerId: args.providerId,
         points: pointsEarned,
         totalPrompts: args.promptsServed,
-        lastEarned: Date.now(),
       });
     }
   },
@@ -254,14 +250,12 @@ export const updateProviderHealth = mutation({
       throw new Error("Provider not found");
     }
 
-    const newUptime = ((provider.uptime ?? 0) * 0.95) + (args.isHealthy ? 100 * 0.05 : 0);
     const newAvgResponseTime = provider.avgResponseTime && args.responseTime
       ? (provider.avgResponseTime * 0.9) + (args.responseTime * 0.1)
       : args.responseTime || provider.avgResponseTime || 0;
 
     await ctx.db.patch(args.providerId, {
       isActive: args.isHealthy,
-      uptime: newUptime,
       avgResponseTime: newAvgResponseTime,
     });
   },
@@ -279,18 +273,11 @@ export const getStats = query({
       .filter((q) => q.eq(q.field("providerId"), args.providerId))
       .first();
 
-    const recentHealthChecks = await ctx.db
-      .query("healthChecks")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
-      .order("desc")
-      .take(10);
-
     return {
       ...provider,
       veniceApiKey: undefined, // Never expose API key
       apiKeyHash: undefined, // Never expose hash
       points: points?.points ?? 0,
-      recentHealthChecks,
     };
   },
 });
@@ -389,7 +376,6 @@ export const incrementPromptCount = mutation({
       await ctx.db.patch(pointsRecord._id, {
         points: (pointsRecord.points ?? 0) + 100,
         totalPrompts: (pointsRecord.totalPrompts ?? 0) + 1,
-        lastEarned: Date.now(),
       });
     }
   },
@@ -421,31 +407,19 @@ export const recordHealthCheck = mutation({
   },
 });
 
-// Remove provider
+// Remove provider and associated provider points
 export const remove = mutation({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args) => {
     // Remove provider
     await ctx.db.delete(args.providerId);
-    
-    // Remove associated points
+    // Remove associated provider points
     const points = await ctx.db
       .query("providerPoints")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
       .first();
-    
     if (points) {
       await ctx.db.delete(points._id);
-    }
-    
-    // Remove health checks
-    const healthChecks = await ctx.db
-      .query("healthChecks")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
-      .collect();
-    
-    for (const check of healthChecks) {
-      await ctx.db.delete(check._id);
     }
   },
 });
@@ -485,7 +459,6 @@ export const getTopProviders = query({
         isActive: p.isActive,
         vcuBalance: p.vcuBalance,
         totalPrompts: p.totalPrompts,
-        uptime: p.uptime,
       }));
   },
 });
@@ -627,7 +600,6 @@ export const getProviderStats = query({
   args: { address: v.string() },
   returns: v.object({
     totalPrompts: v.number(),
-    uptime: v.number(),
     points: v.number(),
   }),
   handler: async (ctx, args) => {
@@ -639,7 +611,6 @@ export const getProviderStats = query({
     if (!provider) {
       return {
         totalPrompts: 0,
-        uptime: 0,
         points: 0,
       };
     }
@@ -651,7 +622,6 @@ export const getProviderStats = query({
 
     return {
       totalPrompts: provider.totalPrompts ?? 0,
-      uptime: provider.uptime ?? 0,
       points: points?.points ?? 0,
     };
   },
@@ -661,7 +631,6 @@ export const updateProviderStats = internalMutation({
   args: {
     providerId: v.id("providers"),
     totalPrompts: v.optional(v.number()),
-    uptime: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
@@ -669,7 +638,6 @@ export const updateProviderStats = internalMutation({
 
     const updates: any = {};
     if (args.totalPrompts !== undefined) updates.totalPrompts = args.totalPrompts;
-    if (args.uptime !== undefined) updates.uptime = args.uptime;
 
     await ctx.db.patch(args.providerId, updates);
   },
@@ -680,5 +648,65 @@ export const getById = internalQuery({
   args: { id: v.id("providers") },
   handler: async (ctx, args) => {
     return ctx.db.get(args.id);
+  },
+});
+
+// Simple health check action
+export const healthCheckProviders = action({
+  args: {},
+  handler: async (ctx) => {
+    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+    for (const provider of providers) {
+      try {
+        const response = await fetch("https://api.venice.ai/api/v1/models", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${provider.veniceApiKey}`,
+          },
+        });
+        await ctx.runMutation(internal.providers.updateHealthCheckInternal, {
+          providerId: provider._id,
+          isHealthy: response.ok,
+          responseTime: Date.now(),
+        });
+      } catch (error) {
+        await ctx.runMutation(internal.providers.updateHealthCheckInternal, {
+          providerId: provider._id,
+          isHealthy: false,
+          responseTime: Date.now(),
+        });
+      }
+    }
+  },
+});
+
+// Internal mutation to update health check
+export const updateHealthCheckInternal = internalMutation({
+  args: {
+    providerId: v.id("providers"),
+    isHealthy: v.boolean(),
+    responseTime: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.providerId, {
+      lastHealthCheck: args.responseTime,
+      isActive: args.isHealthy,
+    });
+  },
+});
+
+// Update provider stats when a prompt is served
+export const recordPromptServed = internalMutation({
+  args: { 
+    providerId: v.id("providers"),
+    responseTime: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) return;
+    await ctx.db.patch(args.providerId, {
+      totalPrompts: provider.totalPrompts + 1,
+      avgResponseTime: ((provider.avgResponseTime || 0) * provider.totalPrompts + args.responseTime) / (provider.totalPrompts + 1),
+    });
   },
 });

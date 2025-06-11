@@ -3,10 +3,56 @@ import { query, mutation, internalMutation, internalAction, internalQuery } from
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-// Award 0.1 points for serving a prompt
-export const awardPromptPoints = mutation({
-  args: { providerId: v.id("providers") },
+// Award points to user for making a prompt
+export const awardUserPoints = internalMutation({
+  args: {
+    address: v.string(),
+    amount: v.number(),
+  },
   handler: async (ctx, args) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = today.getTime();
+
+    const points = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+
+    if (points) {
+      // Check if we need to reset daily counters
+      const lastEarnedDate = new Date(points.lastEarned);
+      lastEarnedDate.setHours(0, 0, 0, 0);
+      const isNewDay = lastEarnedDate.getTime() < todayTimestamp;
+
+      await ctx.db.patch(points._id, {
+        points: points.points + args.amount,
+        promptsToday: isNewDay ? 1 : points.promptsToday + 1,
+        pointsToday: isNewDay ? args.amount : points.pointsToday + args.amount,
+        lastEarned: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("userPoints", {
+        address: args.address,
+        points: args.amount,
+        promptsToday: 1,
+        pointsToday: args.amount,
+        lastEarned: Date.now(),
+      });
+    }
+  },
+});
+
+// Award points to provider
+export const awardProviderPoints = internalMutation({
+  args: { 
+    providerId: v.id("providers"),
+    tokens: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Award 1 point per 100 tokens
+    const pointsToAward = Math.floor(args.tokens / 100);
+    
     const pointsRecord = await ctx.db
       .query("providerPoints")
       .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
@@ -14,14 +60,14 @@ export const awardPromptPoints = mutation({
 
     if (pointsRecord) {
       await ctx.db.patch(pointsRecord._id, {
-        points: pointsRecord.points + 0.1, // 0.1 points per prompt
+        points: pointsRecord.points + pointsToAward,
         totalPrompts: pointsRecord.totalPrompts + 1,
         lastEarned: Date.now(),
       });
     } else {
       await ctx.db.insert("providerPoints", {
         providerId: args.providerId,
-        points: 0.1,
+        points: pointsToAward,
         totalPrompts: 1,
         lastEarned: Date.now(),
       });
@@ -72,28 +118,36 @@ export const updateProviderPointsInternal = internalMutation({
   },
 });
 
-// Daily VCU rewards: 1 point per VCU per day
+// Daily VCU rewards for providers
 export const distributeDailyVCURewards = internalAction({
   args: {},
   handler: async (ctx) => {
     const activeProviders = await ctx.runQuery(internal.providers.listActiveInternal);
+    
     for (const provider of activeProviders) {
-      // Get current points record via internal query
-      const pointsRecord = await ctx.runQuery(internal.points.getProviderPointsInternal, {
-        providerId: provider._id,
-      });
-      if (!pointsRecord) {
-        console.log(`No points record found for provider ${provider._id}`);
-        continue;
+      const dailyReward = provider.vcuBalance || 0; // 1 point per VCU
+      
+      if (dailyReward > 0) {
+        // Use runQuery to get providerPoints
+        const pointsRecord = await ctx.runQuery(internal.points.getProviderPointsInternal, {
+          providerId: provider._id,
+        });
+
+        if (pointsRecord) {
+          await ctx.runMutation(internal.points.updateProviderPointsInternal, {
+            providerId: provider._id,
+            points: pointsRecord.points + dailyReward,
+            totalPrompts: pointsRecord.totalPrompts,
+            lastEarned: Date.now(),
+          });
+        } else {
+          // If no record, use awardProviderPoints to create it
+          await ctx.runMutation(internal.points.awardProviderPoints, {
+            providerId: provider._id,
+            tokens: dailyReward * 100, // awardProviderPoints expects tokens, so convert points to tokens
+          });
+        }
       }
-      // Award daily VCU reward (no lastDailyReward check)
-      const dailyVCUReward = provider.vcuBalance ?? 0; // 1 point per VCU per day
-      await ctx.runMutation(internal.points.updateProviderPointsInternal, {
-        providerId: provider._id,
-        points: (pointsRecord?.points ?? 0) + dailyVCUReward,
-        totalPrompts: pointsRecord?.totalPrompts ?? 0,
-        lastEarned: Date.now(),
-      });
     }
   },
 });
@@ -141,45 +195,40 @@ export const getPointsLeaderboard = query({
   },
 });
 
-
-// Get user stats (for API endpoints)
+// Get user stats
 export const getUserStats = query({
- args: { address: v.string() },
- handler: async (ctx, args) => {
-   const points = await ctx.db
-     .query("userPoints")
-     .withIndex("by_address", (q) => q.eq("address", args.address))
-     .first();
+  args: { address: v.string() },
+  handler: async (ctx, args) => {
+    const points = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
 
-   const today = new Date();
-   today.setHours(0, 0, 0, 0);
-   const todayTimestamp = today.getTime();
+    if (!points) {
+      return {
+        points: 0,
+        promptsToday: 0,
+        promptsRemaining: 50,
+        canMakePrompt: true,
+      };
+    }
 
-   const todayHistory = await ctx.db
-     .query("points_history")
-     .filter((q) => 
-       q.and(
-         q.eq(q.field("address"), args.address),
-         q.gte(q.field("ts"), todayTimestamp)
-       )
-     )
-     .collect();
+    // Check if it's a new day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastEarnedDate = new Date(points.lastEarned);
+    lastEarnedDate.setHours(0, 0, 0, 0);
+    
+    const isNewDay = lastEarnedDate.getTime() < today.getTime();
+    const promptsToday = isNewDay ? 0 : points.promptsToday;
 
-   const promptsToday = todayHistory.filter(h => h.reason === "prompt").length;
-   const pointsToday = todayHistory.reduce((sum, h) => sum + h.amount, 0);
-
-   return {
-     points: points?.points ?? 0,
-     promptsToday,
-     pointsRemaining: Math.max(0, 50 - promptsToday),
-     pointsToday,
-     pointsThisWeek: points?.points ?? 0,
-     pointsHistory: todayHistory.map(h => ({
-       ts: h.ts,
-       points: h.amount,
-     })),
-   };
- },
+    return {
+      points: points.points,
+      promptsToday,
+      promptsRemaining: Math.max(0, 50 - promptsToday),
+      canMakePrompt: promptsToday < 50,
+    };
+  },
 });
 
 // Get user's total points
