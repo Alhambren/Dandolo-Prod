@@ -135,7 +135,7 @@ const ChatPage: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const routeInference = useAction(api.inference.route);
+  const routeInference = useAction(api.inference.routeSimple);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
   const fetchModels = useAction(api.models.fetchAndCategorizeModels);
   const [availableModels, setAvailableModels] = useState<any>(null);

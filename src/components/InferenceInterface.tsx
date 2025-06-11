@@ -12,7 +12,7 @@ const InferenceInterface: React.FC = () => {
 
   const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
   const userPoints = useQuery(api.wallets.getUserPoints, address ? { address } : "skip");
-  const routeInference = useAction(api.inference.route);
+  const routeInference = useAction(api.inference.routeSimple);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
