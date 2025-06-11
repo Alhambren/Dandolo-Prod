@@ -240,6 +240,14 @@ export type RouteReturnType = {
   pointsAwarded: number;
 };
 
+export type RouteSimpleReturnType = {
+  response: string;
+  model: string;
+  tokens: number;
+  provider: string;
+  responseTime: number;
+};
+
 /**
  * Simplified routing wrapper matching the frontend parameters.
  * Converts a single prompt into message format and maps intent types.
@@ -264,7 +272,7 @@ export const routeSimple = action({
     provider: v.string(),
     responseTime: v.number(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<RouteSimpleReturnType> => {
     try {
       const messages = [
         {
@@ -277,7 +285,7 @@ export const routeSimple = action({
 
       const sessionId = `session-${args.address}-${Date.now()}`;
 
-      const result = await ctx.runAction(api.inference.route, {
+      const result: RouteReturnType = await ctx.runAction(api.inference.route, {
         messages,
         intent,
         sessionId,
