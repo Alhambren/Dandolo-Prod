@@ -141,11 +141,12 @@ function calculateVCUCost(tokens: number, model: string): number {
 async function callVeniceAI(
   apiKey: string,
   messages: VeniceMessage[],
-  intent: "chat" | "code" | "image" | "analysis"
+  intent: "chat" | "code" | "image" | "analysis",
 ): Promise<{ response: string; model: string; tokens: number; responseTime: number }> {
   const startTime = Date.now();
+  console.log(`[callVeniceAI] Starting Venice.ai call for intent: ${intent}`);
   try {
-    // Fetch available models for selection
+    console.log("[callVeniceAI] Fetching models list...");
     const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -154,13 +155,19 @@ async function callVeniceAI(
     });
 
     if (!modelsResponse.ok) {
+      console.error(
+        `[callVeniceAI] Models fetch failed: ${modelsResponse.status} ${modelsResponse.statusText}`,
+      );
       throw new Error(`Failed to fetch models: ${modelsResponse.statusText}`);
     }
 
     const modelsData = (await modelsResponse.json()) as VeniceModelsResponse;
+    console.log(`[callVeniceAI] Got ${modelsData.data.length} models`);
     const model = await selectModelForIntent(modelsData.data, intent);
+    console.log(`[callVeniceAI] Selected model: ${model}`);
 
     if (intent === "image") {
+      console.log("[callVeniceAI] Calling image generation endpoint...");
       const imageResponse = await fetch(
         "https://api.venice.ai/api/v1/images/generations",
         {
@@ -175,7 +182,7 @@ async function callVeniceAI(
             n: 1,
             size: "1024x1024",
           }),
-        }
+        },
       );
 
       if (!imageResponse.ok) {
@@ -184,6 +191,7 @@ async function callVeniceAI(
       }
 
       const imageData = (await imageResponse.json()) as VeniceImageResponse;
+      console.log("[callVeniceAI] Success! Generated image");
       return {
         response: imageData.data[0]?.url || "Failed to generate image",
         model,
@@ -192,6 +200,7 @@ async function callVeniceAI(
       };
     }
 
+    console.log("[callVeniceAI] Calling chat completions endpoint...");
     const response = await fetch(
       "https://api.venice.ai/api/v1/chat/completions",
       {
@@ -215,6 +224,9 @@ async function callVeniceAI(
     }
 
     const data = (await response.json()) as VeniceTextResponse;
+    console.log(
+      `[callVeniceAI] Success! Got response with ${data.usage?.total_tokens || 0} tokens`,
+    );
     return {
       response: data.choices[0]?.message?.content || "No response generated",
       model: data.model || model,
@@ -222,7 +234,7 @@ async function callVeniceAI(
       responseTime: Date.now() - startTime,
     };
   } catch (error) {
-    console.error("Venice API call failed:", error);
+    console.error("[callVeniceAI] Venice API call failed:", error);
     throw error;
   }
 }
@@ -338,16 +350,18 @@ export const route = action({
     pointsAwarded: v.number(),
   }),
   handler: async (ctx, args): Promise<RouteReturnType> => {
+    console.log("[route] Starting inference routing...");
     try {
-      const providers: Provider[] = await ctx.runQuery(
-        api.providers.listActive
-      );
+      console.log("[route] Fetching active providers...");
+      const providers: Provider[] = await ctx.runQuery(api.providers.listActive);
+      console.log(`[route] Found ${providers.length} providers`);
 
       if (providers.length === 0) {
         throw new Error("No active providers available");
       }
 
       const validProviders = providers.filter((p) => p.veniceApiKey);
+      console.log(`[route] Found ${validProviders.length} providers with API keys`);
 
       if (validProviders.length === 0) {
         throw new Error("No providers with valid API keys available");
@@ -355,16 +369,22 @@ export const route = action({
 
       const randomProvider: Provider =
         validProviders[Math.floor(Math.random() * validProviders.length)];
+      console.log(`[route] Selected provider: ${randomProvider.name}`);
 
+      console.log("[route] Calling Venice.ai...");
       const { response, model: usedModel, tokens, responseTime } =
         await callVeniceAI(
           randomProvider.veniceApiKey as string,
           args.messages,
-          args.intent
+          args.intent,
         );
+      console.log(
+        `[route] Venice.ai responded successfully with model: ${usedModel}, tokens: ${tokens}`,
+      );
 
       const vcuCost = calculateVCUCost(tokens, usedModel);
 
+      console.log("[route] Recording inference...");
       await ctx.runMutation(api.inference.recordInference, {
         providerId: randomProvider._id,
         model: usedModel,
@@ -381,6 +401,7 @@ export const route = action({
       if (tokens > 0) {
         const points = Math.floor(tokens / 100);
         if (points > 0) {
+          console.log(`[route] Awarding ${points} points to provider...`);
           await ctx.runMutation(api.points.awardPromptPoints, {
             providerId: randomProvider._id,
           });
@@ -388,6 +409,7 @@ export const route = action({
         }
       }
 
+      console.log("[route] Success! Returning response...");
       return {
         response,
         model: usedModel,
@@ -399,7 +421,11 @@ export const route = action({
         pointsAwarded,
       };
     } catch (error) {
-      console.error("Inference routing error:", error);
+      console.error("[route] Error in inference routing:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       throw error;
     }
   },
