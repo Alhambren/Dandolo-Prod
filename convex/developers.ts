@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { api } from "./_generated/api";
 
 // Generate API key for developers
 export const generateApiKey = mutation({
@@ -19,8 +20,7 @@ export const generateApiKey = mutation({
       isActive: true,
       createdAt: Date.now(),
       lastUsed: undefined,
-      usageCount: 0,
-      sessionId: "dev-session",
+      totalUsage: 0,
     });
 
     return apiKey;
@@ -44,7 +44,6 @@ export const generateAgentKey = mutation({
       name: args.name,
       isActive: true,
       createdAt: Date.now(),
-      usageCount: 0,
       totalUsage: 0,
     });
 
@@ -104,7 +103,7 @@ export const updateApiKeyUsage = mutation({
     if (keyRecord) {
       await ctx.db.patch(keyRecord._id, {
         lastUsed: Date.now(),
-        usageCount: (keyRecord.usageCount || 0) + 1,
+        totalUsage: (keyRecord.totalUsage || 0) + 1,
       });
     }
   },
@@ -126,7 +125,7 @@ export const getSdkStats = query({
   handler: async (ctx) => {
     const apiKeys = await ctx.db.query("apiKeys").collect();
     const activeKeys = apiKeys.filter(key => key.isActive);
-    const totalUsage = apiKeys.reduce((sum, key) => sum + (key.usageCount || 0), 0);
+    const totalUsage = apiKeys.reduce((sum, key) => sum + (key.totalUsage || 0), 0);
     
     const last30Days = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const recentKeys = apiKeys.filter(key => key.createdAt > last30Days);
@@ -137,5 +136,50 @@ export const getSdkStats = query({
       totalUsage,
       newKeysLast30Days: recentKeys.length,
     };
+  },
+});
+
+export const getDeveloperDashboard = query({
+  args: { address: v.string() },
+  handler: async (ctx, args): Promise<any> => {
+    // Get API keys
+    const apiKeyStats = await ctx.runQuery(api.apiKeys.getApiKeyStats, { address: args.address });
+    
+    // Get user's inference count from inferences table
+    const inferences = await ctx.db
+      .query("inferences")
+      .filter(q => q.eq(q.field("address"), args.address))
+      .collect();
+    
+    return {
+      apiKeys: apiKeyStats,
+      usage: {
+        totalRequests: inferences.length,
+        tokensUsed: inferences.reduce((sum, i) => sum + i.totalTokens, 0),
+        modelsUsed: [...new Set(inferences.map(i => i.model))],
+      },
+    };
+  },
+});
+
+export const createApiKey = mutation({
+  args: {
+    address: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args): Promise<any> => {
+    // Generate API key
+    const key = `dk_${Math.random().toString(36).substring(2)}${Date.now().toString(36)}`;
+    
+    const id = await ctx.db.insert("apiKeys", {
+      address: args.address,
+      name: args.name,
+      key,
+      isActive: true,
+      createdAt: Date.now(),
+      totalUsage: 0,
+    });
+    
+    return { id, key };
   },
 });

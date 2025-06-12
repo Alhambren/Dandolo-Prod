@@ -9,44 +9,26 @@ import { query, mutation, internalMutation } from "./_generated/server";
 
 // Get system-wide anonymous statistics
 export const getSystemStats = query({
-  args: {},
   handler: async (ctx) => {
     const providers = await ctx.db.query("providers").collect();
-    const activeProviders = providers.filter(p => p.isActive);
+    const users = await ctx.db.query("userPoints").collect();
+    const inferences = await ctx.db.query("inferences").collect();
     
-    const usageLogs = await ctx.db.query("usageLogs").collect();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayUsage = usageLogs.filter(log => log.createdAt >= today.getTime());
+    const todayTimestamp = today.getTime();
     
-    const totalVCU = activeProviders.reduce((sum, p) => sum + (p.vcuBalance ?? 0), 0);
-    const totalPrompts = providers.reduce((sum, p) => sum + (p.totalPrompts ?? 0), 0);
+    const todayInferences = inferences.filter(i => i.timestamp >= todayTimestamp);
     
-    // Calculate average response time
-    const avgResponseTime = usageLogs.length > 0 
-      ? usageLogs.reduce((sum, log) => sum + log.latencyMs, 0) / usageLogs.length 
-      : 0;
-
-    // Count unique active users in last 24h (anonymous count only)
-    const last24h = Date.now() - 24 * 60 * 60 * 1000;
-    const recent = usageLogs.filter(log => log.createdAt >= last24h);
-    const activeUsers = new Set(
-      recent.filter(log => log.address).map(log => log.address)
-    ).size;
-
-    const avgUptime = activeProviders.length > 0
-      ? activeProviders.reduce((sum, p) => sum + (p.uptime ?? 0), 0) / activeProviders.length
-      : 0;
-
     return {
       totalProviders: providers.length,
-      activeProviders: activeProviders.length,
-      totalVCU,
-      totalPrompts,
-      promptsToday: todayUsage.length,
-      avgResponseTime: Math.round(avgResponseTime),
-      networkUptime: avgUptime,
-      activeUsers, // Anonymous count only
+      activeProviders: providers.filter(p => p.isActive).length,
+      totalUsers: users.length,
+      activeUsers: users.filter(u => u.lastEarned >= todayTimestamp).length,
+      totalPrompts: inferences.length,
+      promptsToday: todayInferences.length,
+      totalTokens: inferences.reduce((sum, i) => sum + i.totalTokens, 0),
+      modelsUsed: [...new Set(inferences.map(i => i.model))].length,
     };
   },
 });
@@ -121,5 +103,25 @@ export const logUsage = mutation({
       latencyMs: args.latencyMs,
       createdAt: Date.now(),
     });
+  },
+});
+
+export const getModelUsageStats = query({
+  handler: async (ctx) => {
+    const inferences = await ctx.db.query("inferences").collect();
+    
+    const modelUsage = inferences.reduce((acc, inf) => {
+      acc[inf.model] = (acc[inf.model] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return {
+      modelUsage,
+      totalInferences: inferences.length,
+      topModels: Object.entries(modelUsage)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([model, count]) => ({ model, count })),
+    };
   },
 });

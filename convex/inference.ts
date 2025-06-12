@@ -274,11 +274,15 @@ function calculateVCUCost(tokens: number, model: string): number {
  */
 async function callVeniceAI(
   apiKey: string,
-  model?: string,
+  messages: VeniceMessage[],
   intentType?: string,
+  prompt?: string,
+  model?: string,
 ) {
+  const startTime = Date.now();
+  const promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
   console.log("CallVeniceAI:", {
-    prompt: prompt.substring(0, 50),
+    prompt: promptText.substring(0, 50),
     model,
     intentType,
   });
@@ -294,66 +298,59 @@ async function callVeniceAI(
 
   // Image generation
   if (isImageModel || intentType === "image") {
-    try {
-      const imageModel = isImageModel
-        ? finalModels[0]
-        : availableModels.find((m) => m.type === "image")?.id;
+    const imageModel = isImageModel
+      ? finalModels[0]
+      : availableModels.find((m) => m.type === "image")?.id;
 
-      if (!imageModel) {
-        console.log(
-          "No image model available, falling back to text description"
-        );
-      } else {
-        const imageResponse = await fetch(
-          "https://api.venice.ai/api/v1/image/generate",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey.trim()}`,
-            },
-            body: JSON.stringify({
-              model: imageModel,
-              prompt,
-              width: 1024,
-              height: 1024,
-              steps: 20,
-              cfg_scale: 7.5,
-              return_binary: false,
-            }),
-          }
-        );
-
-        if (imageResponse.ok) {
-          const imageData = await imageResponse.json();
-          if (imageData.images && imageData.images.length > 0) {
-            const imageUrl = imageData.images[0];
-            const vcuCost = calculateVCUCost(100, imageModel);
-            return {
-              text: `![Generated Image](${imageUrl})\n\n*"${prompt}"*`,
-              tokens: 100,
-              model: imageModel,
-              cost: vcuCost,
-              vcuUsed: vcuCost,
-            };
-          }
-        } else {
-          const errorText = await imageResponse.text();
-          console.error("Image generation failed:", errorText);
+    if (!imageModel) {
+      console.log(
+        "No image model available, falling back to text description"
+      );
+    } else {
+      const imageResponse = await fetch(
+        "https://api.venice.ai/api/v1/image/generate",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey.trim()}`,
+          },
+          body: JSON.stringify({
+            model: imageModel,
+            prompt: promptText,
+            width: 1024,
+            height: 1024,
+            steps: 20,
+            cfg_scale: 7.5,
+            return_binary: false,
+          }),
         }
+      );
+
+      if (imageResponse.ok) {
+        const imageData = (await imageResponse.json()) as VeniceImageResponse;
+        if (imageData.data && imageData.data.length > 0) {
+          const imageUrl = imageData.data[0].url;
+          const vcuCost = calculateVCUCost(100, imageModel);
+          return {
+            response: `![Generated Image](${imageUrl})\n\n*\"${promptText}\"*`,
+            model: imageModel,
+            tokens: 100,
+            cost: vcuCost,
+            responseTime: Date.now() - startTime,
+          };
+        }
+      } else {
+        const errorText = await imageResponse.text();
+        console.error("Image generation failed:", errorText);
+        throw new Error("Image generation failed: " + errorText);
       }
-
-      const imageData = (await imageResponse.json()) as VeniceImageResponse;
-      console.log("[callVeniceAI] Success! Generated image");
-      return {
-        response: imageData.data[0]?.url || "Failed to generate image",
-        model,
-        tokens: 1,
-        responseTime: Date.now() - startTime,
-      };
     }
+    throw new Error("No image model available for image generation.");
+  }
 
-    console.log("[callVeniceAI] Calling chat completions endpoint...");
+  // Text/completions branch
+  try {
     const response = await fetch(
       "https://api.venice.ai/api/v1/chat/completions",
       {
@@ -363,7 +360,7 @@ async function callVeniceAI(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model,
+          model: model || finalModels[0],
           messages,
           temperature: intentType === "code" ? 0.3 : 0.7,
           max_tokens: 2000,
@@ -382,14 +379,14 @@ async function callVeniceAI(
     );
     return {
       response: data.choices[0]?.message?.content || "No response generated",
-      model: data.model || model,
+      model: data.model || model || finalModels[0],
       tokens: data.usage?.total_tokens || 0,
       responseTime: Date.now() - startTime,
     };
+  } catch (error) {
+    console.error("[callVeniceAI] Error:", error);
+    throw error;
   }
-
-  // If all models fail
-  throw new Error("All available models failed to generate a response.");
 }
 
 /** Return type for the route action. */
@@ -530,6 +527,8 @@ export const route = action({
           randomProvider.veniceApiKey as string,
           args.messages,
           args.intent,
+          args.messages[0]?.content,
+          args.messages[0]?.role === "system" ? args.messages[0]?.content : undefined
         );
       console.log(
         `[route] Venice.ai responded successfully with model: ${usedModel}, tokens: ${tokens}`,
@@ -647,27 +646,28 @@ export const getStats = query({
   },
 });
 
-/**
- * Legacy mutation kept for backwards compatibility. Records basic usage metrics
- * in the `usageLogs` table. Router.ts relies on this export.
- */
-export const logUsage = mutation({
+export const recordInference = internalMutation({
   args: {
-    address: v.optional(v.string()),
-    providerId: v.optional(v.id("providers")),
+    providerId: v.id("providers"),
     model: v.string(),
-    tokens: v.number(),
-    createdAt: v.number(),
-    latencyMs: v.number(),
+    intent: v.string(),
+    totalTokens: v.number(),
+    vcuCost: v.number(),
+    address: v.string(),
+    timestamp: v.number(),
   },
-  handler: async (ctx, args): Promise<void> => {
-    await ctx.db.insert("usageLogs", {
-      address: args.address ?? "anonymous",
+  handler: async (ctx, args) => {
+    await ctx.db.insert("inferences", {
       providerId: args.providerId,
       model: args.model,
-      tokens: args.tokens,
-      latencyMs: args.latencyMs,
-      createdAt: args.createdAt,
+      intent: args.intent,
+      promptTokens: Math.floor(args.totalTokens * 0.7), // Estimate
+      completionTokens: Math.floor(args.totalTokens * 0.3), // Estimate
+      totalTokens: args.totalTokens,
+      vcuCost: args.vcuCost,
+      sessionId: `session-${args.address}`,
+      isAnonymous: args.address === 'anonymous',
+      timestamp: args.timestamp,
     });
   },
 });

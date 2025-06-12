@@ -1,6 +1,8 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import { v } from "convex/values";
+import { action } from "./_generated/server";
 
 const http = httpRouter();
 
@@ -199,5 +201,33 @@ function detectIntent(content: string): "chat" | "code" | "image" | "analysis" {
 
   return "chat";
 }
+
+export const routeRequest = action({
+  args: {
+    prompt: v.string(),
+    sessionId: v.string(),
+    intentType: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Check rate limit
+    const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+      sessionId: args.sessionId,
+    });
+    
+    if (!rateLimit.allowed) {
+      throw new Error(`Rate limit exceeded. Try again tomorrow.`);
+    }
+    
+    // Route to inference
+    const result = await ctx.runAction(api.inference.route, {
+      messages: [{ role: "user" as const, content: args.prompt }],
+      intent: (args.intentType || "chat") as any,
+      sessionId: args.sessionId,
+      isAnonymous: !args.sessionId.includes("0x"),
+    });
+    
+    return result;
+  },
+});
 
 export default http;

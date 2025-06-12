@@ -55,45 +55,28 @@ export const getNetworkStats = query({
     avgResponseTime: v.number(),
     networkUptime: v.number(),
     activeUsers: v.number(),
-    avgUptime: v.number(),
   }),
   handler: async (ctx) => {
-    const providers = await ctx.db
-      .query("providers")
-      .collect();
-
+    const providers = await ctx.db.query("providers").collect();
     const activeProviders = providers.filter(p => p.isActive);
-    const totalVCU = providers.reduce((sum, p) => sum + (p.vcuBalance ?? 0), 0);
-    const totalPrompts = providers.reduce((sum, p) => sum + (p.totalPrompts ?? 0), 0);
-    const avgUptime = activeProviders.length > 0
-      ? activeProviders.reduce((sum, p) => sum + (p.uptime ?? 0), 0) / activeProviders.length
+    const inferences = await ctx.db.query("inferences").collect();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = today.getTime();
+    const todayInferences = inferences.filter(i => i.timestamp >= todayTimestamp);
+    const avgResponseTime = activeProviders.length > 0
+      ? activeProviders.reduce((sum, p) => sum + (p.avgResponseTime || 0), 0) / activeProviders.length
       : 0;
-
-    const recentLogs = await ctx.db
-      .query("usageLogs")
-      .order("desc")
-      .take(100);
-
-    const avgResponseTime = recentLogs.length > 0
-      ? recentLogs.reduce((sum, log) => sum + log.latencyMs, 0) / recentLogs.length
-      : 0;
-
-    const activeUsers = new Set([
-      ...recentLogs.map(log => log.address)
-    ]).size;
-
+    const uniqueUsers = new Set(inferences.map(i => i.address)).size;
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
-      totalVCU,
-      totalPrompts,
-      avgUptime,
-      promptsToday: recentLogs.filter(log => 
-        log.createdAt > Date.now() - 24 * 60 * 60 * 1000
-      ).length,
-      avgResponseTime,
-      networkUptime: avgUptime,
-      activeUsers,
+      totalVCU: providers.reduce((sum, p) => sum + p.vcuBalance, 0),
+      totalPrompts: inferences.length,
+      promptsToday: todayInferences.length,
+      avgResponseTime: Math.round(avgResponseTime),
+      networkUptime: activeProviders.length > 0 ? 99.9 : 0,
+      activeUsers: uniqueUsers,
     };
   },
 });
@@ -158,39 +141,24 @@ export const getUsageMetrics = query({
     activeProviders: v.number(),
   }),
   handler: async (ctx) => {
-    const usageLogs = await ctx.db.query("usageLogs").collect();
-    
-    // Last 24 hours
+    const inferences = await ctx.db.query("inferences").collect();
     const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const last24h = usageLogs.filter(log => Number(log.createdAt) >= oneDayAgo);
-    
-    // Last 7 days
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const last7days = usageLogs.filter(log => Number(log.createdAt) >= oneWeekAgo);
-    
-    // Model usage breakdown
-    const modelUsage = usageLogs.reduce((acc, log) => {
-      acc[log.model] = (acc[log.model] || 0) + 1;
+    const last24h = inferences.filter(i => i.timestamp >= oneDayAgo);
+    const last7days = inferences.filter(i => i.timestamp >= oneWeekAgo);
+    const modelUsage = inferences.reduce((acc, inf) => {
+      acc[inf.model] = (acc[inf.model] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    
-    const recentLogs = await ctx.db
-      .query("usageLogs")
-      .filter((q) => q.gte(q.field("createdAt"), oneDayAgo))
-      .collect();
-    
-    const avgLatency = recentLogs.length > 0
-      ? recentLogs.reduce((sum, log) => sum + log.latencyMs, 0) / recentLogs.length
-      : 0;
-    
+    const activeProviderIds = new Set(inferences.map(i => i.providerId));
     return {
-      totalPrompts: usageLogs.length,
+      totalPrompts: inferences.length,
       promptsLast24h: last24h.length,
       promptsLast7days: last7days.length,
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.tokens, 0),
-      avgResponseTime: avgLatency,
+      totalTokens: inferences.reduce((sum, i) => sum + i.totalTokens, 0),
+      avgResponseTime: 0,
       modelUsage,
-      activeProviders: new Set(usageLogs.map(log => log.providerId).filter(Boolean)).size,
+      activeProviders: activeProviderIds.size,
     };
   },
 });

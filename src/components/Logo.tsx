@@ -1,63 +1,41 @@
 import React from 'react';
 
 interface LogoProps {
-  onClick?: () => void;
   className?: string;
+  showText?: boolean;
 }
 
-const Logo: React.FC<LogoProps> = ({ onClick, className = '' }) => {
+export const Logo: React.FC<LogoProps> = ({ className = "h-12 w-12", showText = true }) => {
   return (
-    <div
-      onClick={onClick}
-      className={`flex items-center space-x-2 cursor-pointer ${className}`}
-      data-testid="logo"
-    >
-      <svg
-        width="32"
-        height="32"
-        viewBox="0 0 32 32"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="text-red"
-        data-testid="logo-icon"
-      >
-        <path
-          d="M16 2L4 9V23L16 30L28 23V9L16 2Z"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M16 2V30"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M4 9L28 23"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M28 9L4 23"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span
-        className="text-xl font-bold bg-gradient-to-r from-red to-gold bg-clip-text text-transparent"
-        data-testid="logo-text"
-      >
-        Dandolo.ai
-      </span>
+    <div className="flex items-center gap-3">
+      <div className={`${className} relative`}>
+        {/* Shield background */}
+        <svg viewBox="0 0 100 120" className="w-full h-full">
+          <path
+            d="M50 0 L90 20 L90 80 Q90 110 50 120 Q10 110 10 80 L10 20 Z"
+            fill="white"
+            stroke="#FFD700"
+            strokeWidth="2"
+          />
+          {/* Lion */}
+          <g transform="translate(50, 60)">
+            <path
+              d="M-15 -20 Q-20 -25 -15 -30 Q-10 -32 -5 -30 L0 -25 L5 -30 Q10 -32 15 -30 Q20 -25 15 -20 L10 -15 L10 0 L5 5 L0 10 L-5 5 L-10 0 L-10 -15 Z"
+              fill="#000000"
+            />
+            {/* Tail */}
+            <path
+              d="M10 0 Q20 5 25 15 Q28 20 25 25"
+              fill="none"
+              stroke="#000000"
+              strokeWidth="2"
+            />
+          </g>
+        </svg>
+      </div>
+      {showText && (
+        <span className="text-3xl font-bold text-white">Dandolo.ai</span>
+      )}
     </div>
   );
-};
-
-export default Logo; 
+}; 

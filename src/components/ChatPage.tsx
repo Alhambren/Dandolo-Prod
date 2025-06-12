@@ -17,53 +17,97 @@ import { toast } from 'sonner';
  * Helper to render message content. Supports basic markdown image syntax and
  * graceful error handling when an image fails to load.
  */
-const renderMessageContent = (content: string) => {
-  // Check for markdown image pattern before doing any heavy work
-  if (content.includes('![')) {
-    const parts = content.split(/(\!\[.*?\]\(.*?\))/g);
-
+const renderMessageContent = (msg: Message) => {
+  if (msg.isLoading) {
     return (
-      <div className="space-y-2">
-        {parts.map((part, index) => {
-          const imageMatch = part.match(/!\[(.*?)\]\((.*?)\)/);
-          if (imageMatch) {
-            const altText = imageMatch[1];
-            const imageUrl = imageMatch[2];
-            return (
-              <div key={index} className="my-2">
-                <img
-                  src={imageUrl}
-                  alt={altText}
-                  className="max-w-full rounded-lg"
-                  style={{ maxHeight: '400px', objectFit: 'contain' }}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const errorDiv = target.nextElementSibling as HTMLDivElement;
-                    if (errorDiv) {
-                      errorDiv.style.display = 'block';
-                    }
-                  }}
-                />
-                <div className="hidden text-red-400 text-sm p-2 bg-red-500/10 rounded mt-2">
-                  ⚠️ Image failed to load
-                </div>
-              </div>
-            );
-          }
-          // Regular text
-          return part ? (
-            <span key={index} className="whitespace-pre-wrap">
-              {part}
-            </span>
-          ) : null;
-        })}
+      <div className="flex items-center gap-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-white"></div>
+        <span className="text-gray-300">
+          {msg.intentType === 'image' ? 'Generating image...' :
+            msg.intentType === 'audio' ? 'Processing audio...' :
+            'Thinking...'}
+        </span>
       </div>
     );
   }
-
-  // No images detected, return plain text
-  return <p className="whitespace-pre-wrap">{content}</p>;
+  if (msg.error) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
+        <p className="text-red-300">⚠️ {msg.error}</p>
+      </div>
+    );
+  }
+  if (msg.intentType === 'image' && msg.imageUrl) {
+    return (
+      <div className="space-y-3">
+        <div className="relative group">
+          <img
+            src={msg.imageUrl}
+            alt="Generated image"
+            className="max-w-full rounded-lg shadow-lg cursor-pointer"
+            style={{ maxHeight: '500px', objectFit: 'contain' }}
+            onClick={() => window.open(msg.imageUrl, '_blank')}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const errorDiv = document.createElement('div');
+              errorDiv.className = 'text-red-400 p-4 bg-red-500/10 rounded';
+              errorDiv.textContent = '⚠️ Failed to load generated image';
+              target.parentElement?.appendChild(errorDiv);
+            }}
+          />
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <a
+              href={msg.imageUrl}
+              download
+              className="bg-black/70 text-white px-3 py-1 rounded-lg text-sm hover:bg-black/90"
+              onClick={(e) => e.stopPropagation()}
+            >
+              ⬇ Download
+            </a>
+          </div>
+        </div>
+        {msg.content && !msg.content.includes(msg.imageUrl) && (
+          <p className="text-gray-300 text-sm">{msg.content}</p>
+        )}
+      </div>
+    );
+  }
+  if (msg.intentType === 'audio' && msg.audioUrl) {
+    return (
+      <div className="space-y-3">
+        <audio controls className="w-full">
+          <source src={msg.audioUrl} />
+          Your browser does not support the audio element.
+        </audio>
+        {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+      </div>
+    );
+  }
+  if (msg.intentType === 'image' && !msg.imageUrl) {
+    return (
+      <div className="space-y-3">
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
+          <p className="text-yellow-300 text-sm mb-2">
+            ⚠️ No image was generated. The model returned a description instead.
+          </p>
+        </div>
+        <div className="bg-white/5 rounded p-3">
+          <p className="whitespace-pre-wrap">{msg.content}</p>
+        </div>
+        <button
+          onClick={() => {
+            const event = new CustomEvent('regenerateMessage', { detail: { messageId: msg.id } });
+            window.dispatchEvent(event);
+          }}
+          className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+        >
+          🔄 Try again with an image model
+        </button>
+      </div>
+    );
+  }
+  return <div className="whitespace-pre-wrap">{msg.content}</div>;
 };
 
 // Message data structure for each chat message
@@ -76,7 +120,11 @@ interface Message {
   provider?: string;
   tokens?: number;
   responseTime?: number;
-  intentType?: string; // the model intent type used for this message
+  intentType?: string;
+  isLoading?: boolean;
+  error?: string;
+  imageUrl?: string;
+  audioUrl?: string;
 }
 
 // Chat data structure representing a conversation thread
@@ -100,12 +148,12 @@ interface Folder {
 }
 
 // Intent definition used to select AI model / capability
-interface ChatIntent {
+type ChatIntent = {
   type: 'chat' | 'code' | 'image' | 'vision' | 'audio' | 'analysis';
   label: string;
   icon: string;
-  model?: string;
-}
+  model: string;
+};
 
 /**
  * ChatPage component renders the main chat UI with folders, chats, and messages.
@@ -122,6 +170,7 @@ const ChatPage: React.FC = () => {
     type: 'chat',
     label: 'General Chat',
     icon: '💬',
+    model: 'llama-3.3-70b',
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
@@ -204,72 +253,45 @@ const ChatPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchModels]);
 
-  // Always show all intent options with smart model selection
-  const CHAT_INTENTS = useMemo(() => {
-    const intents: ChatIntent[] = [];
-
-    intents.push({
+  // Replace the CHAT_INTENTS useMemo with this static array:
+  const CHAT_INTENTS: ChatIntent[] = [
+    {
       type: 'chat',
       label: 'General Chat',
       icon: '💬',
-      model: availableModels?.text?.[0]?.id,
-    });
-
-    if (availableModels?.code?.length > 0) {
-      intents.push({
-        type: 'code',
-        label: 'Code Assistant',
-        icon: '💻',
-        model: availableModels.code[0].id,
-      });
-    }
-
-    if (availableModels?.image?.length > 0) {
-      intents.push({
-        type: 'image',
-        label: 'Image Creation',
-        icon: '🎨',
-        model: availableModels.image[0].id,
-      });
-    }
-
-    if (availableModels?.multimodal?.length > 0) {
-      intents.push({
-        type: 'vision',
-        label: 'Image Analysis',
-        icon: '👁️',
-        model: availableModels.multimodal[0].id,
-      });
-    }
-
-    const audioModel = availableModels?.text?.find(
-      (m: any) =>
-        m.id.toLowerCase().includes('whisper') ||
-        m.id.toLowerCase().includes('audio')
-    );
-    if (audioModel) {
-      intents.push({
-        type: 'audio',
-        label: 'Voice Chat',
-        icon: '🎤',
-        model: audioModel.id,
-      });
-    }
-
-    const analysisModel =
-      availableModels?.text?.find((m: any) => m.contextLength > 100000) ||
-      availableModels?.text?.[0];
-    if (analysisModel) {
-      intents.push({
-        type: 'analysis',
-        label: 'Deep Analysis',
-        icon: '📊',
-        model: analysisModel.id,
-      });
-    }
-
-    return intents;
-  }, [availableModels]);
+      model: 'llama-3.3-70b',
+    },
+    {
+      type: 'code',
+      label: 'Code Assistant',
+      icon: '💻',
+      model: 'qwen-2.5-coder-32b',
+    },
+    {
+      type: 'image',
+      label: 'Image Creation',
+      icon: '🎨',
+      model: 'flux-standard',
+    },
+    {
+      type: 'vision',
+      label: 'Image Analysis',
+      icon: '👁️',
+      model: 'llama-3.2-vision-11b',
+    },
+    {
+      type: 'audio',
+      label: 'Voice Chat',
+      icon: '🎤',
+      model: 'whisper-large-v3',
+    },
+    {
+      type: 'analysis',
+      label: 'Deep Analysis',
+      icon: '📊',
+      model: 'llama-3.3-70b',
+    },
+  ];
 
   // Show model info in UI
   const currentModelInfo = useMemo(() => {
@@ -300,8 +322,8 @@ const ChatPage: React.FC = () => {
   }, [selectedIntent, availableModels]);
 
   // Update all references to promptsRemaining
-  const canSendMessage = userStats && userStats.pointsRemaining > 0;
-  const pointsRemaining = userStats?.pointsRemaining ?? 0;
+  const canSendMessage = userStats && userStats.promptsRemaining > 0;
+  const pointsRemaining = userStats?.promptsRemaining ?? 0;
 
   // ----- Helper functions -----
 
@@ -432,39 +454,77 @@ const ChatPage: React.FC = () => {
 
   // ----- Message handling -----
 
+  // Smart Response Parser
+  const parseResponseByIntent = (
+    response: any,
+    intentType: string
+  ): { content: string; imageUrl?: string; audioUrl?: string } => {
+    const responseText = response.response || response.text || '';
+    switch (intentType) {
+      case 'image': {
+        const urlPatterns = [
+          /https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|svg)/gi,
+          /!\[.*?\]\((https?:\/\/[^\s]+)\)/g,
+          /"url":\s*"(https?:\/\/[^\s"]+)"/g,
+          /image_url['":\s]+(['"])(https?:\/\/[^\s]+)\1/g,
+        ];
+        for (const pattern of urlPatterns) {
+          const match = responseText.match(pattern);
+          if (match) {
+            const imageUrl = match[0].replace(/['"]/g, '').replace(/^!\[.*?\]\(/, '').replace(/\)$/, '');
+            return {
+              content: responseText,
+              imageUrl: imageUrl.startsWith('http') ? imageUrl : undefined,
+            };
+          }
+        }
+        return {
+          content: responseText || 'Image generation failed. Please try again.',
+          imageUrl: undefined,
+        };
+      }
+      case 'audio': {
+        const audioUrlMatch = responseText.match(/https?:\/\/[^\s]+\.(?:mp3|wav|ogg|m4a)/i);
+        return {
+          content: responseText,
+          audioUrl: audioUrlMatch ? audioUrlMatch[0] : undefined,
+        };
+      }
+      default:
+        return { content: responseText };
+    }
+  };
+
+  // Updated handleSubmit with Better Response Handling
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!message.trim() && !uploadedFile) || isLoading) return;
-
     const currentChat = getCurrentChat();
-
-    // Check if we need to create a new chat due to model change
     if (currentChat && currentChat.intentType !== selectedIntent.type) {
       toast.info("Creating new chat for different task type");
       createNewChat();
       return;
     }
-
     let userMessageContent = message;
-
-    // Attach file data if uploaded for vision or audio
     if (uploadedFile) {
       try {
         const base64Data = await fileToBase64(uploadedFile);
         if (selectedIntent.type === 'vision') {
           userMessageContent = `[Image: ${uploadedFile.name}]\n${message || 'What do you see in this image?'}`;
-          // TODO: send base64Data to API when backend supports it
         } else if (selectedIntent.type === 'audio') {
           userMessageContent = `[Audio: ${uploadedFile.name}]\n${message || 'Transcribe this audio'}`;
-          // TODO: send base64Data to API when backend supports it
         }
       } catch (err) {
         toast.error('Failed to process file');
         return;
       }
     }
-    
-    // Create new chat if none exists
+    if (selectedIntent.type === 'image') {
+      const qualityKeywords = ['quality', 'resolution', '4k', '8k', 'detailed', 'style'];
+      if (!qualityKeywords.some(keyword => userMessageContent.toLowerCase().includes(keyword))) {
+        userMessageContent += ', high quality, detailed, 4k resolution';
+      }
+    }
     let chatId = activeChat;
     if (!chatId) {
       const newChat: Chat = {
@@ -476,56 +536,48 @@ const ChatPage: React.FC = () => {
         model: selectedIntent.model,
         intentType: selectedIntent.type,
       };
-      
       setChats(prev => [...prev, newChat]);
       setActiveChat(newChat.id);
       chatId = newChat.id;
     }
-
-    // Add user message
     const userMessage: Message = {
-      id: `msg_${Date.now()}`,
+      id: `msg_${Date.now()}_user`,
       content: userMessageContent,
       role: 'user',
       timestamp: Date.now(),
       intentType: selectedIntent.type,
     };
-    
-    // Clear input and set loading
+    const loadingMessage: Message = {
+      id: `msg_${Date.now()}_ai`,
+      content: '',
+      role: 'assistant',
+      timestamp: Date.now(),
+      intentType: selectedIntent.type,
+      isLoading: true,
+    };
     setMessage('');
     setIsLoading(true);
-    
-    // Update chat with user message
     setChats(prevChats => prevChats.map(chat => {
       if (chat.id === chatId) {
-        const updatedMessages = [...chat.messages, userMessage];
-        const title = chat.messages.length === 0 ? generateChatTitle(userMessageContent) : chat.title;
-        return { 
-          ...chat, 
-          messages: updatedMessages, 
+        return {
+          ...chat,
+          messages: [...chat.messages, userMessage, loadingMessage],
           updatedAt: Date.now(),
-          title,
-          model: selectedIntent.model,
-          intentType: selectedIntent.type,
         };
       }
       return chat;
     }));
-
     try {
-      // Pass intent type to the inference router
       const response = await routeInference({
         prompt: userMessageContent,
         address: address || "anonymous",
         intentType: selectedIntent.type,
       });
-
       console.log("Got response:", response);
-
-      // Add AI response
+      const parsed = parseResponseByIntent(response, selectedIntent.type);
       const aiMessage: Message = {
-        id: `msg_${Date.now()}_ai`,
-        content: response.response,
+        id: loadingMessage.id,
+        content: parsed.content,
         role: 'assistant',
         timestamp: Date.now(),
         model: response.model,
@@ -533,44 +585,52 @@ const ChatPage: React.FC = () => {
         tokens: response.tokens,
         responseTime: response.responseTime,
         intentType: selectedIntent.type,
+        isLoading: false,
+        imageUrl: parsed.imageUrl,
+        audioUrl: parsed.audioUrl,
       };
-      
-      // Update chats with the AI response
       setChats(prevChats => prevChats.map(chat => {
         if (chat.id === chatId) {
-          return { 
-            ...chat, 
-            messages: [...chat.messages, aiMessage], 
-            updatedAt: Date.now() 
+          return {
+            ...chat,
+            messages: chat.messages.map(msg =>
+              msg.id === loadingMessage.id ? aiMessage : msg
+            ),
+            updatedAt: Date.now(),
           };
         }
         return chat;
       }));
-      
-      toast.success(`Response from ${response.provider} (${response.responseTime}ms)`);
+      if (selectedIntent.type === 'image' && parsed.imageUrl) {
+        toast.success(`Image generated successfully!`);
+      } else if (selectedIntent.type === 'image' && !parsed.imageUrl) {
+        toast.warning(`Model returned a description instead of an image. Try a different prompt.`);
+      } else {
+        toast.success(`Response from ${response.provider} (${response.responseTime}ms)`);
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      
-      // Add error message to chat
       const errorMessage: Message = {
-        id: `msg_${Date.now()}_error`,
-        content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
+        id: loadingMessage.id,
+        content: '',
         role: 'assistant',
         timestamp: Date.now(),
         intentType: selectedIntent.type,
+        isLoading: false,
+        error: error instanceof Error ? error.message : "Failed to get response",
       };
-      
       setChats(prevChats => prevChats.map(chat => {
         if (chat.id === chatId) {
-          return { 
-            ...chat, 
-            messages: [...chat.messages, errorMessage], 
-            updatedAt: Date.now() 
+          return {
+            ...chat,
+            messages: chat.messages.map(msg =>
+              msg.id === loadingMessage.id ? errorMessage : msg
+            ),
+            updatedAt: Date.now(),
           };
         }
         return chat;
       }));
-      
       toast.error(error instanceof Error ? error.message : "Failed to get response");
     } finally {
       setIsLoading(false);
@@ -591,6 +651,31 @@ const ChatPage: React.FC = () => {
   const getChatsInFolder = (folderId?: string) => filteredChats.filter((chat) => chat.folderId === folderId);
 
   const currentChat = getCurrentChat();
+
+  // Add Regeneration Support
+  useEffect(() => {
+    const handleRegenerate = (event: CustomEvent) => {
+      const messageId = event.detail.messageId;
+      const chat = getCurrentChat();
+      if (!chat) return;
+      const message = chat.messages.find(m => m.id === messageId);
+      if (!message) return;
+      const messageIndex = chat.messages.findIndex(m => m.id === messageId);
+      if (messageIndex > 0) {
+        const userMessage = chat.messages[messageIndex - 1];
+        if (userMessage.role === 'user') {
+          setMessage(userMessage.content);
+          setSelectedIntent(CHAT_INTENTS.find(i => i.type === 'image') || selectedIntent);
+          setTimeout(() => {
+            const form = document.querySelector('form');
+            form?.requestSubmit();
+          }, 100);
+        }
+      }
+    };
+    window.addEventListener('regenerateMessage', handleRegenerate as any);
+    return () => window.removeEventListener('regenerateMessage', handleRegenerate as any);
+  }, [activeChat, chats]);
 
   // ----- Render -----
   return (
@@ -835,13 +920,13 @@ const ChatPage: React.FC = () => {
                         toast.info('Task type changed. Next message will start a new chat.');
                       }
                     }}
-                    className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${
+                    className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-all ${
                       selectedIntent.type === intent.type
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                        ? 'bg-gradient-gold text-black font-bold shadow-lg'
+                        : 'bg-black-light border border-gold/30 text-gold hover:border-gold'
                     }`}
                   >
-                    <span>{intent.icon}</span>
+                    <span className="text-lg">{intent.icon}</span>
                     <span>{intent.label}</span>
                   </button>
                 ))}
@@ -885,7 +970,7 @@ const ChatPage: React.FC = () => {
                         : 'bg-white/10 border border-white/20'
                     }`}
                   >
-                    {renderMessageContent(msg.content)}
+                    {renderMessageContent(msg)}
                     {msg.role === 'assistant' && (
                       <div className="mt-2 text-xs text-gray-400">
                         {msg.provider} • {msg.model} • {msg.tokens} tokens • {msg.responseTime}ms
@@ -930,11 +1015,11 @@ const ChatPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-gray-300">Prompts Today</p>
-                  <p className="text-2xl font-bold">{userStats?.promptsToday || 0}</p>
+                  <p className="text-xl">{userStats?.promptsToday || 0} / 50</p>
                 </div>
                 <div>
                   <p className="text-gray-300">Remaining Today</p>
-                  <p className="text-2xl font-bold">{userStats?.pointsRemaining || 50}</p>
+                  <p className="text-xl text-green-400">{Math.max(0, 50 - (userStats?.promptsToday || 0))}</p>
                 </div>
               </div>
             </GlassCard>
@@ -952,7 +1037,7 @@ const ChatPage: React.FC = () => {
 
       {/* Update points display */}
       <div className="text-sm text-gray-500">
-        <p className="text-2xl font-bold">{userStats?.pointsRemaining || 50}</p>
+        <p className="text-2xl font-bold">{userStats?.promptsRemaining || 50}</p>
       </div>
     </div>
   );

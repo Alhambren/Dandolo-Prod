@@ -39,31 +39,22 @@ export default defineSchema({
     points: v.number(),
     totalPrompts: v.number(),
     lastEarned: v.number(),
+    lastDailyReward: v.optional(v.number()),
   }).index("by_provider", ["providerId"]),
 
-  // HEALTH CHECKS: Provider monitoring
-  healthChecks: defineTable({
+  // INFERENCES: Track AI requests
+  inferences: defineTable({
     providerId: v.id("providers"),
+    model: v.string(),
+    intent: v.string(),
+    totalTokens: v.number(),
+    vcuCost: v.number(),
+    address: v.string(),
     timestamp: v.number(),
-    status: v.union(v.literal("success"), v.literal("failure")),
-    responseTime: v.optional(v.number()),
-    errorMessage: v.optional(v.string()),
-  }).index("by_provider", ["providerId"]),
-
-  // API KEYS: Developer access tokens
-  apiKeys: defineTable({
-    address: v.optional(v.string()), // Made optional for legacy data
-    name: v.string(),
-    key: v.string(),
-    isActive: v.boolean(),
-    usageCount: v.optional(v.number()), // Made optional for legacy data
-    sessionId: v.optional(v.string()), // Made optional for legacy data
-    createdAt: v.number(),
-    lastUsed: v.optional(v.number()),
-    totalUsage: v.optional(v.number()), // Made optional for legacy data
   })
-    .index("by_address", ["address"])
-    .index("by_key", ["key"]),
+    .index("by_provider", ["providerId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_address", ["address"]),
 
   // MODEL CACHE: Venice.ai models
   modelCache: defineTable({
