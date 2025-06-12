@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { action, internalMutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { mutation, query } from "./_generated/server";
 
 /**
  * Generate and store text embeddings using Venice.ai.
@@ -56,17 +55,18 @@ export const embedText = action({
 /**
  * Store embedding in database.
  */
-export const store = internalMutation({
+export const storeEmbedding = mutation({
   args: {
     text: v.string(),
     embedding: v.array(v.number()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("embeddings", {
+    const id = await ctx.db.insert("embeddings", {
       text: args.text,
       embedding: args.embedding,
       createdAt: Date.now(),
     });
+    return id;
   },
 });
 
@@ -77,5 +77,21 @@ export const getAll = query({
   args: {},
   handler: async (ctx) => {
     return ctx.db.query("embeddings").collect();
+  },
+});
+
+export const searchSimilar = query({
+  args: {
+    embedding: v.array(v.number()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    // Simple implementation - can be enhanced with vector similarity
+    const embeddings = await ctx.db
+      .query("embeddings")
+      .order("desc")
+      .take(args.limit || 10);
+    
+    return embeddings;
   },
 });

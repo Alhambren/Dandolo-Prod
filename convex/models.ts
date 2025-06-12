@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, action, internalAction, internalMutation } from "./_generated/server";
+import { query, mutation, action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
@@ -130,6 +130,7 @@ export const fetchAndCategorizeModels = action({
           code: [],
           image: [],
           multimodal: [],
+          audio: [],
         };
       }
 
@@ -149,6 +150,7 @@ export const fetchAndCategorizeModels = action({
             code: [],
             image: [],
             multimodal: [],
+            audio: [],
           };
         }
 
@@ -160,32 +162,37 @@ export const fetchAndCategorizeModels = action({
           code: [] as any[],
           image: [] as any[],
           multimodal: [] as any[],
+          audio: [] as any[],
         };
 
         models.forEach((model: any) => {
           const modelInfo = {
             id: model.id,
             name: model.id,
-            contextLength: model.model_spec?.availableContextTokens || 0,
-            type: model.type,
+            contextLength: model.context_length || 0,
           };
 
-          if (model.type === "image") {
-            categorized.image.push(modelInfo);
-          } else if (model.type === "text") {
-            const modelId = model.id.toLowerCase();
+          const modelId = model.id.toLowerCase();
 
-            if (
-              modelId.includes("code") ||
-              modelId.includes("deepseek") ||
-              modelId.includes("starcoder")
-            ) {
-              categorized.code.push(modelInfo);
-            } else if (model.model_spec?.capabilities?.supportsVision) {
-              categorized.multimodal.push(modelInfo);
-            } else {
-              categorized.text.push(modelInfo);
-            }
+          // Updated image model detection based on Venice's actual models
+          if (model.type === "image" || 
+              modelId.includes("hidream") ||
+              modelId.includes("venice-sd35") ||
+              modelId.includes("flux-standard") ||
+              modelId.includes("flux-custom") ||
+              modelId.includes("lustify") ||
+              modelId.includes("sd35") ||
+              modelId.includes("flux") ||
+              modelId.includes("stable-diffusion")) {
+            categorized.image.push(modelInfo);
+          } else if (model.type === "audio" || modelId.includes("whisper") || modelId.includes("speech")) {
+            categorized.audio.push(modelInfo);
+          } else if (modelId.includes("vision") || model.capabilities?.vision || modelId.includes("llava")) {
+            categorized.multimodal.push(modelInfo);
+          } else if (modelId.includes("code") || modelId.includes("deepseek") || modelId.includes("qwen-2.5-coder") || modelId.includes("starcoder")) {
+            categorized.code.push(modelInfo);
+          } else {
+            categorized.text.push(modelInfo);
           }
         });
 
@@ -197,6 +204,7 @@ export const fetchAndCategorizeModels = action({
           code: [],
           image: [],
           multimodal: [],
+          audio: [],
         };
       }
     } catch (error) {
@@ -206,6 +214,7 @@ export const fetchAndCategorizeModels = action({
         code: [],
         image: [],
         multimodal: [],
+        audio: [],
       };
     }
   },
@@ -307,26 +316,29 @@ export const refreshModelCacheInternal = internalAction({
               const modelInfo = {
                 id: model.id,
                 name: model.id,
-                type: model.type,
-                contextLength: model.model_spec?.availableContextTokens || 0,
+                contextLength: model.context_length || 0,
               };
-              if (model.type === "image") {
+
+              const modelId = model.id.toLowerCase();
+
+              // Updated image model detection based on Venice's actual models
+              if (model.type === "image" || 
+                  modelId.includes("hidream") ||
+                  modelId.includes("venice-sd35") ||
+                  modelId.includes("flux-standard") ||
+                  modelId.includes("flux-custom") ||
+                  modelId.includes("lustify") ||
+                  modelId.includes("sd35") ||
+                  modelId.includes("flux")) {
                 categorized.image.push(modelInfo);
-              } else if (model.type === "audio") {
+              } else if (model.type === "audio" || modelId.includes("whisper")) {
                 categorized.audio.push(modelInfo);
-              } else if (model.type === "text") {
-                const modelId = model.id.toLowerCase();
-                if (
-                  modelId.includes("code") ||
-                  modelId.includes("deepseek") ||
-                  modelId.includes("starcoder")
-                ) {
-                  categorized.code.push(modelInfo);
-                } else if (model.model_spec?.capabilities?.supportsVision) {
-                  categorized.multimodal.push(modelInfo);
-                } else {
-                  categorized.text.push(modelInfo);
-                }
+              } else if (modelId.includes("vision") || model.capabilities?.vision) {
+                categorized.multimodal.push(modelInfo);
+              } else if (modelId.includes("code") || modelId.includes("deepseek") || modelId.includes("qwen-2.5-coder")) {
+                categorized.code.push(modelInfo);
+              } else {
+                categorized.text.push(modelInfo);
               }
             });
             await ctx.runMutation(internal.models.updateModelCacheInternal, {
@@ -371,5 +383,13 @@ export const updateModelCacheInternal = internalMutation({
         lastUpdated: args.timestamp,
       });
     }
+  },
+});
+
+// Internal query to get model cache
+export const getModelCacheInternal = internalQuery({
+  handler: async (ctx) => {
+    const cached = await ctx.db.query("modelCache").first();
+    return cached;
   },
 });

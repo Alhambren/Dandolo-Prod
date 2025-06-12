@@ -1,75 +1,60 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 
+// Rate limiting based on userPoints promptsToday
 export const checkRateLimit = mutation({
-  args: {
-    address: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
+  args: { sessionId: v.string() },
   handler: async (ctx, args) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTimestamp = today.getTime();
-
-    if (!args.address) {
-      return {
-        allowed: false,
-        remaining: 0,
-        resetTime: todayTimestamp + 24 * 60 * 60 * 1000,
-        current: 0,
-      };
+    // Extract address from sessionId
+    const addressMatch = args.sessionId.match(/session-([^-]+)/);
+    const address = addressMatch ? addressMatch[1] : 'anonymous';
+    
+    if (address === 'anonymous') {
+      // Anonymous users get limited access
+      return { allowed: true, remaining: 5, limit: 5 };
     }
-
-    const usageToday = await ctx.db
-      .query("usageLogs")
-      .withIndex("by_address", (q) => q.eq("address", args.address!))
-      .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
-      .collect();
-
-    const promptsToday = usageToday.length;
-    const dailyLimit = args.limit || 50;
-
+    
+    // Get user's points record
+    const userPoints = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", q => q.eq("address", address))
+      .first();
+    
+    const promptsToday = userPoints?.promptsToday ?? 0;
+    const limit = 50;
+    const remaining = Math.max(0, limit - promptsToday);
+    
     return {
-      allowed: promptsToday < dailyLimit,
-      remaining: Math.max(0, dailyLimit - promptsToday),
-      resetTime: todayTimestamp + 24 * 60 * 60 * 1000,
+      allowed: remaining > 0,
+      remaining,
+      limit,
       current: promptsToday,
     };
   },
 });
 
 export const getRateLimitStatus = query({
-  args: {
-    address: v.optional(v.string()),
-  },
+  args: { sessionId: v.string() },
   handler: async (ctx, args) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTimestamp = today.getTime();
-
-    if (!args.address) {
-      return {
-        current: 0,
-        remaining: 50,
-        resetTime: todayTimestamp + 24 * 60 * 60 * 1000,
-        limit: 50,
-      };
+    const addressMatch = args.sessionId.match(/session-([^-]+)/);
+    const address = addressMatch ? addressMatch[1] : 'anonymous';
+    
+    if (address === 'anonymous') {
+      return { current: 0, remaining: 5, limit: 5 };
     }
-
-    const usageToday = await ctx.db
-      .query("usageLogs")
-      .withIndex("by_address", (q) => q.eq("address", args.address!))
-      .filter((q) => q.gte(q.field("createdAt"), todayTimestamp))
-      .collect();
-
-    const promptsToday = usageToday.length;
-    const dailyLimit = 50;
-
+    
+    const userPoints = await ctx.db
+      .query("userPoints")
+      .withIndex("by_address", q => q.eq("address", address))
+      .first();
+    
+    const promptsToday = userPoints?.promptsToday ?? 0;
+    const limit = 50;
+    
     return {
       current: promptsToday,
-      remaining: Math.max(0, dailyLimit - promptsToday),
-      resetTime: todayTimestamp + 24 * 60 * 60 * 1000,
-      limit: dailyLimit,
+      remaining: Math.max(0, limit - promptsToday),
+      limit,
     };
   },
 });

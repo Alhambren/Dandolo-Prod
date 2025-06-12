@@ -41,10 +41,57 @@ export const recordUsage = mutation({
     if (record) {
       await ctx.db.patch(args.keyId, {
         lastUsed: Date.now(),
-        usageCount: (record.usageCount || 0) + 1,
         totalUsage: (record.totalUsage || 0) + 1,
       });
     }
     return null;
+  },
+});
+
+export const trackApiKeyUsage = mutation({
+  args: { 
+    key: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const apiKey = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_key", q => q.eq("key", args.key))
+      .first();
+    if (!apiKey) {
+      throw new Error("Invalid API key");
+    }
+    if (!apiKey.isActive) {
+      throw new Error("API key is inactive");
+    }
+    // Update usage count and last used
+    await ctx.db.patch(apiKey._id, {
+      lastUsed: Date.now(),
+      totalUsage: (apiKey.totalUsage || 0) + 1,
+    });
+    return { success: true };
+  },
+});
+
+export const getApiKeyStats = query({
+  args: { address: v.string() },
+  handler: async (ctx, args) => {
+    const keys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_address", q => q.eq("address", args.address))
+      .collect();
+    return {
+      totalKeys: keys.length,
+      activeKeys: keys.filter(k => k.isActive).length,
+      totalUsage: keys.reduce((sum, k) => sum + (k.totalUsage || 0), 0),
+      keys: keys.map(k => ({
+        id: k._id,
+        name: k.name,
+        key: `${k.key.substring(0, 8)}...`,
+        isActive: k.isActive,
+        totalUsage: k.totalUsage || 0,
+        lastUsed: k.lastUsed,
+        createdAt: k.createdAt,
+      })),
+    };
   },
 });

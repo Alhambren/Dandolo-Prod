@@ -113,6 +113,7 @@ export const registerProvider = mutation({
       providerId: providerId,
       points: 0,
       totalPrompts: 0,
+      lastEarned: Date.now(),
     });
 
     return providerId;
@@ -175,6 +176,7 @@ export const registerProviderWithVCU = mutation({
       providerId: providerId,
       points: 0,
       totalPrompts: 0,
+      lastEarned: Date.now(),
     });
 
     return providerId;
@@ -226,12 +228,14 @@ export const awardProviderPoints = mutation({
       await ctx.db.patch(pointsRecord._id, {
         points: (pointsRecord.points ?? 0) + pointsEarned,
         totalPrompts: (pointsRecord.totalPrompts ?? 0) + args.promptsServed,
+        lastEarned: Date.now(),
       });
     } else {
       await ctx.db.insert("providerPoints", {
         providerId: args.providerId,
         points: pointsEarned,
         totalPrompts: args.promptsServed,
+        lastEarned: Date.now(),
       });
     }
   },
@@ -288,14 +292,8 @@ export const getProviderHealth = query({
     const provider = await ctx.db.get(args.providerId);
     if (!provider) return null;
 
-    const recentCheck = await ctx.db
-      .query("healthChecks")
-      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
-      .order("desc")
-      .first();
-
     return {
-      lastCheck: recentCheck?.timestamp || provider.lastHealthCheck,
+      lastCheck: provider.lastHealthCheck,
       isHealthy: provider.isActive,
       avgResponseTime: provider.avgResponseTime,
     };
@@ -382,27 +380,23 @@ export const incrementPromptCount = mutation({
 });
 
 // Record health check result
-export const recordHealthCheck = mutation({
+export const recordHealthCheck = internalMutation({
   args: {
     providerId: v.id("providers"),
-    status: v.union(v.literal("success"), v.literal("failure")),
-    responseTime: v.optional(v.number()),
-    errorMessage: v.optional(v.string()),
+    status: v.boolean(),
+    responseTime: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("healthChecks", {
-      providerId: args.providerId,
-      timestamp: Date.now(),
-      status: args.status,
-      responseTime: args.responseTime,
-      errorMessage: args.errorMessage,
-    });
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) {
+      throw new Error("Provider not found");
+    }
 
     // Update provider health
-    await ctx.runMutation(api.providers.updateProviderHealth, {
-      providerId: args.providerId,
-      isHealthy: args.status === "success",
-      responseTime: args.responseTime,
+    await ctx.db.patch(args.providerId, {
+      lastHealthCheck: Date.now(),
+      isActive: args.status,
+      avgResponseTime: args.responseTime,
     });
   },
 });
@@ -500,59 +494,29 @@ export const runHealthChecks = internalAction({
     const providers = await ctx.runQuery(internal.providers.listActiveInternal);
     
     for (const provider of providers) {
-      // Simple health check - just verify API key still works
       try {
-        const response = await fetch("https://api.venice.ai/api/v1/chat/completions", {
-          method: "POST",
+        const startTime = Date.now();
+        const response = await fetch("https://api.venice.ai/v1/health", {
           headers: {
             "Authorization": `Bearer ${provider.veniceApiKey}`,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            model: "llama-3.2-3b",
-            messages: [{ role: "user", content: "test" }],
-            max_tokens: 1,
-          }),
         });
+        const responseTime = Date.now() - startTime;
         
-        const responseTime = 100; // Simplified for MVP
-        
-        await ctx.runMutation(api.providers.recordHealthCheck, {
+        await ctx.runMutation(internal.providers.recordHealthCheck, {
           providerId: provider._id,
-          status: response.ok ? "success" : "failure",
-          responseTime: response.ok ? responseTime : undefined,
-          errorMessage: response.ok ? undefined : `Status: ${response.status}`,
+          status: response.ok,
+          responseTime,
         });
       } catch (error) {
-        await ctx.runMutation(api.providers.recordHealthCheck, {
+        console.error(`Health check failed for provider ${provider._id}:`, error);
+        await ctx.runMutation(internal.providers.recordHealthCheck, {
           providerId: provider._id,
-          status: "failure",
-          errorMessage: error instanceof Error ? error.message : "Unknown error",
+          status: false,
+          responseTime: 0,
         });
       }
     }
-  },
-});
-
-// Update uptime based on recent health checks
-export const updateUptime = mutation({
-  args: { providerId: v.id("providers") },
-  handler: async (ctx, args) => {
-    const recentChecks = await ctx.db
-      .query("healthChecks")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
-      .order("desc")
-      .take(100);
-
-    if (recentChecks.length === 0) return;
-
-    const successCount = recentChecks.filter(check => check.status === "success").length;
-    const uptime = (successCount / recentChecks.length) * 100;
-
-    await ctx.db.patch(args.providerId, { 
-      uptime,
-      isActive: uptime > 50, // Deactivate if uptime too low
-    });
   },
 });
 
@@ -598,31 +562,31 @@ export const getLeaderboard = query({
 
 export const getProviderStats = query({
   args: { address: v.string() },
-  returns: v.object({
-    totalPrompts: v.number(),
-    points: v.number(),
-  }),
   handler: async (ctx, args) => {
     const provider = await ctx.db
       .query("providers")
-      .filter((q) => q.eq(q.field("address"), args.address))
+      .withIndex("by_address", q => q.eq("address", args.address))
       .first();
 
     if (!provider) {
       return {
         totalPrompts: 0,
+        avgResponseTime: 0,
         points: 0,
+        isActive: false,
       };
     }
 
-    const points = await ctx.db
-      .query("userPoints")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
+    const providerPoints = await ctx.db
+      .query("providerPoints")
+      .withIndex("by_provider", q => q.eq("providerId", provider._id))
       .first();
 
     return {
       totalPrompts: provider.totalPrompts ?? 0,
-      points: points?.points ?? 0,
+      avgResponseTime: provider.avgResponseTime ?? 0,
+      points: providerPoints?.points ?? 0,
+      isActive: provider.isActive,
     };
   },
 });
