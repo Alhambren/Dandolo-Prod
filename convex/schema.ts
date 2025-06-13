@@ -19,6 +19,8 @@ export default defineSchema({
     status: v.union(v.literal("pending"), v.literal("active"), v.literal("inactive")),
     registrationDate: v.number(),
     lastHealthCheck: v.optional(v.number()),
+    // Total uptime percentage for the provider
+    uptime: v.number(),
   })
     .index("by_active", ["isActive"])
     .index("by_address", ["address"])
@@ -41,6 +43,35 @@ export default defineSchema({
     lastEarned: v.number(),
     lastDailyReward: v.optional(v.number()),
   }).index("by_provider", ["providerId"]),
+
+  // USAGE LOGS: Track anonymous and API usage
+  usageLogs: defineTable({
+    address: v.string(),
+    providerId: v.optional(v.id("providers")),
+    model: v.string(),
+    tokens: v.number(),
+    latencyMs: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_address", ["address"])
+    .index("by_provider", ["providerId"]),
+
+  // EMBEDDINGS: Persist text embeddings for similarity search
+  embeddings: defineTable({
+    text: v.string(),
+    embedding: v.array(v.float64()),
+    model: v.string(),
+    providerId: v.id("providers"),
+    createdAt: v.number(),
+  }).index("by_text", ["text"]),
+
+  // POINTS HISTORY: Track wallet reward transactions
+  points_history: defineTable({
+    address: v.string(),
+    amount: v.number(),
+    reason: v.string(),
+    ts: v.number(),
+  }).index("by_address", ["address"]),
 
   // INFERENCES: Track AI requests
   inferences: defineTable({

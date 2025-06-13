@@ -584,27 +584,6 @@ export const route = action({
 });
 
 /** Mutation to record each inference for statistics. */
-export const recordInference = mutation({
-  args: {
-    providerId: v.id("providers"),
-    model: v.string(),
-    intent: v.string(),
-    promptTokens: v.number(),
-    completionTokens: v.number(),
-    totalTokens: v.number(),
-    vcuCost: v.number(),
-    sessionId: v.string(),
-    isAnonymous: v.boolean(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.insert("inferences", {
-      ...args,
-      timestamp: Date.now(),
-    });
-    return null;
-  },
-});
 
 /** Query to gather aggregated statistics on recorded inferences. */
 export const getStats = query({
@@ -646,28 +625,33 @@ export const getStats = query({
   },
 });
 
-export const recordInference = internalMutation({
+/**
+ * Record inference in database
+ */
+export const recordInference = mutation({
   args: {
     providerId: v.id("providers"),
     model: v.string(),
     intent: v.string(),
     totalTokens: v.number(),
+    promptTokens: v.number(),
+    completionTokens: v.number(),
     vcuCost: v.number(),
-    address: v.string(),
-    timestamp: v.number(),
+    isAnonymous: v.boolean(),
+    sessionId: v.string(),
   },
   handler: async (ctx, args) => {
+    // For anonymous users, use session ID as address
+    const address = args.isAnonymous ? `anon_${args.sessionId}` : args.sessionId;
+
     await ctx.db.insert("inferences", {
+      address,
       providerId: args.providerId,
       model: args.model,
       intent: args.intent,
-      promptTokens: Math.floor(args.totalTokens * 0.7), // Estimate
-      completionTokens: Math.floor(args.totalTokens * 0.3), // Estimate
       totalTokens: args.totalTokens,
       vcuCost: args.vcuCost,
-      sessionId: `session-${args.address}`,
-      isAnonymous: args.address === 'anonymous',
-      timestamp: args.timestamp,
+      timestamp: Date.now(),
     });
   },
 });

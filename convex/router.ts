@@ -208,6 +208,16 @@ export const routeRequest = action({
     sessionId: v.string(),
     intentType: v.optional(v.string()),
   },
+  returns: v.object({
+    response: v.string(),
+    model: v.string(),
+    tokens: v.number(),
+    providerId: v.id("providers"),
+    provider: v.string(),
+    cost: v.number(),
+    responseTime: v.number(),
+    pointsAwarded: v.number(),
+  }),
   handler: async (ctx, args) => {
     // Check rate limit
     const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
