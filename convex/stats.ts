@@ -31,8 +31,7 @@ interface UsageLog {
   address: string;
   providerId?: Id<"providers">;
   model: string;
-  tokens: number;
-  latencyMs: number;
+  totalTokens: number;
   createdAt: number;
 }
 

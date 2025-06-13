@@ -9,7 +9,15 @@ export type API = {
   };
   inference: {
     route: FunctionReference<"action", "public", { prompt: string; model?: string; walletAddress?: string; sessionId: string }, null, any>;
-    logUsage: FunctionReference<"mutation", "public", { address?: string; providerId: Id<"providers">; model: string; tokens: number; createdAt: number; latencyMs: number }, null, void>;
+    recordInference: FunctionReference<"mutation", "public", {
+      address: string;
+      providerId: Id<"providers">;
+      model: string;
+      intent: string;
+      totalTokens: number;
+      vcuCost: number;
+      timestamp: number;
+    }, null, null>;
     // ... other inference methods ...
   };
   wallets: {
