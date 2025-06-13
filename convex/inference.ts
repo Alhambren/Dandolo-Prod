@@ -538,15 +538,13 @@ export const route = action({
 
       console.log("[route] Recording inference...");
       await ctx.runMutation(api.inference.recordInference, {
+        address: args.address || 'anonymous',
         providerId: randomProvider._id,
         model: usedModel,
         intent: args.intent,
-        promptTokens: Math.floor(tokens * 0.3),
-        completionTokens: Math.floor(tokens * 0.7),
         totalTokens: tokens,
         vcuCost,
-        sessionId: args.sessionId,
-        isAnonymous: args.isAnonymous,
+        timestamp: Date.now(),
       });
 
       let pointsAwarded = 0;
@@ -586,21 +584,24 @@ export const route = action({
 /** Mutation to record each inference for statistics. */
 export const recordInference = mutation({
   args: {
+    address: v.string(),
     providerId: v.id("providers"),
     model: v.string(),
     intent: v.string(),
-    promptTokens: v.number(),
-    completionTokens: v.number(),
     totalTokens: v.number(),
     vcuCost: v.number(),
-    sessionId: v.string(),
-    isAnonymous: v.boolean(),
+    timestamp: v.number(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.insert("inferences", {
-      ...args,
-      timestamp: Date.now(),
+      address: args.address,
+      providerId: args.providerId,
+      model: args.model,
+      intent: args.intent,
+      totalTokens: args.totalTokens,
+      vcuCost: args.vcuCost,
+      timestamp: args.timestamp,
     });
     return null;
   },
@@ -643,32 +644,6 @@ export const getStats = query({
       byIntent,
       byModel,
     };
-  },
-});
-
-export const recordInference = internalMutation({
-  args: {
-    providerId: v.id("providers"),
-    model: v.string(),
-    intent: v.string(),
-    totalTokens: v.number(),
-    vcuCost: v.number(),
-    address: v.string(),
-    timestamp: v.number(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.insert("inferences", {
-      providerId: args.providerId,
-      model: args.model,
-      intent: args.intent,
-      promptTokens: Math.floor(args.totalTokens * 0.7), // Estimate
-      completionTokens: Math.floor(args.totalTokens * 0.3), // Estimate
-      totalTokens: args.totalTokens,
-      vcuCost: args.vcuCost,
-      sessionId: `session-${args.address}`,
-      isAnonymous: args.address === 'anonymous',
-      timestamp: args.timestamp,
-    });
   },
 });
 

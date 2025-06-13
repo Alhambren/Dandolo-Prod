@@ -208,7 +208,7 @@ export const routeRequest = action({
     sessionId: v.string(),
     intentType: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     // Check rate limit
     const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
       sessionId: args.sessionId,

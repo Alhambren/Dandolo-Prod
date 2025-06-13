@@ -19,6 +19,7 @@ export default defineSchema({
     status: v.union(v.literal("pending"), v.literal("active"), v.literal("inactive")),
     registrationDate: v.number(),
     lastHealthCheck: v.optional(v.number()),
+    uptime: v.optional(v.number()),
   })
     .index("by_active", ["isActive"])
     .index("by_address", ["address"])
@@ -44,12 +45,12 @@ export default defineSchema({
 
   // INFERENCES: Track AI requests
   inferences: defineTable({
+    address: v.string(),
     providerId: v.id("providers"),
     model: v.string(),
     intent: v.string(),
     totalTokens: v.number(),
     vcuCost: v.number(),
-    address: v.string(),
     timestamp: v.number(),
   })
     .index("by_provider", ["providerId"])
@@ -98,5 +99,29 @@ export default defineSchema({
   })
     .index("by_address", ["address"])
     .index("by_key", ["key"]),
+
+  usageLogs: defineTable({
+    address: v.string(),
+    providerId: v.id("providers"),
+    model: v.string(),
+    intent: v.string(),
+    totalTokens: v.number(),
+    vcuCost: v.number(),
+    createdAt: v.number(),
+  }).index("by_address", ["address"]),
+
+  embeddings: defineTable({
+    text: v.string(),
+    embedding: v.array(v.number()),
+    createdAt: v.number(),
+  }),
+
+  points_history: defineTable({
+    address: v.string(),
+    points: v.number(),
+    change: v.number(),
+    reason: v.string(),
+    createdAt: v.number(),
+  }).index("by_address", ["address"]),
 });
 
