@@ -1,140 +1,201 @@
 # Dandolo.ai
 
-Experimental sovereign inference platform built on [Convex](https://convex.dev) and
-[Venice.ai](https://venice.ai). This fork introduces a streamlined UI with room
-for upcoming audio and vision features.
-  
-## Project structure
-  
-The frontend code lives in `src` and uses [Vite](https://vitejs.dev/). The
-backend logic resides in the `convex` directory.
+**Sovereign inference routing for Venice.ai** — Route intelligence freely, without surveillance or control.
 
-Run `npm run dev` to start both servers during development.
+## 🛡️ Design Principles
 
-### Interface Highlights
+* **No payload logging**
+* **No centralized platform**
+* **No account linking**
+* **No surveillance**
 
-- **Chat** – multi-model text chat with basic folder organization.
-- **Audio Studio** – placeholder for speech-to-text and text-to-speech.
-- **Vision Lab** – placeholder for image generation and analysis.
-- **Tools Marketplace** – upcoming registry for AI tools.
+Every design decision flows from one goal: **route value, not identity**.
 
-## App authentication
+## 🏛️ Historical Lineage
 
-Chef apps use [Convex Auth](https://auth.convex.dev/) with Anonymous auth for easy sign in. You may wish to change this before deploying your app.
+The Dandolo family was among the most formidable dynasties in Venetian history, blending politics, commerce, war, and systems design. Their most iconic figure, Enrico Dandolo, who became Doge of Venice in his 80s, was completely blind, yet had unmatched strategic clarity. He led the Fourth Crusade, rerouting it from the Holy Land to sack Constantinople in 1204, fracturing the Byzantine Empire and redrawing the geopolitical map.
 
-## Developing and deploying your app
+His power didn't come from force, but from leverage: trade, diplomacy, and institutional control. The Dandolos helped craft Venice's oligarchic machine to become resilient, decentralized, and built for scale.
 
-Check out the [Convex docs](https://docs.convex.dev/) for more information on how to develop with Convex.
-* If you're new to Convex, the [Overview](https://docs.convex.dev/understanding/) is a good place to start
-* Check out the [Hosting and Deployment](https://docs.convex.dev/production/) docs for how to deploy your app
-* Read the [Best Practices](https://docs.convex.dev/understanding/best-practices/) guide for tips on how to improve you app further
+Dandolo.ai inherits that lineage.
 
-## HTTP API
+We are also blind — blind inference routers. We don't know what's inside each query. We don't see the payload. But like Enrico, we route with purpose. We move value, not armies. Data, not doctrine. Agents, not soldiers.
 
-User-defined http routes are defined in the `convex/router.ts` file. We split these routes into a separate file from `convex/http.ts` to allow us to prevent the LLM from modifying the authentication routes.
+Dandolo.ai is a continuation, not a tribute. As Venice once ruled the seas through invisible systems of trade, we intend to rule the compute flows — silently, strategically, and without ever needing to see.
 
-## API Documentation Update
+The future belongs to those who route it.
 
-### Chat Completions (Multi-turn Conversations)
+## 🚀 Quick Start
 
+### For Users
+Visit [dandolo.ai](https://dandolo.ai) and start chatting. No signup required. Your prompts are never stored.
+
+### For Venice Providers
 ```bash
-POST https://dandolo.ai/api/v1/chat/completions
-Authorization: Bearer YOUR_API_KEY
-Content-Type: application/json
-
-{
-  "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "What's the capital of France?"},
-    {"role": "assistant", "content": "The capital of France is Paris."},
-    {"role": "user", "content": "What's the population?"}
-  ],
-  "model": "gpt-3.5-turbo",
-  "temperature": 0.7,
-  "max_tokens": 1000
-}
+1. Connect wallet at dandolo.ai
+2. Add your Venice API key
+3. Start earning points (1 point per 100 tokens routed)
 ```
 
-**Response:**
-```json
-{
-  "id": "chatcmpl-123456",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "gpt-3.5-turbo",
-  "usage": {
-    "prompt_tokens": 45,
-    "completion_tokens": 28,
-    "total_tokens": 73
-  },
-  "choices": [{
-    "message": {
-      "role": "assistant",
-      "content": "The population of Paris is approximately 2.2 million..."
-    },
-    "finish_reason": "stop",
-    "index": 0
-  }]
-}
+### For Developers
+```bash
+npm install @dandolo/sdk
 ```
-
-### SDK Usage for Agents
 
 ```javascript
 import DandoloSDK from '@dandolo/sdk';
 
 const dandolo = new DandoloSDK({
-  apiKey: 'ak_your_agent_key', // Agent keys start with ak_
+  apiKey: 'YOUR_API_KEY' // Get from dandolo.ai
 });
 
-// Initialize conversation
-let messages = [
-  { role: 'system', content: 'You are a helpful assistant.' }
-];
-
-// First message
-const response1 = await dandolo.chatCompletion({
-  messages: [...messages, { role: 'user', content: 'Hello!' }],
+const response = await dandolo.chatCompletion({
+  messages: [{ role: 'user', content: 'Hello, blind router' }]
 });
+```
 
-// Update conversation history
-messages.push(
-  { role: 'user', content: 'Hello!' },
-  response1.choices[0].message
-);
+## 🏗️ Architecture
 
-// Continue conversation
-const response2 = await dandolo.chatCompletion({
-  messages: [...messages, { role: 'user', content: 'What can you help me with?' }],
-});
+Dandolo operates as a decentralized routing layer above Venice.ai:
+
+```
+User → Dandolo Router → Venice Provider Pool → AI Models
+         ↓                      ↓                    ↓
+    (No logging)        (Load balanced)       (Direct pass)
+```
+
+### Core Components
+
+**Inference Router** — Selects optimal providers based on health, latency, and VCU availability. Never inspects payload content.
+
+**Provider Network** — Venice API key holders contribute compute in exchange for points. One wallet, one provider.
+
+**Privacy Layer** — Zero-knowledge routing. We track only metadata: tokens used, latency, model type. Never content.
+
+**Economic Engine** — VCU-based resource allocation. Points earned now convert to tokens later.
+
+## 📡 API Reference
+
+### Chat Completions
+```bash
+POST /api/v1/chat/completions
+Authorization: Bearer YOUR_API_KEY
+
+{
+  "messages": [{
+    "role": "user",
+    "content": "What is sovereign inference?"
+  }],
+  "model": "gpt-4",
+  "temperature": 0.7
+}
+```
+
+### Models List
+```bash
+GET /api/v1/models
+Authorization: Bearer YOUR_API_KEY
 ```
 
 ### Rate Limits
+- Anonymous: 50 requests/day
+- Developer (dk_): 500 requests/day
+- Agent (ak_): 5,000 requests/day
 
-- **Developer Keys (dk_)**: 500 requests/day
-- **Agent Keys (ak_)**: 5,000 requests/day
-- **Anonymous Web**: 50 requests/day
+## 🔐 Security
 
-### Points System Update
+**No Knowledge** — Prompts pass through without inspection or storage
 
-Providers now earn **1 point per 100 tokens processed** instead of flat rate per prompt. This ensures fair compensation for longer conversations.
+**No Identity** — Use anonymously or with wallet verification
 
-### Memory Management
+**No Lock-in** — Export your data anytime, no vendor control
 
-Dandolo does not store conversation history. Agents must include the full message history with each request. This ensures:
-- Complete privacy (no conversation storage)
-- Agent control over context window
-- Ability to compress/summarize as needed
+**No Backdoors** — Open source, verifiable, immutable routing
 
-**Best Practices:**
-```javascript
-// Manage context window
-if (messages.length > 20) {
-  // Summarize older messages
-  const summary = await summarizeConversation(messages.slice(0, -10));
-  messages = [
-    { role: 'system', content: 'Previous conversation summary: ' + summary },
-    ...messages.slice(-10)
-  ];
-}
+## 💰 Economics
+
+During MVP, participants earn points:
+- **Users**: 100 points per prompt routed + allowance per VCU provided
+- **Providers**: 1 point per 100 tokens routed
+- **Developers**: Bonus points for integrations
+
+Points represent contribution to network bootstrap. Any future token distribution based on point allocation.
+
+## 🛠️ Development
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- Venice API key (for providers)
+
+### Local Setup
+```bash
+git clone https://github.com/yourusername/dandolo-ai
+cd dandolo-ai
+npm install
+npm run dev
 ```
+
+### Environment Variables
+```bash
+# Not required for basic usage
+# Providers register keys through web interface
+```
+
+### Tech Stack
+- **Frontend**: Next.js, React, TailwindCSS
+- **Backend**: Convex (serverless)
+- **AI**: Venice.ai integration
+- **Auth**: Web3 wallets (optional)
+
+## 🗺️ Roadmap
+
+**Phase 1: Blind Routing** ✓
+- Zero-knowledge inference
+- Provider network
+- Points accumulation
+
+**Phase 2: Economic Layer**
+- On-chain provider registry
+- Token generation event
+- Staking mechanisms
+
+**Phase 3: Autonomous Scale**
+- Cross-model routing
+- Custom model marketplace
+- Governance minimization
+
+**Phase 4: Full Sovereignty**
+- No admin keys
+- Immutable routing
+- Complete decentralization
+
+## 🤝 Contributing
+
+We welcome contributions that enhance sovereignty and privacy:
+
+1. Fork the repository
+2. Create your feature branch
+3. Ensure no logging of user data
+4. Submit pull request
+
+### Principles for Contributors
+- Never add user tracking
+- Never store prompts
+- Never require identity
+- Always preserve sovereignty
+
+## 📜 License
+
+MIT License - Use freely, modify freely, route freely.
+
+## 🔗 Links
+
+- [Website](https://dandolo.ai)
+- [Venice.ai](https://venice.ai)
+
+---
+
+*"We don't see your prompts. We don't want to. We just route them where they need to go."*
+
+**Dandolo.ai** — Blind routing for sovereign intelligence.
