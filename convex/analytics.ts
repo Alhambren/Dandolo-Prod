@@ -94,6 +94,12 @@ export const logUsage = mutation({
     vcuCost: v.number(),
   },
   handler: async (ctx, args) => {
+    // Only insert if we have a valid providerId
+    if (!args.providerId) {
+      console.warn("logUsage called without providerId, skipping log");
+      return;
+    }
+
     await ctx.db.insert("usageLogs", {
       address: args.address || 'anonymous',
       providerId: args.providerId,
