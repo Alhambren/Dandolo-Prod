@@ -284,11 +284,29 @@ export const updateModelCache = mutation({
   },
 });
 
+// Remove any old-format model cache entries
+export const cleanupOldModelCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const cache = await ctx.db.query("modelCache").first();
+
+    if (cache && Array.isArray((cache as any).models)) {
+      await ctx.db.delete(cache._id);
+      console.log("Deleted old format model cache");
+      return { deleted: true };
+    }
+
+    return { deleted: false };
+  },
+});
+
 // Add audio and multimodal support to model cache
 export const refreshModelCacheInternal = internalAction({
   args: {},
   handler: async (ctx: any) => {
     try {
+      // Clean up any legacy model cache format
+      await ctx.runMutation(api.models.cleanupOldModelCache);
       const providers = await ctx.runQuery(internal.providers.listActiveInternal);
       if (providers.length === 0) {
         console.log("No providers available for model refresh");
