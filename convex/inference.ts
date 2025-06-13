@@ -538,7 +538,7 @@ export const route = action({
 
       console.log("[route] Recording inference...");
       await ctx.runMutation(api.inference.recordInference, {
-        address: args.address || 'anonymous',
+        address: 'anonymous',
         providerId: randomProvider._id,
         model: usedModel,
         intent: args.intent,
@@ -552,8 +552,9 @@ export const route = action({
         const points = Math.floor(tokens / 100);
         if (points > 0) {
           console.log(`[route] Awarding ${points} points to provider...`);
-          await ctx.runMutation(api.points.awardPromptPoints, {
+          await ctx.runMutation(internal.points.awardProviderPoints, {
             providerId: randomProvider._id,
+            tokens,
           });
           pointsAwarded = points;
         }

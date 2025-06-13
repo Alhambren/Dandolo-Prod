@@ -23,7 +23,7 @@ export type API = {
   };
   analytics: {
     getSystemStats: FunctionReference<"query", "public", {}, null, { totalProviders: number; activeProviders: number; totalVCU: number; totalPrompts: number; promptsToday: number; avgResponseTime: number; networkUptime: number; activeUsers: number; }>;
-    logUsage: FunctionReference<"mutation", "public", { address?: string; providerId: Id<"providers">; model: string; tokens: number; latencyMs: number }, null, void>;
+    logUsage: FunctionReference<"mutation", "public", { address?: string; providerId?: Id<"providers">; model: string; intent: string; totalTokens: number; vcuCost: number }, null, void>;
     // ... other analytics methods ...
   };
   rateLimit: {

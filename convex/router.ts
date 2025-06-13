@@ -31,13 +31,13 @@ http.route({
       });
 
       // Record anonymous usage
-      await ctx.runMutation(api.usageLogs.create, {
+      await ctx.runMutation(api.analytics.logUsage, {
         address: sessionId,
         providerId: result.providerId,
         model: result.model,
-        tokens: result.tokens,
-        latencyMs: result.responseTime,
-        createdAt: Date.now(),
+        intent: "chat",
+        totalTokens: result.tokens,
+        vcuCost: result.cost,
       });
 
       return new Response(
@@ -121,13 +121,13 @@ http.route({
         keyId: keyData._id,
       });
 
-      await ctx.runMutation(api.usageLogs.create, {
+      await ctx.runMutation(api.analytics.logUsage, {
         address: keyData.address || `api-${keyData._id}`,
         providerId: result.providerId,
         model: result.model,
-        tokens: result.tokens,
-        latencyMs: result.responseTime,
-        createdAt: Date.now(),
+        intent: intent,
+        totalTokens: result.tokens,
+        vcuCost: result.cost,
       });
 
       return new Response(

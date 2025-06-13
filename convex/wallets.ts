@@ -108,11 +108,12 @@ export const addAddressPoints = mutation({
     });
 
     // Log points history
-    await ctx.db.insert('points_history', { 
-      address, 
-      amount, 
-      reason, 
-      ts: Date.now() 
+    await ctx.db.insert('points_history', {
+      address,
+      points: (pointsRecord.points ?? 0) + amount,
+      change: amount,
+      reason,
+      createdAt: Date.now()
     });
 
     return (pointsRecord.points ?? 0) + amount;
@@ -272,12 +273,13 @@ export const addPoints = mutation({
     }
 
     // Add to history
-    await ctx.db.insert("points_history", {
+  await ctx.db.insert("points_history", {
       address: args.address,
-      amount: args.points,
+      points: (points?.points ?? 0) + args.points,
+      change: args.points,
       reason: "Manual addition",
-      ts: Date.now(),
-    });
+      createdAt: Date.now(),
+  });
   },
 });
 

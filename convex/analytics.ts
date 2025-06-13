@@ -42,15 +42,13 @@ export const getProviderAnalytics = query({
 
     const usageLogs = await ctx.db
       .query("usageLogs")
-      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .filter((q) => q.eq(q.field("providerId"), args.providerId))
       .collect();
 
     const last24h = Date.now() - 24 * 60 * 60 * 1000;
     const recentUsage = usageLogs.filter(log => log.createdAt >= last24h);
 
-    const avgResponseTime = usageLogs.length > 0
-      ? usageLogs.reduce((sum, log) => sum + log.latencyMs, 0) / usageLogs.length
-      : 0;
+    const avgResponseTime = 0;
 
     return {
       ...provider,
@@ -58,7 +56,7 @@ export const getProviderAnalytics = query({
       totalPrompts: usageLogs.length,
       promptsLast24h: recentUsage.length,
       avgResponseTime: Math.round(avgResponseTime),
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.tokens, 0),
+      totalTokens: usageLogs.reduce((sum, log) => sum + log.totalTokens, 0),
     };
   },
 });
@@ -91,16 +89,18 @@ export const logUsage = mutation({
     // handled the request
     providerId: v.optional(v.id("providers")),
     model: v.string(),
-    tokens: v.number(),
-    latencyMs: v.number(),
+    intent: v.string(),
+    totalTokens: v.number(),
+    vcuCost: v.number(),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("usageLogs", {
       address: args.address || 'anonymous',
       providerId: args.providerId,
       model: args.model,
-      tokens: args.tokens,
-      latencyMs: args.latencyMs,
+      intent: args.intent,
+      totalTokens: args.totalTokens,
+      vcuCost: args.vcuCost,
       createdAt: Date.now(),
     });
   },
