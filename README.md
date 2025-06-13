@@ -72,7 +72,7 @@ User → Dandolo Router → Venice Provider Pool → AI Models
 
 **Privacy Layer** — Zero-knowledge routing. We track only metadata: tokens used, latency, model type. Never content.
 
-**Economic Engine** — VCU-based resource allocation. Points earned now convert to tokens later.
+**Economic Engine** — VCU-based resource allocation.
 
 ## 📡 API Reference
 
