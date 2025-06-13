@@ -27,7 +27,14 @@ Chef apps use [Convex Auth](https://auth.convex.dev/) with Anonymous auth for ea
 Check out the [Convex docs](https://docs.convex.dev/) for more information on how to develop with Convex.
 * If you're new to Convex, the [Overview](https://docs.convex.dev/understanding/) is a good place to start
 * Check out the [Hosting and Deployment](https://docs.convex.dev/production/) docs for how to deploy your app
-* Read the [Best Practices](https://docs.convex.dev/understanding/best-practices/) guide for tips on how to improve you app further
+* Read the [Best Practices](https://docs.convex.dev/understanding/best-practices/) guide for tips on how to improve your app further
+
+### Deploying to Vercel
+
+1. Install the [Vercel CLI](https://vercel.com/docs/cli) with `npm i -g vercel`.
+2. From the project root run `vercel` and follow the prompts to connect your repository.
+3. In the Vercel dashboard, add `CONVEX_DEPLOY_KEY` and any other environment variables.
+4. Trigger a production build with `vercel --prod`.
 
 ## HTTP API
 
