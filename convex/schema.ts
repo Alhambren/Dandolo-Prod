@@ -102,7 +102,7 @@ export default defineSchema({
 
   usageLogs: defineTable({
     address: v.string(),
-    providerId: v.id("providers"),
+    providerId: v.optional(v.id("providers")),
     model: v.string(),
     intent: v.string(),
     totalTokens: v.number(),
