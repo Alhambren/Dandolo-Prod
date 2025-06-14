@@ -36,7 +36,7 @@ http.route({
         providerId: result.providerId,
         model: result.model,
         intent: "chat",
-        totalTokens: result.tokens,
+        totalTokens: result.tokens, // Use result.tokens since that's what RouteReturnType provides
         vcuCost: result.cost,
       });
 
@@ -126,7 +126,7 @@ http.route({
         providerId: result.providerId,
         model: result.model,
         intent: intent,
-        totalTokens: result.tokens,
+        totalTokens: result.tokens, // Use result.tokens since that's what RouteReturnType provides
         vcuCost: result.cost,
       });
 
