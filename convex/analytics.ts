@@ -40,23 +40,29 @@ export const getProviderAnalytics = query({
     const provider = await ctx.db.get(args.providerId);
     if (!provider) return null;
 
-    const usageLogs = await ctx.db
+    // Collect all logs first to handle legacy entries without providerId
+    const allUsageLogs = await ctx.db
       .query("usageLogs")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
       .collect();
 
-    const last24h = Date.now() - 24 * 60 * 60 * 1000;
-    const recentUsage = usageLogs.filter(log => log.createdAt >= last24h);
+    // Only include logs explicitly tied to this provider
+    const usageLogs = allUsageLogs.filter(
+      (log) => log.providerId && log.providerId === args.providerId
+    );
 
-    const avgResponseTime = 0;
+    const last24h = Date.now() - 24 * 60 * 60 * 1000;
+    const recentUsage = usageLogs.filter((log) => log.createdAt >= last24h);
 
     return {
       ...provider,
-      veniceApiKey: undefined, // Don't expose API key
+      veniceApiKey: undefined,
       totalPrompts: usageLogs.length,
       promptsLast24h: recentUsage.length,
-      avgResponseTime: Math.round(avgResponseTime),
-      totalTokens: usageLogs.reduce((sum, log) => sum + log.totalTokens, 0),
+      avgResponseTime: 0,
+      totalTokens: usageLogs.reduce((sum, log) => {
+        const tokens = log.totalTokens ?? (log as any).tokens ?? 0;
+        return sum + tokens;
+      }, 0),
     };
   },
 });
