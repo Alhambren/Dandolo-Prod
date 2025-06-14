@@ -108,7 +108,7 @@ export default defineSchema({
     totalTokens: v.optional(v.number()),
     vcuCost: v.optional(v.number()),
     createdAt: v.number(),
-    // Legacy field names from early deployments
+    // Legacy fields
     tokens: v.optional(v.number()),
     latencyMs: v.optional(v.number()),
   }).index("by_address", ["address"]),

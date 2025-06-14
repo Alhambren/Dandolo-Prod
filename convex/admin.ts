@@ -163,4 +163,39 @@ export const checkLeaderboard = query({
       })),
     };
   },
-}); 
+});
+
+// Migrate legacy usage logs to new schema fields
+export const migrateUsageLogs = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const logs = await ctx.db.query("usageLogs").collect();
+    let migrated = 0;
+
+    for (const log of logs) {
+      const updates: Record<string, unknown> = {};
+
+      // Move legacy 'tokens' into 'totalTokens'
+      if ("tokens" in log && !log.totalTokens) {
+        updates.totalTokens = (log as any).tokens;
+      }
+
+      // Ensure intent exists for older entries
+      if (!log.intent) {
+        updates.intent = "chat";
+      }
+
+      // Legacy entries may be missing vcuCost
+      if (!log.vcuCost && (updates.totalTokens || log.totalTokens)) {
+        updates.vcuCost = 0;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(log._id, updates);
+        migrated++;
+      }
+    }
+
+    return { migrated };
+  },
+});
