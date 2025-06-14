@@ -104,10 +104,13 @@ export default defineSchema({
     address: v.string(),
     providerId: v.optional(v.id("providers")),
     model: v.string(),
-    intent: v.string(),
-    totalTokens: v.number(),
-    vcuCost: v.number(),
+    intent: v.optional(v.string()),
+    totalTokens: v.optional(v.number()),
+    vcuCost: v.optional(v.number()),
     createdAt: v.number(),
+    // Legacy field names from early deployments
+    tokens: v.optional(v.number()),
+    latencyMs: v.optional(v.number()),
   }).index("by_address", ["address"]),
 
   embeddings: defineTable({
