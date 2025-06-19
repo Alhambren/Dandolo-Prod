@@ -187,6 +187,7 @@ const ChatPage: React.FC = () => {
   const routeInference = useAction(api.inference.routeSimple);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
   const fetchModels = useAction(api.models.fetchAndCategorizeModels);
+  console.log(address,fetchModels,routeInference)
   const [availableModels, setAvailableModels] = useState<any>(null);
 
   // Load data from localStorage on mount
