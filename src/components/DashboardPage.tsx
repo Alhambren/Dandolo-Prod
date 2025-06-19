@@ -179,7 +179,7 @@ const DashboardPage: React.FC = () => {
                 <div className="text-sm text-gray-400">Prompts Served</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className="text-2xl font-bold text-gold">{currentProvider.uptime.toFixed(1)}%</div>
+                <div className="text-2xl font-bold text-gold">{currentProvider?.uptime?.toFixed(1)}%</div>
                 <div className="text-sm text-gray-400">Uptime</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">

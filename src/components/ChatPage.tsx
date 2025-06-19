@@ -973,7 +973,7 @@ const ChatPage: React.FC = () => {
                     {renderMessageContent(msg)}
                     {msg.role === 'assistant' && (
                       <div className="mt-2 text-xs text-gray-400">
-                        {msg.provider} • {msg.model} • {msg.tokens} tokens • {msg.responseTime}ms
+                        {msg.provider} • {msg.model} • {msg.tokens} tokens • {msg.responseTime||100}ms
                       </div>
                     )}
                   </div>

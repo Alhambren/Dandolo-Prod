@@ -62,7 +62,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                       </div>
                       <div>
                         <p className="text-gray-400">Uptime</p>
-                        <p className="font-semibold">{provider.uptime.toFixed(1)}%</p>
+                        {/* <p className="font-semibold">{provider.uptime.toFixed(1)}%</p> */}
                       </div>
                     </div>
                   </div>
