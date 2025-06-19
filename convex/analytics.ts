@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
 import { query, mutation, internalMutation } from "./_generated/server";
 
 /**
@@ -40,18 +41,18 @@ export const getProviderAnalytics = query({
     const provider = await ctx.db.get(args.providerId);
     if (!provider) return null;
 
-    // Collect all logs first to handle legacy entries without providerId
+    // Get all usage logs and filter in JavaScript
     const allUsageLogs = await ctx.db
       .query("usageLogs")
       .collect();
-
-    // Only include logs explicitly tied to this provider
-    const usageLogs = allUsageLogs.filter(
-      (log) => log.providerId && log.providerId === args.providerId
+    
+    // Filter for this provider's logs (only include logs explicitly tied to this provider)
+    const usageLogs = allUsageLogs.filter(log => 
+      log.providerId && log.providerId === args.providerId
     );
 
     const last24h = Date.now() - 24 * 60 * 60 * 1000;
-    const recentUsage = usageLogs.filter((log) => log.createdAt >= last24h);
+    const recentUsage = usageLogs.filter(log => (log.createdAt ?? 0) >= last24h);
 
     return {
       ...provider,
@@ -91,8 +92,6 @@ export const cleanupOldLogs = internalMutation({
 export const logUsage = mutation({
   args: {
     address: v.optional(v.string()),
-    // providerId may be undefined when the router doesn't know which provider
-    // handled the request
     providerId: v.optional(v.id("providers")),
     model: v.string(),
     intent: v.string(),
@@ -105,10 +104,10 @@ export const logUsage = mutation({
       console.warn("logUsage called without providerId, skipping log");
       return;
     }
-
+    
     await ctx.db.insert("usageLogs", {
       address: args.address || 'anonymous',
-      providerId: args.providerId,
+      providerId: args.providerId, // This is guaranteed to exist now
       model: args.model,
       intent: args.intent,
       totalTokens: args.totalTokens,

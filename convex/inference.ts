@@ -65,57 +65,41 @@ interface Provider {
   isActive: boolean;
 }
 
-// Cache for available models with expiration
-let modelCache: {
-  models: any[];
-  timestamp: number;
-} | null = null;
-
-const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+// Preferred image model order
+const PREFERRED_IMAGE_MODELS = [
+  "venice-sd35",
+  "stable-diffusion-3.5",
+  "hidream",
+  "flux-dev"
+];
 
 /**
- * Fetch available models from Venice.ai with caching
+ * Fetch available models from persistent DB cache
  */
-async function fetchAvailableModels(apiKey: string): Promise<any[]> {
-  // Return cached models if they're still fresh
-  if (modelCache && Date.now() - modelCache.timestamp < CACHE_DURATION) {
-    return modelCache.models;
-  }
+async function fetchAvailableModelsFromCache(ctx: any): Promise<any[]> {
+  return await ctx.runQuery(api.models.getAvailableModels, {});
+}
 
-  try {
-    const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!modelsResponse.ok) {
-      console.error("Failed to fetch models:", modelsResponse.status);
-      throw new Error(`Venice API error: ${modelsResponse.status}`);
+/**
+ * Select the best image model from available models
+ */
+function selectBestImageModel(models: any[]): string | undefined {
+  const imageModels = models.filter((m) => m.type === "image");
+  console.log("selectBestImageModel - Total models:", models.length);
+  console.log("selectBestImageModel - Image models found:", imageModels.length);
+  console.log("selectBestImageModel - Image model IDs:", imageModels.map(m => m.id));
+  
+  for (const preferred of PREFERRED_IMAGE_MODELS) {
+    const found = imageModels.find((m) => m.id === preferred);
+    if (found) {
+      console.log("selectBestImageModel - Selected preferred model:", found.id);
+      return found.id;
     }
-
-    const modelsData = await modelsResponse.json();
-    const models = modelsData.data || [];
-    
-    // Update cache
-    modelCache = {
-      models,
-      timestamp: Date.now(),
-    };
-
-    console.log(
-      "Available models from Venice:",
-      models.map((m: any) => ({ id: m.id, type: m.type }))
-    );
-
-    return models;
-  } catch (error) {
-    console.error("Failed to fetch models:", error);
-    // If we have cached models, use them even if expired
-    if (modelCache) {
-      console.log("Using expired cache due to fetch error");
-      return modelCache.models;
-    }
-    throw new Error("Cannot proceed without model list");
   }
+  // Fallback: return first available image model
+  const fallback = imageModels[0]?.id;
+  console.log("selectBestImageModel - Using fallback model:", fallback);
+  return fallback;
 }
 
 /**
@@ -273,6 +257,7 @@ function calculateVCUCost(tokens: number, model: string): number {
  * image URL), the model used and the total tokens consumed.
  */
 async function callVeniceAI(
+  ctx: any,
   apiKey: string,
   messages: VeniceMessage[],
   intentType?: string,
@@ -287,64 +272,136 @@ async function callVeniceAI(
     intentType,
   });
 
-  // Fetch available models with caching
-  const availableModels = await fetchAvailableModels(apiKey);
-
-  // Select appropriate model
-  const finalModels = selectModel(availableModels, intentType, model);
-  console.log("Selected models:", finalModels, "for intent:", intentType);
-
-  const isImageModel = availableModels.find((m) => m.id === finalModels[0])?.type === "image";
-
-  // Image generation
-  if (isImageModel || intentType === "image") {
-    const imageModel = isImageModel
-      ? finalModels[0]
-      : availableModels.find((m) => m.type === "image")?.id;
-
-    if (!imageModel) {
-      console.log(
-        "No image model available, falling back to text description"
-      );
-    } else {
-      const imageResponse = await fetch(
-        "https://api.venice.ai/api/v1/image/generate",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey.trim()}`,
-          },
-          body: JSON.stringify({
-            model: imageModel,
-            prompt: promptText,
-            width: 1024,
-            height: 1024,
-            steps: 20,
-            cfg_scale: 7.5,
-            return_binary: false,
-          }),
-        }
-      );
+  // TEMPORARY: Direct image generation bypass
+  if (intentType === "image") {
+    console.log("BYPASS: Direct image generation for intentType=image");
+    try {
+      const imageResponse = await fetch("https://api.venice.ai/api/v1/image/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+        body: JSON.stringify({
+          model: "venice-sd35",
+          prompt: promptText,
+          width: 512,
+          height: 512,
+        }),
+      });
 
       if (imageResponse.ok) {
-        const imageData = (await imageResponse.json()) as VeniceImageResponse;
-        if (imageData.data && imageData.data.length > 0) {
-          const imageUrl = imageData.data[0].url;
-          const vcuCost = calculateVCUCost(100, imageModel);
+        const imageData = await imageResponse.json();
+        const imageUrl = imageData.images?.[0];
+        if (imageUrl) {
           return {
-            response: `![Generated Image](${imageUrl})\n\n*\"${promptText}\"*`,
-            model: imageModel,
+            response: `![Generated Image](data:image/webp;base64,${imageUrl})`,
+            model: "venice-sd35",
             tokens: 100,
-            cost: vcuCost,
             responseTime: Date.now() - startTime,
           };
         }
       } else {
         const errorText = await imageResponse.text();
-        console.error("Image generation failed:", errorText);
-        throw new Error("Image generation failed: " + errorText);
+        console.error("BYPASS: Image generation failed:", errorText);
+        throw new Error(`Image generation failed: ${errorText}`);
       }
+    } catch (error) {
+      console.error("BYPASS: Image generation error:", error);
+      throw error;
+    }
+  }
+
+  // Fetch available models from persistent cache
+  const availableModels = await fetchAvailableModelsFromCache(ctx);
+  console.log("Available models (from cache):", availableModels.map(m => ({ id: m.id, type: m.type, name: m.name })));
+  console.log("Intent type:", intentType);
+  console.log("Available models count:", availableModels.length);
+
+  // Select appropriate model
+  let selectedModel: string | undefined = model;
+  if (!selectedModel) {
+    if (intentType === "image") {
+      console.log("Using image model selection");
+      selectedModel = selectBestImageModel(availableModels);
+      console.log("Selected image model:", selectedModel);
+    } else {
+      console.log("Using text model selection for intent:", intentType);
+      // Use existing selectModel logic for text/code/etc
+      const ranked = selectModel(availableModels, intentType);
+      console.log("Ranked models:", ranked);
+      selectedModel = ranked[0];
+      console.log("Selected text model:", selectedModel);
+      
+      // Fallback to first available text model if no ranked models found
+      if (!selectedModel && availableModels.length > 0) {
+        const textModels = availableModels.filter(m => m.type === "text");
+        console.log("Using fallback text models:", textModels.map(m => m.id));
+        selectedModel = textModels[0]?.id;
+        console.log("Fallback selected model:", selectedModel);
+      }
+    }
+  }
+  if (!selectedModel) {
+    throw new Error("No suitable model found for the requested intent.");
+  }
+  console.log("Selected model:", selectedModel, "for intent:", intentType);
+  console.log("Final request body model:", model || selectedModel);
+
+  const isImageModel = availableModels.find((m) => m.id === selectedModel)?.type === "image";
+  console.log("Is selected model an image model?", isImageModel);
+
+  // Image generation
+  if (isImageModel || intentType === "image") {
+    console.log("=== IMAGE GENERATION BLOCK ===");
+    console.log("isImageModel:", isImageModel);
+    console.log("intentType:", intentType);
+    console.log("selectedModel:", selectedModel);
+    
+    // Force use venice-sd35 for now to bypass model selection issues
+    let imageModel = "venice-sd35";
+    console.log("Using hardcoded model for debugging:", imageModel);
+    // imageModel is guaranteed to be a string here
+    console.log("Image model selected:", imageModel);
+    console.log("Available image models:", availableModels.filter(m => m.type === "image").map(m => m.id));
+
+    const imageResponse = await fetch(
+      "https://api.venice.ai/api/v1/image/generate",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+        body: JSON.stringify({
+          model: model || imageModel,
+          prompt: promptText,
+          width: 1024,
+          height: 1024,
+          steps: 20,
+          cfg_scale: 7.5,
+          return_binary: false,
+        }),
+      }
+    );
+
+    if (imageResponse.ok) {
+      const imageData = (await imageResponse.json()) as VeniceImageResponse;
+      if (imageData.data && imageData.data.length > 0) {
+        const imageUrl = imageData.data[0].url;
+        const vcuCost = calculateVCUCost(100, imageModel);
+        return {
+          response: `![Generated Image](${imageUrl})\n\n*\"${promptText}\"*`,
+          model: imageModel,
+          tokens: 100,
+          cost: vcuCost,
+          responseTime: Date.now() - startTime,
+        };
+      }
+    } else {
+      const errorText = await imageResponse.text();
+      console.error("Image generation failed:", errorText);
+      throw new Error("Image generation failed: " + errorText);
     }
     throw new Error("No image model available for image generation.");
   }
@@ -360,7 +417,7 @@ async function callVeniceAI(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: model || finalModels[0],
+          model: model || selectedModel,
           messages,
           temperature: intentType === "code" ? 0.3 : 0.7,
           max_tokens: 2000,
@@ -379,7 +436,7 @@ async function callVeniceAI(
     );
     return {
       response: data.choices[0]?.message?.content || "No response generated",
-      model: data.model || model || finalModels[0],
+      model: data.model || model || selectedModel,
       tokens: data.usage?.total_tokens || 0,
       responseTime: Date.now() - startTime,
     };
@@ -394,18 +451,21 @@ async function callVeniceAI(
 export type RouteReturnType = {
   response: string;
   model: string;
-  tokens: number;
+  totalTokens: number;
   providerId: Id<"providers">;
   provider: string;
   cost: number;
   responseTime: number;
   pointsAwarded: number;
+  address?: string;
+  intent: string;
+  vcuCost: number;
 };
 
 export type RouteSimpleReturnType = {
   response: string;
   model: string;
-  tokens: number;
+  totalTokens: number;
   provider: string;
   responseTime: number;
 };
@@ -430,7 +490,7 @@ export const routeSimple = action({
   returns: v.object({
     response: v.string(),
     model: v.string(),
-    tokens: v.number(),
+    totalTokens: v.number(),
     provider: v.string(),
     responseTime: v.number(),
   }),
@@ -457,7 +517,7 @@ export const routeSimple = action({
       return {
         response: result.response,
         model: result.model,
-        tokens: result.tokens,
+        totalTokens: result.totalTokens,
         provider: result.provider,
         responseTime: result.responseTime,
       };
@@ -488,33 +548,84 @@ export const route = action({
     ),
     sessionId: v.string(),
     isAnonymous: v.boolean(),
+    address: v.optional(v.string()),
   },
   returns: v.object({
     response: v.string(),
     model: v.string(),
-    tokens: v.number(),
+    totalTokens: v.number(),
     providerId: v.id("providers"),
     provider: v.string(),
     cost: v.number(),
     responseTime: v.number(),
     pointsAwarded: v.number(),
+    address: v.optional(v.string()),
+    intent: v.string(),
+    vcuCost: v.number(),
   }),
   handler: async (ctx, args): Promise<RouteReturnType> => {
     console.log("[route] Starting inference routing...");
     try {
       console.log("[route] Fetching active providers...");
-      const providers: Provider[] = await ctx.runQuery(api.providers.listActive);
+      const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
       console.log(`[route] Found ${providers.length} providers`);
+      
+      // Debug: Log each provider's details
+      providers.forEach((provider, index) => {
+        console.log(`[route] Provider ${index}:`, {
+          id: provider._id,
+          name: provider.name,
+          isActive: provider.isActive,
+          hasApiKey: !!provider.veniceApiKey,
+          apiKeyLength: provider.veniceApiKey?.length || 0,
+          apiKeyPreview: provider.veniceApiKey ? `${provider.veniceApiKey.substring(0, 10)}...` : 'none'
+        });
+      });
 
       if (providers.length === 0) {
-        throw new Error("No active providers available");
+        // Return a helpful error message instead of throwing
+        return {
+          response: "Sorry, no AI providers are currently available. Please try again later or contact support.",
+          model: "error",
+          totalTokens: 0,
+          providerId: "error" as any,
+          provider: "System",
+          cost: 0,
+          responseTime: 0,
+          pointsAwarded: 0,
+          address: args.address,
+          intent: args.intent,
+          vcuCost: 0,
+        };
       }
 
       const validProviders = providers.filter((p) => p.veniceApiKey);
       console.log(`[route] Found ${validProviders.length} providers with API keys`);
+      
+      // Debug: Log which providers passed the filter
+      validProviders.forEach((provider, index) => {
+        console.log(`[route] Valid provider ${index}:`, {
+          id: provider._id,
+          name: provider.name,
+          apiKeyLength: provider.veniceApiKey?.length || 0,
+          apiKeyPreview: provider.veniceApiKey ? `${provider.veniceApiKey.substring(0, 10)}...` : 'none'
+        });
+      });
 
       if (validProviders.length === 0) {
-        throw new Error("No providers with valid API keys available");
+        return {
+          response: "Sorry, no AI providers with valid API keys are currently available. Please try again later.",
+          model: "error",
+          totalTokens: 0,
+          providerId: "error" as any,
+          provider: "System",
+          cost: 0,
+          responseTime: 0,
+          pointsAwarded: 0,
+          address: args.address,
+          intent: args.intent,
+          vcuCost: 0,
+        };
       }
 
       const randomProvider: Provider =
@@ -524,6 +635,7 @@ export const route = action({
       console.log("[route] Calling Venice.ai...");
       const { response, model: usedModel, tokens, responseTime } =
         await callVeniceAI(
+          ctx,
           randomProvider.veniceApiKey as string,
           args.messages,
           args.intent,
@@ -554,7 +666,7 @@ export const route = action({
           console.log(`[route] Awarding ${points} points to provider...`);
           await ctx.runMutation(internal.points.awardProviderPoints, {
             providerId: randomProvider._id,
-            tokens,
+            tokens: tokens,
           });
           pointsAwarded = points;
         }
@@ -564,12 +676,15 @@ export const route = action({
       return {
         response,
         model: usedModel,
-        tokens,
+        totalTokens: tokens,
         providerId: randomProvider._id,
         provider: randomProvider.name,
         cost: vcuCost,
         responseTime,
         pointsAwarded,
+        address: args.address,
+        intent: args.intent,
+        vcuCost,
       };
     } catch (error) {
       console.error("[route] Error in inference routing:", {

@@ -4,8 +4,8 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 
-// Cache TTL in milliseconds (5 minutes)
-const CACHE_TTL = 5 * 60 * 1000;
+// Cache TTL in milliseconds (30 minutes)
+const CACHE_TTL = 30 * 60 * 1000;
 
 interface Model {
   id: string;
@@ -54,6 +54,18 @@ export const getAvailableModels = query({
           ...models.audio.map((m: any) => ({ ...m, type: "audio" })),
         ];
       }
+    }
+
+    // If cache is missing or expired, return fallback models
+    // This ensures the system doesn't fail even with cache issues
+    if (!cached || Date.now() - cached.lastUpdated >= CACHE_TTL) {
+      console.log("Model cache expired or missing, returning fallback models");
+      
+      // Return basic fallback models to keep the system functional
+      return [
+        { id: "llama-3.3-70b", name: "llama-3.3-70b", type: "text" },
+        { id: "qwen-2.5-coder-32b", name: "qwen-2.5-coder-32b", type: "code" },
+      ];
     }
 
     // Return empty array if no cache - will be populated by action
@@ -136,86 +148,64 @@ export const fetchAndCategorizeModels = action({
 
       const apiKey = providers[0].veniceApiKey;
 
-      try {
-        const response = await fetch("https://api.venice.ai/api/v1/models", {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-          },
-        });
-
-        if (!response.ok) {
-          console.error(`Venice API returned ${response.status}`);
-          return {
-            text: [],
-            code: [],
-            image: [],
-            multimodal: [],
-            audio: [],
-          };
-        }
-
-        const data = await response.json();
-        const models = data.data || [];
-
-        const categorized = {
-          text: [] as any[],
-          code: [] as any[],
-          image: [] as any[],
-          multimodal: [] as any[],
-          audio: [] as any[],
-        };
-
-        models.forEach((model: any) => {
-          const modelInfo = {
-            id: model.id,
-            name: model.id,
-            contextLength: model.context_length || 0,
-          };
-
-          const modelId = model.id.toLowerCase();
-
-          // Updated image model detection based on Venice's actual models
-          if (model.type === "image" || 
-              modelId.includes("hidream") ||
-              modelId.includes("venice-sd35") ||
-              modelId.includes("flux-standard") ||
-              modelId.includes("flux-custom") ||
-              modelId.includes("lustify") ||
-              modelId.includes("sd35") ||
-              modelId.includes("flux") ||
-              modelId.includes("stable-diffusion")) {
-            categorized.image.push(modelInfo);
-          } else if (model.type === "audio" || modelId.includes("whisper") || modelId.includes("speech")) {
-            categorized.audio.push(modelInfo);
-          } else if (modelId.includes("vision") || model.capabilities?.vision || modelId.includes("llava")) {
-            categorized.multimodal.push(modelInfo);
-          } else if (modelId.includes("code") || modelId.includes("deepseek") || modelId.includes("qwen-2.5-coder") || modelId.includes("starcoder")) {
-            categorized.code.push(modelInfo);
-          } else {
-            categorized.text.push(modelInfo);
-          }
-        });
-
-        return categorized;
-      } catch (error) {
-        console.error("Model fetch error:", error);
-        return {
-          text: [],
-          code: [],
-          image: [],
-          multimodal: [],
-          audio: [],
-        };
-      }
-    } catch (error) {
-      console.error("Provider fetch error:", error);
-      return {
-        text: [],
-        code: [],
-        image: [],
-        multimodal: [],
-        audio: [],
+      const categorized = {
+        text: [] as any[],
+        code: [] as any[],
+        image: [] as any[],
+        multimodal: [] as any[],
+        audio: [] as any[],
       };
+
+      // Fetch models by type to get all categories
+      const modelTypes = ['text', 'image', 'embedding', 'tts', 'upscale'];
+      
+      for (const modelType of modelTypes) {
+        try {
+          const response = await fetch(`https://api.venice.ai/api/v1/models?type=${modelType}`, {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const models = data.data || [];
+
+            models.forEach((model: any) => {
+              if (model.type === "image") {
+                categorized.image.push(model);
+              } else if (model.type === "tts") {
+                categorized.audio.push(model);
+              } else if (model.capabilities?.supportsVision || model.capabilities?.vision) {
+                categorized.multimodal.push(model);
+              } else if (model.capabilities?.optimizedForCode) {
+                categorized.code.push(model);
+              } else if (model.type === "text") {
+                categorized.text.push(model);
+              } else {
+                // Default fallback for embedding, upscale, etc.
+                categorized.text.push(model);
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`Error fetching ${modelType} models:`, error);
+        }
+      }
+
+      // Log categorization results
+      console.log("Model categorization results:", {
+        text: categorized.text.length,
+        code: categorized.code.length,
+        image: categorized.image.length,
+        multimodal: categorized.multimodal.length,
+        audio: categorized.audio.length,
+      });
+
+      return categorized;
+    } catch (error) {
+      console.error("Error in fetchAndCategorizeModels:", error);
+      throw error;
     }
   },
 });
@@ -314,58 +304,81 @@ export const refreshModelCacheInternal = internalAction({
       }
       for (const provider of providers) {
         try {
-          const response = await fetch("https://api.venice.ai/api/v1/models", {
-            headers: {
-              Authorization: `Bearer ${provider.veniceApiKey}`,
-              "Content-Type": "application/json",
-            },
-          });
-          if (response.ok) {
-            const data = await response.json();
-            const models = data.data || [];
-            const categorized = {
-              text: [] as any[],
-              code: [] as any[],
-              image: [] as any[],
-              multimodal: [] as any[],
-              audio: [] as any[],
-            };
-            models.forEach((model: any) => {
-              const modelInfo = {
-                id: model.id,
-                name: model.id,
-                contextLength: model.context_length || 0,
-              };
+          console.log("[refreshModelCacheInternal] Using provider:", provider.name);
+          console.log("[refreshModelCacheInternal] API key preview:", provider.veniceApiKey.substring(0, 10) + "...");
+          
+          const categorized = {
+            text: [] as any[],
+            code: [] as any[],
+            image: [] as any[],
+            multimodal: [] as any[],
+            audio: [] as any[],
+          };
 
-              const modelId = model.id.toLowerCase();
-
-              // Updated image model detection based on Venice's actual models
-              if (model.type === "image" || 
-                  modelId.includes("hidream") ||
-                  modelId.includes("venice-sd35") ||
-                  modelId.includes("flux-standard") ||
-                  modelId.includes("flux-custom") ||
-                  modelId.includes("lustify") ||
-                  modelId.includes("sd35") ||
-                  modelId.includes("flux")) {
-                categorized.image.push(modelInfo);
-              } else if (model.type === "audio" || modelId.includes("whisper")) {
-                categorized.audio.push(modelInfo);
-              } else if (modelId.includes("vision") || model.capabilities?.vision) {
-                categorized.multimodal.push(modelInfo);
-              } else if (modelId.includes("code") || modelId.includes("deepseek") || modelId.includes("qwen-2.5-coder")) {
-                categorized.code.push(modelInfo);
+          // Fetch models by type to get proper categorization
+          // Using documented Venice.ai API types: "embedding", "image", "text", "tts", "upscale", "all"
+          const modelTypes = ['text', 'image', 'embedding', 'tts', 'upscale'];
+          
+          for (const modelType of modelTypes) {
+            try {
+              console.log(`[refreshModelCacheInternal] Fetching models for type: ${modelType}`);
+              const response = await fetch(`https://api.venice.ai/api/v1/models?type=${modelType}`, {
+                headers: {
+                  Authorization: `Bearer ${provider.veniceApiKey}`,
+                  "Content-Type": "application/json",
+                },
+              });
+              console.log(`[refreshModelCacheInternal] API response status for ${modelType}:`, response.status);
+              if (response.ok) {
+                const data = await response.json();
+                const models = data.data || [];
+                console.log(`[refreshModelCacheInternal] Number of ${modelType} models found:`, models.length);
+                if (models.length > 0) {
+                  console.log(`[refreshModelCacheInternal] First ${modelType} model:`, JSON.stringify(models[0], null, 2));
+                }
+                // Log each model's type for debugging
+                models.forEach((model: any) => {
+                  console.log(`[refreshModelCacheInternal] Model ${model.id}: type="${model.type}", object="${model.object}"`);
+                });
+                models.forEach((model: any) => {
+                  const modelInfo = {
+                    id: model.id,
+                    name: model.id,
+                    contextLength: model.context_length || 0,
+                  };
+                  // Categorize based on the API response type and capabilities
+                  if (model.type === "image") {
+                    categorized.image.push(modelInfo);
+                  } else if (model.type === "tts") {
+                    categorized.audio.push(modelInfo);
+                  } else if (model.capabilities?.supportsVision || model.capabilities?.vision) {
+                    categorized.multimodal.push(modelInfo);
+                  } else if (model.capabilities?.optimizedForCode) {
+                    categorized.code.push(modelInfo);
+                  } else if (model.type === "text") {
+                    categorized.text.push(modelInfo);
+                  } else {
+                    // Default fallback for embedding, upscale, etc.
+                    categorized.text.push(modelInfo);
+                  }
+                });
               } else {
-                categorized.text.push(modelInfo);
+                console.log(`[refreshModelCacheInternal] API request failed for ${modelType} with status:`, response.status);
+                const errorText = await response.text();
+                console.log(`[refreshModelCacheInternal] Error response for ${modelType}:`, errorText);
               }
-            });
-            await ctx.runMutation(internal.models.updateModelCacheInternal, {
-              models: categorized,
-              timestamp: Date.now(),
-            });
-            console.log("Model cache updated successfully with categorized models");
-            return;
+            } catch (error) {
+              console.error(`Error fetching ${modelType} models from provider:`, provider.name, error);
+            }
           }
+          
+          console.log("[refreshModelCacheInternal] Final categorized models:", JSON.stringify(categorized, null, 2));
+          await ctx.runMutation(internal.models.updateModelCacheInternal, {
+            models: categorized,
+            timestamp: Date.now(),
+          });
+          console.log("Model cache updated successfully with categorized models");
+          return;
         } catch (error) {
           console.error("Error fetching from provider:", provider.name, error);
           continue;
@@ -409,5 +422,52 @@ export const getModelCacheInternal = internalQuery({
   handler: async (ctx) => {
     const cached = await ctx.db.query("modelCache").first();
     return cached;
+  },
+});
+
+// Test function to verify Venice API
+export const testVeniceAPI = internalAction({
+  args: {},
+  returns: v.object({
+    success: v.boolean(),
+    imageModels: v.optional(v.number()),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx: any) => {
+    try {
+      const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+      if (providers.length === 0) {
+        console.log("No providers available for API test");
+        return { success: false, error: "No providers available" };
+      }
+      
+      const provider: any = providers[0];
+      console.log("Testing Venice API with provider:", provider.name);
+      console.log("API key preview:", provider.veniceApiKey.substring(0, 10) + "...");
+      
+      // Test the image models endpoint
+      const response: Response = await fetch("https://api.venice.ai/api/v1/models?type=image", {
+        headers: {
+          Authorization: `Bearer ${provider.veniceApiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      console.log("API response status:", response.status);
+      
+      if (response.ok) {
+        const data: any = await response.json();
+        console.log("Image models found:", data.data?.length || 0);
+        console.log("First image model:", data.data?.[0]?.id);
+        return { success: true, imageModels: data.data?.length || 0 };
+      } else {
+        const errorText: string = await response.text();
+        console.log("API error:", errorText);
+        return { success: false, error: errorText };
+      }
+    } catch (error: any) {
+      console.error("API test error:", error);
+      return { success: false, error: error.message };
+    }
   },
 });

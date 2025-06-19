@@ -51,7 +51,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                         {provider.isActive ? 'Active' : 'Inactive'}
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-gray-400">VCU</p>
                         <p className="font-semibold">{provider.vcuBalance.toLocaleString()}</p>
@@ -59,10 +59,6 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                       <div>
                         <p className="text-gray-400">Prompts</p>
                         <p className="font-semibold">{provider.totalPrompts.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Uptime</p>
-                        <p className="font-semibold">{provider.uptime.toFixed(1)}%</p>
                       </div>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import { action, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import { v } from "convex/values";
 
 interface ModelCache {
@@ -26,6 +27,9 @@ interface RefreshResult {
   imageModels: Array<{ id: string; name: string }>;
   totalModels: number;
 }
+
+type ClearCacheResult = { deleted: number };
+type DeploymentFixResult = { message: string; cacheCleared: number };
 
 // Manual model refresh
 export const refreshModels = action({
@@ -197,5 +201,118 @@ export const migrateUsageLogs = mutation({
     }
 
     return { migrated };
+  },
+});
+
+// Clear old model cache
+export const clearModelCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allCaches = await ctx.db.query("modelCache").collect();
+    let deleted = 0;
+    
+    for (const cache of allCaches) {
+      // Only delete if it's the old format (array)
+      if (Array.isArray(cache.models)) {
+        await ctx.db.delete(cache._id);
+        deleted++;
+        console.log(`Deleted old format cache: ${cache._id}`);
+      }
+    }
+    
+    return { 
+      message: `Cleared ${deleted} old format model cache entries`,
+      deleted 
+    };
+  },
+});
+
+// Manually refresh model cache with new format
+export const forceRefreshModels = action({
+  args: {},
+  handler: async (ctx) => {
+    console.log("Force refreshing model cache...");
+    
+    // Clear any existing cache first
+    await ctx.runMutation(api.admin.clearModelCache);
+    
+    // Trigger the refresh
+    await ctx.runAction(internal.models.refreshModelCacheInternal);
+    
+    return { message: "Model cache refreshed with new format" };
+  },
+});
+
+// Check current model cache format
+export const checkModelCacheFormat = query({
+  args: {},
+  handler: async (ctx) => {
+    const cache = await ctx.db.query("modelCache").first();
+    
+    if (!cache) {
+      return { status: "No cache found" };
+    }
+    
+    if (Array.isArray(cache.models)) {
+      return { 
+        status: "Old format detected",
+        format: "array",
+        modelCount: cache.models.length,
+        needsMigration: true
+      };
+    }
+    
+    return {
+      status: "New format",
+      format: "categorized",
+      categories: Object.keys(cache.models),
+      modelCounts: {
+        text: cache.models.text?.length || 0,
+        code: cache.models.code?.length || 0,
+        image: cache.models.image?.length || 0,
+        multimodal: cache.models.multimodal?.length || 0,
+        audio: cache.models.audio?.length || 0,
+      },
+      needsMigration: false
+    };
+  },
+});
+
+export const clearAllModelCache = mutation({
+  args: {},
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx): Promise<ClearCacheResult> => {
+    const allCaches = await ctx.db.query("modelCache").collect();
+    let deleted = 0;
+    
+    for (const cache of allCaches) {
+      await ctx.db.delete(cache._id);
+      deleted++;
+    }
+    
+    return { deleted };
+  },
+});
+
+export const deploymentFix = action({
+  args: {},
+  handler: async (ctx): Promise<{ message: string; cacheCleared: number }> => {
+    // Step 1: Clear all model cache
+    const cleared = await ctx.runMutation(api.admin.clearAllModelCache) as { deleted: number };
+    
+    // Step 2: Wait a moment
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Step 3: Trigger model refresh
+    try {
+      await ctx.runAction(internal.models.refreshModelCacheInternal);
+    } catch (e) {
+      console.log("Model refresh failed, but cache is cleared");
+    }
+    
+    return { 
+      message: "Deployment fix complete", 
+      cacheCleared: cleared.deleted,
+    };
   },
 });

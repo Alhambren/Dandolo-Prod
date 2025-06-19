@@ -35,8 +35,8 @@ http.route({
         address: sessionId,
         providerId: result.providerId,
         model: result.model,
-        intent: "chat",
-        totalTokens: result.tokens, // Use result.tokens since that's what RouteReturnType provides
+        intent: result.intent,
+        totalTokens: result.totalTokens,
         vcuCost: result.cost,
       });
 
@@ -44,7 +44,7 @@ http.route({
         JSON.stringify({
           response: result.response,
           provider: result.provider,
-          tokens: result.tokens,
+          tokens: result.totalTokens,
           cost: result.cost,
           response_time: result.responseTime,
         }),
@@ -125,8 +125,8 @@ http.route({
         address: keyData.address || `api-${keyData._id}`,
         providerId: result.providerId,
         model: result.model,
-        intent: intent,
-        totalTokens: result.tokens, // Use result.tokens since that's what RouteReturnType provides
+        intent: result.intent,
+        totalTokens: result.totalTokens,
         vcuCost: result.cost,
       });
 
@@ -147,9 +147,9 @@ http.route({
             },
           ],
           usage: {
-            prompt_tokens: Math.floor(result.tokens * 0.3),
-            completion_tokens: Math.floor(result.tokens * 0.7),
-            total_tokens: result.tokens,
+            prompt_tokens: Math.floor(result.totalTokens * 0.3),
+            completion_tokens: Math.floor(result.totalTokens * 0.7),
+            total_tokens: result.totalTokens,
           },
         }),
         {
@@ -228,6 +228,70 @@ export const routeRequest = action({
     
     return result;
   },
+});
+
+// Simple image generation endpoint
+http.route({
+  path: "/image/generate",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+      const { prompt } = body;
+      
+      if (!prompt) {
+        return new Response(JSON.stringify({ error: "Prompt is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Get provider
+      const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+      if (providers.length === 0) {
+        return new Response(JSON.stringify({ error: "No providers available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const apiKey = providers[0].veniceApiKey;
+
+      // Call Venice API directly
+      const response = await fetch("https://api.venice.ai/api/v1/image/generate", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "venice-sd35",
+          prompt: prompt,
+          width: 512,
+          height: 512,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return new Response(JSON.stringify({ error: errorText }), {
+          status: response.status,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await response.json();
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
 });
 
 export default http;

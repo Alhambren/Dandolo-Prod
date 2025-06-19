@@ -236,7 +236,7 @@ export const getWalletBalance = query({
 
     return {
       balance: pointsRecord?.points ?? 0,
-      prompts_today: usageLogs.filter(log => log.createdAt >= today.getTime()).length,
+      prompts_today: usageLogs.filter(log => (log.createdAt ?? 0) >= today.getTime()).length,
       points_today: pointsRecord?.pointsToday ?? 0,
     };
   },
@@ -273,13 +273,13 @@ export const addPoints = mutation({
     }
 
     // Add to history
-  await ctx.db.insert("points_history", {
+    await ctx.db.insert("points_history", {
       address: args.address,
-      points: (points?.points ?? 0) + args.points,
+      points: points ? (points.points ?? 0) + args.points : args.points,
       change: args.points,
       reason: "Manual addition",
       createdAt: Date.now(),
-  });
+    });
   },
 });
 

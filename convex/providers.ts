@@ -82,7 +82,7 @@ export const registerProvider = mutation({
     }
 
     // No duplicate API keys
-    const cleanApiKey = args.veniceApiKey.trim().replace(/^"|"$/g, "");
+    const cleanApiKey = args.veniceApiKey.trim().replace(/['"]/g, "");
     const apiKeyHash = hashApiKey(cleanApiKey);
     const duplicateKey = await ctx.db
       .query("providers")
@@ -143,7 +143,12 @@ export const registerProviderWithVCU = mutation({
     }
 
     // No duplicate API keys
-    const cleanApiKey = args.veniceApiKey.trim().replace(/^"|"$/g, "");
+    const cleanApiKey = args.veniceApiKey.trim().replace(/['"]/g, "");
+    console.log("DEBUG: Original API key:", JSON.stringify(args.veniceApiKey));
+    console.log("DEBUG: Cleaned API key:", JSON.stringify(cleanApiKey));
+    console.log("DEBUG: Cleaned API key length:", cleanApiKey.length);
+    console.log("DEBUG: Cleaned API key is truthy:", !!cleanApiKey);
+    
     const apiKeyHash = hashApiKey(cleanApiKey);
     const duplicateKey = await ctx.db
       .query("providers")
@@ -155,7 +160,7 @@ export const registerProviderWithVCU = mutation({
     }
 
     // Create provider with actual VCU balance
-    const cleanApiKey2 = args.veniceApiKey.trim().replace(/^"|"$/g, "");
+    const cleanApiKey2 = args.veniceApiKey.trim().replace(/['"]/g, "");
     const apiKeyHash2 = hashApiKey(cleanApiKey2);
     const providerId = await ctx.db.insert("providers", {
       address: walletAddress,
@@ -496,7 +501,7 @@ export const runHealthChecks = internalAction({
     for (const provider of providers) {
       try {
         const startTime = Date.now();
-        const response = await fetch("https://api.venice.ai/v1/health", {
+        const response = await fetch("https://api.venice.ai/api/v1/models", {
           headers: {
             "Authorization": `Bearer ${provider.veniceApiKey}`,
           },
@@ -672,5 +677,47 @@ export const recordPromptServed = internalMutation({
       totalPrompts: provider.totalPrompts + 1,
       avgResponseTime: ((provider.avgResponseTime || 0) * provider.totalPrompts + args.responseTime) / (provider.totalPrompts + 1),
     });
+  },
+});
+
+// DEVELOPMENT: Create a test provider for development
+export const createTestProvider = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Check if test provider already exists
+    const existingTestProvider = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("name"), "Test Provider"))
+      .first();
+
+    if (existingTestProvider) {
+      return existingTestProvider._id;
+    }
+
+    // Create test provider
+    const providerId = await ctx.db.insert("providers", {
+      address: "0x0000000000000000000000000000000000000000",
+      name: "Test Provider",
+      description: "Development test provider",
+      veniceApiKey: "test_api_key_123",
+      apiKeyHash: "test_hash",
+      vcuBalance: 1000,
+      isActive: true,
+      totalPrompts: 0,
+      registrationDate: Date.now(),
+      avgResponseTime: 1000,
+      status: "active" as const,
+    });
+
+    // Initialize points
+    await ctx.db.insert("providerPoints", {
+      providerId: providerId,
+      points: 0,
+      totalPrompts: 0,
+      lastEarned: Date.now(),
+    });
+
+    console.log("Created test provider:", providerId);
+    return providerId;
   },
 });

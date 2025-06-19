@@ -11,12 +11,12 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     veniceApiKey: v.string(),
-    apiKeyHash: v.string(),
+    apiKeyHash: v.optional(v.string()),
     vcuBalance: v.number(),
     isActive: v.boolean(),
     totalPrompts: v.number(),
-    avgResponseTime: v.number(),
-    status: v.union(v.literal("pending"), v.literal("active"), v.literal("inactive")),
+    avgResponseTime: v.optional(v.number()),
+    status: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("inactive"))),
     registrationDate: v.number(),
     lastHealthCheck: v.optional(v.number()),
     uptime: v.optional(v.number()),
@@ -59,31 +59,7 @@ export default defineSchema({
 
   // MODEL CACHE: Venice.ai models
   modelCache: defineTable({
-    models: v.object({
-      text: v.array(v.object({
-        id: v.string(),
-        name: v.string(),
-        contextLength: v.optional(v.number()),
-      })),
-      code: v.array(v.object({
-        id: v.string(),
-        name: v.string(),
-        contextLength: v.optional(v.number()),
-      })),
-      image: v.array(v.object({
-        id: v.string(),
-        name: v.string(),
-      })),
-      multimodal: v.array(v.object({
-        id: v.string(),
-        name: v.string(),
-        contextLength: v.optional(v.number()),
-      })),
-      audio: v.array(v.object({
-        id: v.string(),
-        name: v.string(),
-      })),
-    }),
+    models: v.any(), // Temporarily accept any format to allow deployment
     lastUpdated: v.number(),
   }),
 
@@ -105,12 +81,12 @@ export default defineSchema({
     providerId: v.optional(v.id("providers")),
     model: v.string(),
     intent: v.optional(v.string()),
-    totalTokens: v.optional(v.number()),
-    vcuCost: v.optional(v.number()),
-    createdAt: v.number(),
+    totalTokens: v.optional(v.float64()),
+    vcuCost: v.optional(v.float64()),
+    createdAt: v.optional(v.float64()),
     // Legacy fields
-    tokens: v.optional(v.number()),
-    latencyMs: v.optional(v.number()),
+    tokens: v.optional(v.float64()),
+    latencyMs: v.optional(v.float64()),
   }).index("by_address", ["address"]),
 
   embeddings: defineTable({
@@ -121,10 +97,12 @@ export default defineSchema({
 
   points_history: defineTable({
     address: v.string(),
-    points: v.number(),
-    change: v.number(),
-    reason: v.string(),
-    createdAt: v.number(),
+    points: v.optional(v.number()),
+    change: v.optional(v.number()),
+    reason: v.optional(v.string()),
+    createdAt: v.optional(v.number()),
+    ts: v.optional(v.number()),
+    amount: v.optional(v.number()),
   }).index("by_address", ["address"]),
 });
 

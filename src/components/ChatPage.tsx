@@ -462,6 +462,18 @@ const ChatPage: React.FC = () => {
     const responseText = response.response || response.text || '';
     switch (intentType) {
       case 'image': {
+        // Check for data URI base64 images first (Venice.ai format)
+        const dataUriPattern = /!\[.*?\]\((data:image\/[^;]+;base64,[^)]+)\)/g;
+        const dataUriMatch = responseText.match(dataUriPattern);
+        if (dataUriMatch) {
+          const imageUrl = dataUriMatch[0].replace(/^!\[.*?\]\(/, '').replace(/\)$/, '');
+          return {
+            content: responseText,
+            imageUrl: imageUrl,
+          };
+        }
+
+        // Fallback to HTTP URLs
         const urlPatterns = [
           /https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|svg)/gi,
           /!\[.*?\]\((https?:\/\/[^\s]+)\)/g,

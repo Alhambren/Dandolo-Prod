@@ -124,13 +124,13 @@ const DashboardPage: React.FC = () => {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      toast.success(`✅ Validated! ${validation.balance.toLocaleString()} VCU available (${validation.models} models)`);
+      toast.success(`✅ Validated! ${(validation.balance || 0).toLocaleString()} VCU available (${validation.models || 0} models)`);
 
       await registerProviderWithVCU({
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
-        vcuBalance: validation.balance,
+        vcuBalance: validation.balance || 0,
       });
 
       setProviderName("");
@@ -179,7 +179,7 @@ const DashboardPage: React.FC = () => {
                 <div className="text-sm text-gray-400">Prompts Served</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className="text-2xl font-bold text-gold">{currentProvider.uptime.toFixed(1)}%</div>
+                <div className="text-2xl font-bold text-gold">{(currentProvider.uptime || 0).toFixed(1)}%</div>
                 <div className="text-sm text-gray-400">Uptime</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
