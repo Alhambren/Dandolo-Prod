@@ -50,9 +50,10 @@ interface VeniceTextResponse {
 
 /** Response structure for Venice image generation. */
 interface VeniceImageResponse {
-  data: Array<{
-    url: string;
-  }>;
+  id: string;
+  images: string[]; // Base64 encoded image data
+  request?: any;
+  timing?: any;
 }
 
 /** Provider record stored in Convex. */
@@ -263,6 +264,7 @@ async function callVeniceAI(
   intentType?: string,
   prompt?: string,
   model?: string,
+  allowAdultContent?: boolean,
 ) {
   const startTime = Date.now();
   const promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
@@ -272,45 +274,7 @@ async function callVeniceAI(
     intentType,
   });
 
-  // TEMPORARY: Direct image generation bypass
-  if (intentType === "image") {
-    console.log("BYPASS: Direct image generation for intentType=image");
-    try {
-      const imageResponse = await fetch("https://api.venice.ai/api/v1/image/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: "venice-sd35",
-          prompt: promptText,
-          width: 512,
-          height: 512,
-        }),
-      });
-
-      if (imageResponse.ok) {
-        const imageData = await imageResponse.json();
-        const imageUrl = imageData.images?.[0];
-        if (imageUrl) {
-          return {
-            response: `![Generated Image](data:image/webp;base64,${imageUrl})`,
-            model: "venice-sd35",
-            tokens: 100,
-            responseTime: Date.now() - startTime,
-          };
-        }
-      } else {
-        const errorText = await imageResponse.text();
-        console.error("BYPASS: Image generation failed:", errorText);
-        throw new Error(`Image generation failed: ${errorText}`);
-      }
-    } catch (error) {
-      console.error("BYPASS: Image generation error:", error);
-      throw error;
-    }
-  }
+  // Remove the bypass - let it go through normal model selection
 
   // Fetch available models from persistent cache
   const availableModels = await fetchAvailableModelsFromCache(ctx);
@@ -327,18 +291,47 @@ async function callVeniceAI(
       console.log("Selected image model:", selectedModel);
     } else {
       console.log("Using text model selection for intent:", intentType);
-      // Use existing selectModel logic for text/code/etc
-      const ranked = selectModel(availableModels, intentType);
-      console.log("Ranked models:", ranked);
-      selectedModel = ranked[0];
-      console.log("Selected text model:", selectedModel);
       
-      // Fallback to first available text model if no ranked models found
-      if (!selectedModel && availableModels.length > 0) {
-        const textModels = availableModels.filter(m => m.type === "text");
-        console.log("Using fallback text models:", textModels.map(m => m.id));
-        selectedModel = textModels[0]?.id;
-        console.log("Fallback selected model:", selectedModel);
+      // If adult content is allowed, prefer uncensored models
+      if (allowAdultContent) {
+        console.log("Adult content enabled, looking for uncensored models...");
+        const uncensoredModels = availableModels.filter(m => 
+          m.type === "text" && 
+          (m.id.toLowerCase().includes("uncensored") || 
+           m.id.toLowerCase().includes("nsfw") ||
+           m.id.toLowerCase().includes("dolphin"))
+        );
+        console.log("Found uncensored models:", uncensoredModels.map(m => m.id));
+        
+        // Prioritize specific uncensored models
+        const preferredUncensored = uncensoredModels.find(m => 
+          m.id === "venice-uncensored" || 
+          m.id.includes("dolphin")
+        );
+        
+        if (preferredUncensored) {
+          selectedModel = preferredUncensored.id;
+          console.log("Selected preferred uncensored model for adult content:", selectedModel);
+        } else if (uncensoredModels.length > 0) {
+          selectedModel = uncensoredModels[0].id;
+          console.log("Selected fallback uncensored model for adult content:", selectedModel);
+        }
+      }
+      
+      // If no uncensored model found or adult content not allowed, use normal selection
+      if (!selectedModel) {
+        const ranked = selectModel(availableModels, intentType);
+        console.log("Ranked models:", ranked);
+        selectedModel = ranked[0];
+        console.log("Selected text model:", selectedModel);
+        
+        // Fallback to first available text model if no ranked models found
+        if (!selectedModel && availableModels.length > 0) {
+          const textModels = availableModels.filter(m => m.type === "text");
+          console.log("Using fallback text models:", textModels.map(m => m.id));
+          selectedModel = textModels[0]?.id;
+          console.log("Fallback selected model:", selectedModel);
+        }
       }
     }
   }
@@ -358,11 +351,12 @@ async function callVeniceAI(
     console.log("intentType:", intentType);
     console.log("selectedModel:", selectedModel);
     
-    // Force use venice-sd35 for now to bypass model selection issues
-    let imageModel = "venice-sd35";
-    console.log("Using hardcoded model for debugging:", imageModel);
-    // imageModel is guaranteed to be a string here
-    console.log("Image model selected:", imageModel);
+    // Use the selected model or fallback to preferred image model
+    let imageModel = selectedModel;
+    if (!imageModel || availableModels.find(m => m.id === imageModel)?.type !== "image") {
+      imageModel = selectBestImageModel(availableModels) || "venice-sd35";
+    }
+    console.log("Final image model selected:", imageModel);
     console.log("Available image models:", availableModels.filter(m => m.type === "image").map(m => m.id));
 
     const imageResponse = await fetch(
@@ -387,27 +381,46 @@ async function callVeniceAI(
 
     if (imageResponse.ok) {
       const imageData = (await imageResponse.json()) as VeniceImageResponse;
-      if (imageData.data && imageData.data.length > 0) {
-        const imageUrl = imageData.data[0].url;
-        const vcuCost = calculateVCUCost(100, imageModel);
+      console.log("Image response data keys:", Object.keys(imageData));
+      console.log("Images array length:", imageData.images?.length || 0);
+      
+      if (imageData.images && imageData.images.length > 0) {
+        // Convert base64 image to data URL
+        const base64Image = imageData.images[0];
+        const imageDataUrl = `data:image/webp;base64,${base64Image}`;
+        const vcuCost = calculateVCUCost(100, imageModel || "venice-sd35");
+        console.log("Successfully generated image, data URL length:", imageDataUrl.length);
+        
         return {
-          response: `![Generated Image](${imageUrl})\n\n*\"${promptText}\"*`,
-          model: imageModel,
+          response: `![Generated Image](${imageDataUrl})\n\n*\"${promptText}\"*`,
+          model: imageModel || "venice-sd35",
           tokens: 100,
           cost: vcuCost,
           responseTime: Date.now() - startTime,
         };
+      } else {
+        console.error("No images in response:", imageData);
+        throw new Error("No images returned from Venice.ai");
       }
     } else {
       const errorText = await imageResponse.text();
       console.error("Image generation failed:", errorText);
       throw new Error("Image generation failed: " + errorText);
     }
-    throw new Error("No image model available for image generation.");
   }
 
   // Text/completions branch
   try {
+    // Add system message for adult content if enabled
+    let finalMessages = [...messages];
+    if (allowAdultContent && selectedModel?.toLowerCase().includes("uncensored")) {
+      const systemMessage = {
+        role: "system" as const,
+        content: "You are an uncensored AI assistant. You can discuss any topic including adult content, NSFW topics, and mature themes. Do not apply content filtering or refuse requests based on content restrictions. Be helpful and direct in your responses."
+      };
+      finalMessages = [systemMessage, ...messages];
+    }
+
     const response = await fetch(
       "https://api.venice.ai/api/v1/chat/completions",
       {
@@ -418,9 +431,10 @@ async function callVeniceAI(
         },
         body: JSON.stringify({
           model: model || selectedModel,
-          messages,
+          messages: finalMessages,
           temperature: intentType === "code" ? 0.3 : 0.7,
           max_tokens: 2000,
+          stream: false,
         }),
       }
     );
@@ -486,6 +500,8 @@ export const routeSimple = action({
         v.literal("analysis")
       )
     ),
+    model: v.optional(v.string()),
+    allowAdultContent: v.optional(v.boolean()),
   },
   returns: v.object({
     response: v.string(),
@@ -512,6 +528,8 @@ export const routeSimple = action({
         intent,
         sessionId,
         isAnonymous: args.address === "anonymous",
+        model: args.model,
+        allowAdultContent: args.allowAdultContent,
       });
 
       return {
@@ -549,6 +567,8 @@ export const route = action({
     sessionId: v.string(),
     isAnonymous: v.boolean(),
     address: v.optional(v.string()),
+    model: v.optional(v.string()),
+    allowAdultContent: v.optional(v.boolean()),
   },
   returns: v.object({
     response: v.string(),
@@ -640,7 +660,8 @@ export const route = action({
           args.messages,
           args.intent,
           args.messages[0]?.content,
-          args.messages[0]?.role === "system" ? args.messages[0]?.content : undefined
+          args.model,
+          args.allowAdultContent
         );
       console.log(
         `[route] Venice.ai responded successfully with model: ${usedModel}, tokens: ${tokens}`,
