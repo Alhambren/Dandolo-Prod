@@ -44,8 +44,8 @@ export function DeveloperPortal() {
   };
   
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-8">Developer Portal</h1>
+    <div className="max-w-4xl mx-auto">
+      {/* Removed duplicate heading - now handled by DeveloperHub */}
       
       {/* API Keys Section */}
       <GlassCard className="p-6 mb-6">

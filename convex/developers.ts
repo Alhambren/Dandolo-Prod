@@ -107,3 +107,88 @@ export const revokeApiKey = mutation({
     return true;
   },
 });
+
+// Validate API key and check rate limits
+export const validateApiKey = query({
+  args: { key: v.string() },
+  returns: v.object({
+    isValid: v.boolean(),
+    error: v.optional(v.string()),
+    status: v.optional(v.number()),
+    keyId: v.optional(v.id("apiKeys")),
+    keyType: v.optional(v.union(v.literal("developer"), v.literal("agent"))),
+    usage: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  }),
+  handler: async (ctx, args) => {
+    const keyRecord = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_key", q => q.eq("key", args.key))
+      .filter(q => q.eq(q.field("isActive"), true))
+      .first();
+    
+    if (!keyRecord) {
+      return { isValid: false, error: "Invalid or inactive API key", status: 401 };
+    }
+    
+    // Check daily rate limit
+    const limit = keyRecord.keyType === "agent" ? 5000 : 500;
+    if (keyRecord.dailyUsage >= limit) {
+      return { 
+        isValid: false, 
+        error: `Daily limit exceeded (${limit} requests). Resets at midnight UTC.`,
+        status: 429 
+      };
+    }
+    
+    return { 
+      isValid: true, 
+      keyId: keyRecord._id,
+      keyType: keyRecord.keyType,
+      usage: keyRecord.dailyUsage,
+      limit 
+    };
+  },
+});
+
+// Record API usage
+export const recordUsage = mutation({
+  args: { 
+    keyId: v.id("apiKeys"),
+    tokens: v.number()
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const key = await ctx.db.get(args.keyId);
+    if (!key) return null;
+    
+    // Increment usage
+    await ctx.db.patch(args.keyId, {
+      dailyUsage: key.dailyUsage + 1,
+      totalUsage: key.totalUsage + args.tokens,
+      lastUsed: Date.now(),
+    });
+    
+    return null;
+  },
+});
+
+// Reset daily usage (call this from a cron job)
+export const resetDailyUsage = mutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const keys = await ctx.db.query("apiKeys").collect();
+    let resetCount = 0;
+    
+    for (const key of keys) {
+      await ctx.db.patch(key._id, {
+        dailyUsage: 0,
+        lastReset: Date.now(),
+      });
+      resetCount++;
+    }
+    
+    return resetCount;
+  },
+});

@@ -366,16 +366,18 @@ http.route({
   }),
 });
 
-// Transparent Venice.ai proxy for all other API endpoints
+// Transparent Venice.ai proxy - handles ALL Venice endpoints
 http.route({
-  path: "/api/v1/*",
+  path: "/api/*",
   method: ["GET", "POST", "PUT", "DELETE"],
   handler: httpAction(async (ctx, request) => {
     try {
-      // Extract API key
+      // 1. Extract and validate API key
       const authHeader = request.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Missing API key" }), {
+        return new Response(JSON.stringify({ 
+          error: "Missing API key. Use format: Authorization: Bearer YOUR_KEY" 
+        }), {
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
@@ -383,58 +385,86 @@ http.route({
       
       const apiKey = authHeader.substring(7);
       
-      // Validate key
-      const keyRecord = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
-      if (!keyRecord) {
-        return new Response(JSON.stringify({ error: "Invalid API key" }), {
-          status: 401,
+      // 2. Validate Dandolo key and check rate limits
+      const keyRecord = await ctx.runQuery(api.developers.validateApiKey, { key: apiKey });
+      if (!keyRecord.isValid) {
+        return new Response(JSON.stringify({ error: keyRecord.error }), {
+          status: keyRecord.status || 401,
           headers: { "Content-Type": "application/json" },
         });
       }
       
-      // Check rate limit
-      const usageLimit = await ctx.runQuery(api.apiKeys.checkDailyUsageLimit, { key: apiKey });
-      if (!usageLimit.allowed) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
-          status: 429,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      
-      // Get provider
+      // 3. Get active provider
       const provider = await ctx.runQuery(api.providers.selectProvider, {});
       if (!provider) {
-        return new Response(JSON.stringify({ error: "No providers available" }), {
+        return new Response(JSON.stringify({ 
+          error: "No providers available. Please try again." 
+        }), {
           status: 503,
           headers: { "Content-Type": "application/json" },
         });
       }
       
-      // Forward to Venice.ai
+      // 4. Build Venice URL (no /v1 prefix!)
       const url = new URL(request.url);
-      const veniceUrl = `https://api.venice.ai${url.pathname}${url.search}`;
+      const apiPath = url.pathname.replace('/api', '');
+      const veniceUrl = `https://api.venice.ai${apiPath}${url.search}`;
       
+      // 5. Forward request to Venice
+      const body = request.method !== "GET" ? await request.text() : null;
       const veniceResponse = await fetch(veniceUrl, {
         method: request.method,
         headers: {
           ...Object.fromEntries(request.headers.entries()),
           'Authorization': `Bearer ${provider.veniceApiKey}`,
+          'Host': 'api.venice.ai',
         },
-        body: request.body,
+        body: body,
       });
       
-      // Track usage
-      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: keyRecord._id });
+      // 6. Clone response to track usage
+      const responseBody = await veniceResponse.text();
+      let usage = 0;
       
-      // Return Venice response as-is
-      const responseBody = await veniceResponse.arrayBuffer();
+      try {
+        const data = JSON.parse(responseBody);
+        // Track tokens for chat completions
+        if (apiPath.includes('chat/completions') && data.usage) {
+          usage = data.usage.total_tokens || 0;
+        }
+        // Track image generations (100 tokens per image)
+        else if (apiPath.includes('images/generations') && data.data) {
+          usage = data.data.length * 100;
+        }
+      } catch {
+        // Response might not be JSON (e.g., audio files)
+      }
+      
+      // 7. Record usage and award points
+      if (usage > 0) {
+        await ctx.runMutation(api.developers.recordUsage, { 
+          keyId: keyRecord.keyId,
+          tokens: usage 
+        });
+        await ctx.runMutation(api.providers.awardProviderPoints, {
+          providerId: provider._id,
+          promptsServed: 1,
+          tokensProcessed: usage
+        });
+      }
+      
+      // 8. Return Venice response as-is
       return new Response(responseBody, {
         status: veniceResponse.status,
         headers: Object.fromEntries(veniceResponse.headers.entries()),
       });
+      
     } catch (error) {
-      console.error("Venice proxy error:", error);
-      return new Response(JSON.stringify({ error: "Proxy error" }), {
+      console.error('Proxy error:', error);
+      return new Response(JSON.stringify({ 
+        error: "Internal proxy error", 
+        details: error.message 
+      }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });

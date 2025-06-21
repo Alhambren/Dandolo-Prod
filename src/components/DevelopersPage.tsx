@@ -1,12 +1,12 @@
 import React from 'react';
-import { DeveloperPortal } from './DeveloperPortal';
+import { DeveloperHub } from './DeveloperHub';
 
 /**
- * DevelopersPage - MVP Developer Portal
- * Simple wrapper around the DeveloperPortal component
+ * DevelopersPage - Complete Developer Hub
+ * Includes API key management and comprehensive documentation
  */
 const DevelopersPage: React.FC = () => {
-  return <DeveloperPortal />;
+  return <DeveloperHub />;
 };
 
 export default DevelopersPage;
