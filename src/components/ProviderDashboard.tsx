@@ -280,56 +280,78 @@ const ProviderStats: React.FC<ProviderStatsProps> = ({ address }) => {
     <div className="space-y-6">
       {/* Points and Health Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <AnimatedPointsCounter 
-          currentPoints={providerStats.points}
-          vcuBalance={5000} // Mock VCU balance
-          isEarning={providerStats.isActive}
-          lastEarned={Date.now() - 30000} // 30 seconds ago
-        />
+        {/* Points Card */}
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Points Earned</h3>
+            {providerStats.isActive && (
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            )}
+          </div>
+          <div className="text-3xl font-bold text-blue-400 mb-2">
+            {providerStats.points.toLocaleString()}
+          </div>
+          <div className="text-sm text-gray-400">
+            {providerStats.isActive ? 'Actively earning' : 'Inactive'}
+          </div>
+        </GlassCard>
         
-        <DailyProgress 
-          vcuBalance={5000}
-          earnedToday={3456}
-          hoursElapsed={16.4}
-        />
+        {/* Performance Card */}
+        <GlassCard className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Performance</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Requests Served</span>
+              <span className="font-semibold">{providerStats.totalPrompts.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Avg Response</span>
+              <span className="font-semibold">
+                {providerStats.avgResponseTime > 0 ? `${providerStats.avgResponseTime.toFixed(0)}ms` : 'No data yet'}
+              </span>
+            </div>
+          </div>
+        </GlassCard>
         
-        <HealthStatus 
-          isActive={providerStats.isActive}
-          uptime={99.5}
-          lastCheck={Date.now() - 2 * 60 * 60 * 1000} // 2 hours ago
-          healthHistory={[
-            { status: true, timestamp: Date.now() - 4 * 60 * 60 * 1000, responseTime: 250 },
-            { status: true, timestamp: Date.now() - 8 * 60 * 60 * 1000, responseTime: 320 },
-            { status: false, timestamp: Date.now() - 12 * 60 * 60 * 1000, responseTime: 0 },
-            { status: true, timestamp: Date.now() - 16 * 60 * 60 * 1000, responseTime: 180 },
-            { status: true, timestamp: Date.now() - 20 * 60 * 60 * 1000, responseTime: 290 },
-            { status: true, timestamp: Date.now() - 24 * 60 * 60 * 1000, responseTime: 210 },
-          ]}
-        />
+        {/* Health Card */}
+        <GlassCard className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Health Status</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Status</span>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                providerStats.isActive 
+                  ? 'bg-green-500/20 text-green-400' 
+                  : 'bg-red-500/20 text-red-400'
+              }`}>
+                {providerStats.isActive ? 'Online' : 'Offline'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Last Check</span>
+              <span className="font-semibold text-sm">
+                {provider?.lastHealthCheck 
+                  ? new Date(provider.lastHealthCheck).toLocaleTimeString()
+                  : 'No data'
+                }
+              </span>
+            </div>
+          </div>
+        </GlassCard>
       </div>
       
-      {/* Additional Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4 bg-dark-4 rounded-2xl">
-          <div className="text-xl font-bold">{providerStats.totalPrompts.toLocaleString()}</div>
-          <div className="text-xs text-white/60">Total Prompts Served</div>
+      {/* Provider Guide */}
+      <GlassCard className="p-6">
+        <h3 className="text-lg font-semibold mb-4">Provider Performance</h3>
+        <div className="text-sm text-gray-400 space-y-2">
+          <p>• Points are earned at 1 point per 100 tokens processed</p>
+          <p>• Provider status is monitored through regular health checks</p>
+          <p>• Performance metrics help optimize request routing</p>
+          {providerStats.totalPrompts === 0 && (
+            <p className="text-yellow-400">• No requests processed yet - waiting for network traffic</p>
+          )}
         </div>
-        
-        <div className="card p-4 bg-dark-4 rounded-2xl">
-          <div className="text-xl font-bold">{providerStats.avgResponseTime.toFixed(0)}ms</div>
-          <div className="text-xs text-white/60">Avg Response Time</div>
-        </div>
-        
-        <div className="card p-4 bg-dark-4 rounded-2xl">
-          <div className="text-xl font-bold">#{Math.floor(Math.random() * 20) + 1}</div>
-          <div className="text-xs text-white/60">Leaderboard Rank</div>
-        </div>
-        
-        <div className="card p-4 bg-dark-4 rounded-2xl">
-          <div className="text-xl font-bold">${(providerStats.points * 0.01).toFixed(2)}</div>
-          <div className="text-xs text-white/60">Estimated Value</div>
-        </div>
-      </div>
+      </GlassCard>
     </div>
   );
 };

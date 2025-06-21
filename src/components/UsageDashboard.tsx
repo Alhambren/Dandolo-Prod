@@ -199,41 +199,8 @@ const ApiKeyStats: React.FC<ApiKeyStatsProps> = ({ address }) => {
 // Main Usage Dashboard Component
 export const UsageDashboard: React.FC = () => {
   const { address } = useAccount();
-  const [refreshInterval, setRefreshInterval] = useState(5000); // 5 seconds default
-  
-  // Mock data for demonstration - in real app this would come from Convex queries
-  const [usageData, setUsageData] = useState({
-    used: 45,
-    limit: 100,
-    resetTime: new Date(Date.now() + 14 * 60 * 60 * 1000).toISOString(), // 14 hours from now
-    userType: 'user' as const,
-    totalPoints: 1234,
-    todayPoints: 45,
-    pointsPerPrompt: 1,
-  });
-  
-  // Real-time polling (when document is visible)
-  useEffect(() => {
-    if (!address) return;
-    
-    const pollUserStats = () => {
-      if (document.hidden) return;
-      
-      // In real implementation, this would be:
-      // fetchUserStats().then(updateUsageData);
-      
-      // Simulate real-time updates for demo
-      setUsageData(prev => ({
-        ...prev,
-        used: Math.min(prev.used + Math.random() * 2, prev.limit),
-        totalPoints: prev.totalPoints + Math.floor(Math.random() * 3),
-        todayPoints: prev.todayPoints + Math.floor(Math.random() * 2),
-      }));
-    };
-    
-    const interval = setInterval(pollUserStats, refreshInterval);
-    return () => clearInterval(interval);
-  }, [address, refreshInterval]);
+  const userPoints = useQuery(api.wallets.getUserPoints, address ? { address } : 'skip');
+  const apiKeys = useQuery(api.developers.getUserApiKeys, address ? { address } : 'skip');
   
   if (!address) {
     return (
@@ -248,70 +215,65 @@ export const UsageDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Usage Dashboard</h2>
-        <div className="flex items-center space-x-2 text-sm text-white/60">
-          <div className="w-2 h-2 bg-system-green rounded-full animate-pulse" />
-          <span>Live updates every {refreshInterval / 1000}s</span>
-        </div>
       </div>
       
-      {/* Usage Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <UsageCounter 
-          used={usageData.used}
-          limit={usageData.limit}
-          resetTime={usageData.resetTime}
-          userType={usageData.userType}
-        />
-        
-        <PointsDisplay 
-          totalPoints={usageData.totalPoints}
-          todayPoints={usageData.todayPoints}
-          pointsPerPrompt={usageData.pointsPerPrompt}
-          userType={usageData.userType}
-        />
-        
-        <ApiKeyStats address={address} />
-      </div>
-      
-      {/* Upgrade Prompt */}
-      {usageData.used / usageData.limit > 0.8 && (
-        <div className="card p-4 bg-brand-500/10 border-brand-500/20 rounded-2xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-brand-500">Approaching Daily Limit</div>
-              <div className="text-sm text-white/70">
-                Upgrade to Developer API for 1,000 requests/day and 2x points
-              </div>
-            </div>
-            <button className="btn-primary text-sm px-4 py-2">
-              Upgrade
-            </button>
+      {/* Real Data Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Points Card */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+          <h3 className="text-lg font-semibold mb-4">Points Balance</h3>
+          <div className="text-3xl font-bold text-blue-400 mb-2">
+            {userPoints?.totalPoints?.toLocaleString() || 0}
+          </div>
+          <div className="text-sm text-gray-400">
+            Earned from chat usage • 1 point per prompt
           </div>
         </div>
-      )}
+        
+        {/* API Keys Card */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+          <h3 className="text-lg font-semibold mb-4">API Keys</h3>
+          <div className="text-3xl font-bold text-green-400 mb-2">
+            {apiKeys?.length || 0}
+          </div>
+          <div className="text-sm text-gray-400">
+            Active developer/agent keys
+          </div>
+          {apiKeys && apiKeys.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {apiKeys.slice(0, 3).map((key) => (
+                <div key={key._id} className="flex justify-between text-sm">
+                  <span className="text-gray-400">{key.name}</span>
+                  <span className="text-gray-300">{key.dailyUsage}/{key.dailyLimit}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       
-      {/* Debug Controls (remove in production) */}
-      <div className="card p-4 bg-dark-4 rounded-2xl">
-        <div className="text-sm text-white/60 mb-2">Debug Controls:</div>
-        <div className="flex space-x-2">
-          <button 
-            className="btn-ghost text-xs"
-            onClick={() => setRefreshInterval(1000)}
-          >
-            1s updates
-          </button>
-          <button 
-            className="btn-ghost text-xs"
-            onClick={() => setRefreshInterval(5000)}
-          >
-            5s updates
-          </button>
-          <button 
-            className="btn-ghost text-xs"
-            onClick={() => setUsageData(prev => ({ ...prev, used: 0, todayPoints: 0 }))}
-          >
-            Reset usage
-          </button>
+      {/* Getting Started Guide */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+        <h3 className="text-lg font-semibold mb-4">Getting Started</h3>
+        <div className="space-y-3 text-sm text-gray-400">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center">
+              <span className="text-blue-400 text-xs">1</span>
+            </div>
+            <span>Use the chat interface to earn points (1 point per prompt)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center">
+              <span className="text-purple-400 text-xs">2</span>
+            </div>
+            <span>Generate API keys for programmatic access</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center">
+              <span className="text-green-400 text-xs">3</span>
+            </div>
+            <span>Register as a provider to earn points by serving requests</span>
+          </div>
         </div>
       </div>
     </div>

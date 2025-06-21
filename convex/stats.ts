@@ -63,10 +63,31 @@ export const getNetworkStats = query({
     today.setHours(0, 0, 0, 0);
     const todayTimestamp = today.getTime();
     const todayInferences = inferences.filter(i => i.timestamp >= todayTimestamp);
-    const avgResponseTime = activeProviders.length > 0
-      ? activeProviders.reduce((sum, p) => sum + (p.avgResponseTime || 0), 0) / activeProviders.length
-      : 0;
-    const uniqueUsers = new Set(inferences.map(i => i.address)).size;
+    // Calculate real average response time from actual inferences
+    let avgResponseTime = 0;
+    if (inferences.length > 0) {
+      const recentInferences = inferences.filter(i => 
+        i.timestamp >= Date.now() - (24 * 60 * 60 * 1000) && // Last 24 hours
+        i.responseTime && i.responseTime > 0 // Only include valid response times
+      );
+      if (recentInferences.length > 0) {
+        avgResponseTime = recentInferences.reduce((sum, i) => sum + (i.responseTime || 0), 0) / recentInferences.length;
+      }
+    }
+    // Calculate active users from today's inferences only
+    const todayUsers = new Set(todayInferences.map(i => i.address)).size;
+    
+    // Calculate network uptime based on provider health checks
+    let networkUptime = 0;
+    if (activeProviders.length > 0) {
+      // Check health status in last 24 hours
+      const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+      const recentHealthyProviders = activeProviders.filter(p => 
+        p.lastHealthCheck && p.lastHealthCheck >= oneDayAgo
+      );
+      networkUptime = Math.round((recentHealthyProviders.length / providers.length) * 100 * 100) / 100;
+    }
+    
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
@@ -74,8 +95,8 @@ export const getNetworkStats = query({
       totalPrompts: inferences.length,
       promptsToday: todayInferences.length,
       avgResponseTime: Math.round(avgResponseTime),
-      networkUptime: activeProviders.length > 0 ? 99.9 : 0,
-      activeUsers: uniqueUsers,
+      networkUptime: Math.min(networkUptime, 100),
+      activeUsers: todayUsers,
     };
   },
 });
