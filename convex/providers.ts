@@ -325,6 +325,44 @@ export const updateProviderHealth = mutation({
   },
 });
 
+// Refresh VCU balance for a specific provider (manual refresh)
+export const refreshProviderVCU = action({
+  args: { 
+    providerId: v.id("providers"),
+    address: v.string() // For ownership verification
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.runQuery(api.providers.getProvider, { 
+      providerId: args.providerId 
+    });
+    
+    if (!provider || provider.address !== args.address) {
+      throw new Error("Provider not found or unauthorized");
+    }
+    
+    // Get fresh VCU balance from Venice.ai
+    const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
+      apiKey: provider.veniceApiKey || ""
+    });
+    
+    if (validation.isValid && validation.balance !== undefined) {
+      await ctx.runMutation(internal.providers.updateVCUBalance, {
+        providerId: args.providerId,
+        vcuBalance: validation.balance
+      });
+      
+      return {
+        success: true,
+        oldBalance: provider.vcuBalance,
+        newBalance: validation.balance,
+        difference: validation.balance - (provider.vcuBalance || 0)
+      };
+    } else {
+      throw new Error(validation.error || "Failed to validate API key");
+    }
+  },
+});
+
 // Get provider stats for dashboard
 export const getStats = query({
   args: { providerId: v.id("providers") },
@@ -926,6 +964,60 @@ export const recordPromptServed = internalMutation({
       totalPrompts: provider.totalPrompts + 1,
       avgResponseTime: ((provider.avgResponseTime || 0) * provider.totalPrompts + args.responseTime) / (provider.totalPrompts + 1),
     });
+  },
+});
+
+// Automatically refresh VCU balances for all providers (called by cron)
+export const refreshAllVCUBalances = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const providers = await ctx.runQuery(internal.providers.getAllProviders);
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    for (const provider of providers) {
+      try {
+        // Validate and get current VCU balance from Venice.ai
+        const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
+          apiKey: provider.veniceApiKey
+        });
+        
+        if (validation.isValid && validation.balance !== undefined) {
+          // Only update if balance has changed significantly (>5 VCU difference)
+          if (Math.abs(validation.balance - (provider.vcuBalance || 0)) > 5) {
+            await ctx.runMutation(internal.providers.updateVCUBalance, {
+              providerId: provider._id,
+              vcuBalance: validation.balance
+            });
+            updatedCount++;
+          }
+        } else {
+          // Mark provider as inactive if API key is invalid
+          if (provider.isActive) {
+            await ctx.runMutation(internal.providers.updateProviderStatus, {
+              providerId: provider._id,
+              healthCheckPassed: false
+            });
+          }
+          errorCount++;
+        }
+      } catch (error) {
+        errorCount++;
+        // Mark provider as having issues
+        if (provider.isActive) {
+          await ctx.runMutation(internal.providers.updateProviderStatus, {
+            providerId: provider._id,
+            healthCheckPassed: false
+          });
+        }
+      }
+    }
+    
+    return { 
+      totalProviders: providers.length, 
+      updatedCount, 
+      errorCount 
+    };
   },
 });
 

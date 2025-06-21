@@ -168,7 +168,10 @@ export const updateProviderPointsInternal = internalMutation({
 export const distributeDailyVCURewards = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Get all active providers for daily rewards
+    // Refresh VCU balances first to ensure accuracy for daily rewards
+    await ctx.runAction(internal.providers.refreshAllVCUBalances);
+    
+    // Get all active providers for daily rewards (after VCU refresh)
     const activeProviders = await ctx.runQuery(internal.providers.listActiveInternal);
     
     const utcMidnight = getUTCMidnightForCron();

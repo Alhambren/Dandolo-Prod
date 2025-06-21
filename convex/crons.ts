@@ -11,29 +11,22 @@ crons.interval(
   {}
 );
 
+// Update VCU balances every 4 hours and before daily rewards
+crons.interval(
+  "update-vcu-balances",
+  { hours: 4 },
+  internal.providers.refreshAllVCUBalances,
+  {}
+);
+
 // Daily VCU rewards at midnight UTC (as per specification)
+// VCU balances are refreshed every 4 hours to ensure accuracy
 crons.interval(
   "daily-vcu-distribution",
   { hours: 24 },
   internal.points.distributeDailyVCURewards,
   {}
 );
-
-// Clean up expired rate limit records every hour
-// crons.interval(
-//   "cleanup-rate-limits",
-//   { hours: 1 },
-//   internal.rateLimit.cleanupExpiredRateLimits,
-//   {}
-// );
-
-// Clean up security data and expired records every 6 hours
-// crons.interval(
-//   "cleanup-security-data",
-//   { hours: 6 },
-//   internal.edgeCases.cleanupSecurityData,
-//   {}
-// );
 
 // Refresh model cache every hour
 crons.interval(

@@ -30,6 +30,7 @@ const DashboardPage: React.FC = () => {
   const validateVeniceApiKey = useAction(api.providers.validateVeniceApiKey);
   const registerProviderWithVCU = useMutation(api.providers.registerProviderWithVCU);
   const removeProvider = useMutation(api.providers.remove);
+  const refreshVCU = useAction(api.providers.refreshProviderVCU);
 
   // Calculate daily VCU points (1:1 ratio, updates throughout the day)
   useEffect(() => {
@@ -204,7 +205,27 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={async () => {
+                  if (!address || !currentProvider._id) return;
+                  try {
+                    const result = await refreshVCU({ 
+                      providerId: currentProvider._id, 
+                      address 
+                    });
+                    if (result.success) {
+                      toast.success(`VCU updated: ${result.oldBalance} → ${result.newBalance} (${result.difference > 0 ? '+' : ''}${result.difference})`);
+                    }
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Failed to refresh VCU');
+                  }
+                }}
+                className="px-4 py-2 bg-gold/20 text-gold border border-gold/30 rounded-lg hover:bg-gold/30 transition-colors"
+              >
+                🔄 Refresh VCU Balance
+              </button>
+              
               <button
                 onClick={async () => {
                   if (confirm('Are you sure you want to remove this provider?')) {
