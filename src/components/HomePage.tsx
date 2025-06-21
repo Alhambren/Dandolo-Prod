@@ -23,9 +23,16 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
+      // Hide poster after video starts playing
       video.addEventListener('loadeddata', () => {
         console.log('Hero video loaded successfully');
+        video.style.opacity = '1';
       });
+      
+      video.addEventListener('canplay', () => {
+        video.style.opacity = '1';
+      });
+      
       video.addEventListener('error', (e) => {
         console.log('Hero video failed to load, using fallback background');
         if (video.parentElement) {
@@ -33,6 +40,17 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
           video.style.display = 'none';
         }
       });
+      
+      // Set a timeout to hide poster if video takes too long
+      const timeoutId = setTimeout(() => {
+        if (video.networkState === video.NETWORK_LOADING || video.readyState < video.HAVE_ENOUGH_DATA) {
+          console.log('Video loading timeout, removing poster');
+          video.removeAttribute('poster');
+          video.style.opacity = '0.5';
+        }
+      }, 2000); // 2 second timeout
+      
+      return () => clearTimeout(timeoutId);
     }
   }, []);
 
@@ -49,8 +67,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             loop 
             playsInline
             className="w-full h-full object-cover transition-opacity duration-1000"
-            style={{ filter: 'brightness(0.6)' }}
-            poster="/logos/Dandolo_full_black_bg.png"
+            style={{ filter: 'brightness(0.6)', opacity: '0.3' }}
           >
             <source src="/logos/hero-video.mp4" type="video/mp4" />
             {/* Fallback for browsers that don't support video */}
