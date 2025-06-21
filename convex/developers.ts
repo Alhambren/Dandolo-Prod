@@ -2,184 +2,108 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { api } from "./_generated/api";
 
-// Generate API key for developers
+// Generate API key
 export const generateApiKey = mutation({
   args: {
     address: v.string(),
-    name: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    // Generate a secure API key
-    const apiKey = "dk_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
-    // Store API key in database
-    await ctx.db.insert("apiKeys", {
-      address: args.address,
-      key: apiKey,
-      name: args.name || "Default API Key",
-      isActive: true,
-      createdAt: Date.now(),
-      lastUsed: undefined,
-      totalUsage: 0,
-    });
-
-    return apiKey;
-  },
-});
-
-
-export const generateAgentKey = mutation({
-  args: {
-    address: v.string(),
     name: v.string(),
-    description: v.optional(v.string()),
+    keyType: v.union(v.literal("developer"), v.literal("agent")),
   },
+  returns: v.string(),
   handler: async (ctx, args) => {
-    // Generate agent API key with ak_ prefix
-    const apiKey = "ak_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-
-    await ctx.db.insert("apiKeys", {
-      address: args.address,
-      key: apiKey,
-      name: args.name,
-      isActive: true,
-      createdAt: Date.now(),
-      totalUsage: 0,
-    });
-
-    return apiKey;
-  },
-});
-
-// Get user's API keys
-export const getUserApiKeys = query({
-  args: {
-    address: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const apiKeys = await ctx.db
+    // Check existing keys (limit 5 per user for MVP)
+    const existingKeys = await ctx.db
       .query("apiKeys")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
-      .collect();
-    return apiKeys?.map(keyRecord => ({
-      ...keyRecord,
-      key: keyRecord.key.substring(0, 8) + "..." + keyRecord.key.substring(keyRecord.key.length - 4), // Mask the key
-    })) || [];
-  },
-});
-
-// Validate API key (for API requests)
-// Validate API key (for API requests)
-export const validateApiKey = query({
-  args: {
-    apiKey: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const keyRecord = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_key", (q) => q.eq("key", args.apiKey))
-      .first();
-
-    if (!keyRecord || !keyRecord.isActive) {
-      return null;
-    }
-
-    return {
-      address: keyRecord.address,
-      name: keyRecord.name,
-    };
-  },
-});
-
-// Update API key usage
-export const updateApiKeyUsage = mutation({
-  args: { apiKey: v.string() },
-  handler: async (ctx, args) => {
-    const keyRecord = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_key", (q) => q.eq("key", args.apiKey))
-      .first();
-
-    if (keyRecord) {
-      await ctx.db.patch(keyRecord._id, {
-        lastUsed: Date.now(),
-        totalUsage: (keyRecord.totalUsage || 0) + 1,
-      });
-    }
-  },
-});
-
-// Deactivate API key
-export const deactivateApiKey = mutation({
-  args: { apiKeyId: v.id("apiKeys") },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.apiKeyId, {
-      isActive: false,
-    });
-  },
-});
-
-// Get SDK usage statistics
-export const getSdkStats = query({
-  args: {},
-  handler: async (ctx) => {
-    const apiKeys = await ctx.db.query("apiKeys").collect();
-    const activeKeys = apiKeys.filter(key => key.isActive);
-    const totalUsage = apiKeys.reduce((sum, key) => sum + (key.totalUsage || 0), 0);
-    
-    const last30Days = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const recentKeys = apiKeys.filter(key => key.createdAt > last30Days);
-
-    return {
-      totalApiKeys: apiKeys.length,
-      activeApiKeys: activeKeys.length,
-      totalUsage,
-      newKeysLast30Days: recentKeys.length,
-    };
-  },
-});
-
-export const getDeveloperDashboard = query({
-  args: { address: v.string() },
-  handler: async (ctx, args): Promise<any> => {
-    // Get API keys
-    const apiKeyStats = await ctx.runQuery(api.apiKeys.getApiKeyStats, { address: args.address });
-    
-    // Get user's inference count from inferences table
-    const inferences = await ctx.db
-      .query("inferences")
-      .filter(q => q.eq(q.field("address"), args.address))
+      .withIndex("by_address", q => q.eq("address", args.address))
+      .filter(q => q.eq(q.field("isActive"), true))
       .collect();
     
-    return {
-      apiKeys: apiKeyStats,
-      usage: {
-        totalRequests: inferences.length,
-        tokensUsed: inferences.reduce((sum, i) => sum + i.totalTokens, 0),
-        modelsUsed: [...new Set(inferences.map(i => i.model))],
-      },
-    };
-  },
-});
-
-export const createApiKey = mutation({
-  args: {
-    address: v.string(),
-    name: v.string(),
-  },
-  handler: async (ctx, args): Promise<any> => {
-    // Generate API key
-    const key = `dk_${Math.random().toString(36).substring(2)}${Date.now().toString(36)}`;
+    if (existingKeys.length >= 5) {
+      throw new Error("Maximum 5 active keys allowed");
+    }
     
-    const id = await ctx.db.insert("apiKeys", {
+    // Generate key
+    const prefix = args.keyType === "agent" ? "ak_" : "dk_";
+    const randomPart = Math.random().toString(36).substring(2) + 
+                      Math.random().toString(36).substring(2);
+    const key = prefix + randomPart;
+    
+    // Check for collisions (very unlikely but let's be safe)
+    const existingKey = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_key", q => q.eq("key", key))
+      .first();
+    
+    if (existingKey) {
+      // Regenerate if collision (recursive call)
+      return await ctx.runMutation(api.developers.generateApiKey, args);
+    }
+    
+    await ctx.db.insert("apiKeys", {
       address: args.address,
       name: args.name,
       key,
+      keyType: args.keyType,
       isActive: true,
       createdAt: Date.now(),
       totalUsage: 0,
+      dailyUsage: 0,
+      lastReset: Date.now(),
     });
     
-    return { id, key };
+    return key;
+  },
+});
+
+
+// Get user's API keys (masked)
+export const getUserApiKeys = query({
+  args: { address: v.string() },
+  returns: v.array(v.object({
+    _id: v.id("apiKeys"),
+    name: v.string(),
+    keyType: v.union(v.literal("developer"), v.literal("agent")),
+    maskedKey: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    lastUsed: v.optional(v.number()),
+    dailyUsage: v.number(),
+    dailyLimit: v.number(),
+  })),
+  handler: async (ctx, args) => {
+    const keys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_address", q => q.eq("address", args.address))
+      .collect();
+    
+    return keys.map(k => ({
+      _id: k._id,
+      name: k.name,
+      keyType: k.keyType,
+      maskedKey: k.key.substring(0, 7) + "..." + k.key.substring(k.key.length - 4),
+      isActive: k.isActive,
+      createdAt: k.createdAt,
+      lastUsed: k.lastUsed,
+      dailyUsage: k.dailyUsage,
+      dailyLimit: k.keyType === "agent" ? 5000 : 500,
+    }));
+  },
+});
+
+// Revoke API key
+export const revokeApiKey = mutation({
+  args: { 
+    keyId: v.id("apiKeys"),
+    address: v.string(), // For ownership verification
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const key = await ctx.db.get(args.keyId);
+    if (!key || key.address !== args.address) {
+      throw new Error("Key not found or unauthorized");
+    }
+    
+    await ctx.db.patch(args.keyId, { isActive: false });
+    return true;
   },
 });

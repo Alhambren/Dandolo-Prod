@@ -366,4 +366,80 @@ http.route({
   }),
 });
 
+// Transparent Venice.ai proxy for all other API endpoints
+http.route({
+  path: "/api/v1/*",
+  method: ["GET", "POST", "PUT", "DELETE"],
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Extract API key
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      
+      const apiKey = authHeader.substring(7);
+      
+      // Validate key
+      const keyRecord = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!keyRecord) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      
+      // Check rate limit
+      const usageLimit = await ctx.runQuery(api.apiKeys.checkDailyUsageLimit, { key: apiKey });
+      if (!usageLimit.allowed) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      
+      // Get provider
+      const provider = await ctx.runQuery(api.providers.selectProvider, {});
+      if (!provider) {
+        return new Response(JSON.stringify({ error: "No providers available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      
+      // Forward to Venice.ai
+      const url = new URL(request.url);
+      const veniceUrl = `https://api.venice.ai${url.pathname}${url.search}`;
+      
+      const veniceResponse = await fetch(veniceUrl, {
+        method: request.method,
+        headers: {
+          ...Object.fromEntries(request.headers.entries()),
+          'Authorization': `Bearer ${provider.veniceApiKey}`,
+        },
+        body: request.body,
+      });
+      
+      // Track usage
+      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: keyRecord._id });
+      
+      // Return Venice response as-is
+      const responseBody = await veniceResponse.arrayBuffer();
+      return new Response(responseBody, {
+        status: veniceResponse.status,
+        headers: Object.fromEntries(veniceResponse.headers.entries()),
+      });
+    } catch (error) {
+      console.error("Venice proxy error:", error);
+      return new Response(JSON.stringify({ error: "Proxy error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;
