@@ -1,9 +1,24 @@
+import { cookieStorage, createStorage } from '@wagmi/core'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { base } from '@reown/appkit/networks'
 
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
+// Get projectId from environment
+export const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
 
-export const config = new WagmiAdapter({
-  networks: [base],
+if (!projectId) {
+  throw new Error('Project ID is not defined')
+}
+
+export const networks = [base]
+
+//Set up the Wagmi Adapter (Config)
+export const wagmiAdapter = new WagmiAdapter({
+  storage: createStorage({
+    storage: cookieStorage
+  }),
+  ssr: true,
   projectId,
-}); 
+  networks
+})
+
+export const config = wagmiAdapter.wagmiConfig 

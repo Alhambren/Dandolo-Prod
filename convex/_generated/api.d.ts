@@ -21,6 +21,7 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as debug from "../debug.js";
 import type * as developers from "../developers.js";
+import type * as edgeCases from "../edgeCases.js";
 import type * as embeddings from "../embeddings.js";
 import type * as http from "../http.js";
 import type * as inference from "../inference.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   debug: typeof debug;
   developers: typeof developers;
+  edgeCases: typeof edgeCases;
   embeddings: typeof embeddings;
   http: typeof http;
   inference: typeof inference;

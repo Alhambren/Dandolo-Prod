@@ -66,30 +66,82 @@ interface Provider {
   isActive: boolean;
 }
 
-// Preferred image model order
+// Preferred image model order (safe models)
 const PREFERRED_IMAGE_MODELS = [
   "venice-sd35",
   "stable-diffusion-3.5",
-  "hidream",
-  "flux-dev"
+  "flux-dev",
+  "hidream"
+];
+
+// Preferred uncensored image models for adult content (based on live Venice.ai data)
+const PREFERRED_UNCENSORED_IMAGE_MODELS = [
+  "pony-realism",        // Has "most_uncensored" trait
+  "lustify-sdxl",        // Specifically for adult content  
+  "flux-dev-uncensored", // Uncensored FLUX variant
+  "hidream",             // Known for adult content
+  "flux-dev",            // Standard FLUX (high quality)
+  "flux-realism",        // If available
+  "flux-1.1-pro"         // If available
+];
+
+// Models with strong internal filters that may need special handling
+const MODELS_WITH_INTERNAL_FILTERS = [
+  "venice-sd35",
+  "stable-diffusion-3.5", 
+  "fluently-xl"
 ];
 
 /**
- * Fetch available models from persistent DB cache
+ * Fetch available models from live Venice.ai API (same as frontend)
  */
-async function fetchAvailableModelsFromCache(ctx: any): Promise<any[]> {
-  return await ctx.runQuery(api.models.getAvailableModels, {});
+async function fetchAvailableModelsFromAPI(ctx: any): Promise<any[]> {
+  try {
+    // Use the same function the frontend uses to ensure consistency
+    const categorizedModels = await ctx.runAction(api.models.fetchAndCategorizeModels, {});
+    
+    // Flatten the categorized models into a single array with type information
+    const allModels = [
+      ...categorizedModels.text.map((m: any) => ({ ...m, type: "text" })),
+      ...categorizedModels.code.map((m: any) => ({ ...m, type: "code" })),
+      ...categorizedModels.image.map((m: any) => ({ ...m, type: "image" })),
+      ...categorizedModels.multimodal.map((m: any) => ({ ...m, type: "multimodal" })),
+      ...categorizedModels.audio.map((m: any) => ({ ...m, type: "audio" })),
+    ];
+    
+    console.log("Fetched live models from Venice.ai:", allModels.length);
+    console.log("Live image models:", allModels.filter(m => m.type === "image").map(m => m.id));
+    
+    return allModels;
+  } catch (error) {
+    console.error("Failed to fetch live models, falling back to cache:", error);
+    // Fallback to cached models if live fetch fails
+    return await ctx.runQuery(api.models.getAvailableModels, {});
+  }
 }
 
 /**
  * Select the best image model from available models
  */
-function selectBestImageModel(models: any[]): string | undefined {
+function selectBestImageModel(models: any[], allowAdultContent?: boolean): string | undefined {
   const imageModels = models.filter((m) => m.type === "image");
   console.log("selectBestImageModel - Total models:", models.length);
   console.log("selectBestImageModel - Image models found:", imageModels.length);
   console.log("selectBestImageModel - Image model IDs:", imageModels.map(m => m.id));
+  console.log("selectBestImageModel - Adult content allowed:", allowAdultContent);
   
+  // If adult content is allowed, prefer uncensored models
+  if (allowAdultContent) {
+    for (const preferred of PREFERRED_UNCENSORED_IMAGE_MODELS) {
+      const found = imageModels.find((m) => m.id === preferred);
+      if (found) {
+        console.log("selectBestImageModel - Selected uncensored model:", found.id);
+        return found.id;
+      }
+    }
+  }
+  
+  // Otherwise use regular preferred models
   for (const preferred of PREFERRED_IMAGE_MODELS) {
     const found = imageModels.find((m) => m.id === preferred);
     if (found) {
@@ -97,6 +149,7 @@ function selectBestImageModel(models: any[]): string | undefined {
       return found.id;
     }
   }
+  
   // Fallback: return first available image model
   const fallback = imageModels[0]?.id;
   console.log("selectBestImageModel - Using fallback model:", fallback);
@@ -267,27 +320,43 @@ async function callVeniceAI(
   allowAdultContent?: boolean,
 ) {
   const startTime = Date.now();
-  const promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
+  let promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
+  
+  // For models with strong internal filters, try prompt modifications when adult content is enabled
+  if (allowAdultContent && intentType === "image" && MODELS_WITH_INTERNAL_FILTERS.some(filtered => 
+    (model || "").toLowerCase().includes(filtered.toLowerCase())
+  )) {
+    console.log("Applying prompt modifications for internal filter bypass");
+    // Add uncensoring prefixes that some models respond to
+    promptText = `uncensored, unfiltered, ${promptText}`;
+  }
+  
   console.log("CallVeniceAI:", {
     prompt: promptText.substring(0, 50),
     model,
     intentType,
+    allowAdultContent,
   });
 
   // Remove the bypass - let it go through normal model selection
 
-  // Fetch available models from persistent cache
-  const availableModels = await fetchAvailableModelsFromCache(ctx);
-  console.log("Available models (from cache):", availableModels.map(m => ({ id: m.id, type: m.type, name: m.name })));
+  // Fetch available models from live Venice.ai API (same as frontend)
+  const availableModels = await fetchAvailableModelsFromAPI(ctx);
+  console.log("Available models (live from Venice.ai):", availableModels.map(m => ({ id: m.id, type: m.type, name: m.name })));
   console.log("Intent type:", intentType);
   console.log("Available models count:", availableModels.length);
+  
+  // Debug image models specifically
+  const imageModels = availableModels.filter(m => m.type === "image");
+  console.log("Image models found:", imageModels.length);
+  console.log("Image model IDs:", imageModels.map(m => m.id));
 
   // Select appropriate model
   let selectedModel: string | undefined = model;
   if (!selectedModel) {
     if (intentType === "image") {
       console.log("Using image model selection");
-      selectedModel = selectBestImageModel(availableModels);
+      selectedModel = selectBestImageModel(availableModels, allowAdultContent);
       console.log("Selected image model:", selectedModel);
     } else {
       console.log("Using text model selection for intent:", intentType);
@@ -336,7 +405,32 @@ async function callVeniceAI(
     }
   }
   if (!selectedModel) {
-    throw new Error("No suitable model found for the requested intent.");
+    // Emergency fallback: use any available model or hardcoded fallbacks
+    if (intentType === "image") {
+      const imageModels = availableModels.filter(m => m.type === "image");
+      if (imageModels.length > 0) {
+        selectedModel = imageModels[0].id;
+        console.log("Emergency fallback to first available image model:", selectedModel);
+      } else {
+        // Hardcoded fallback for image generation
+        selectedModel = "venice-sd35";
+        console.log("No image models found in cache, using hardcoded fallback:", selectedModel);
+      }
+    } else {
+      const textModels = availableModels.filter(m => m.type === "text");
+      if (textModels.length > 0) {
+        selectedModel = textModels[0].id;
+        console.log("Emergency fallback to first available text model:", selectedModel);
+      } else {
+        // Hardcoded fallback for text generation  
+        selectedModel = "llama-3.2-3b";
+        console.log("No text models found in cache, using hardcoded fallback:", selectedModel);
+      }
+    }
+  }
+  
+  if (!selectedModel) {
+    throw new Error(`No suitable model found for intent '${intentType}'. Available models: ${availableModels.map(m => m.id).join(', ')}`);
   }
   console.log("Selected model:", selectedModel, "for intent:", intentType);
   console.log("Final request body model:", model || selectedModel);
@@ -350,14 +444,72 @@ async function callVeniceAI(
     console.log("isImageModel:", isImageModel);
     console.log("intentType:", intentType);
     console.log("selectedModel:", selectedModel);
+    console.log("allowAdultContent:", allowAdultContent);
     
     // Use the selected model or fallback to preferred image model
     let imageModel = selectedModel;
-    if (!imageModel || availableModels.find(m => m.id === imageModel)?.type !== "image") {
-      imageModel = selectBestImageModel(availableModels) || "venice-sd35";
+    console.log("Initial imageModel from selectedModel:", imageModel);
+    
+    // Check if the manually selected model is an image model
+    const manuallySelectedModelInfo = availableModels.find(m => m.id === imageModel);
+    console.log("Manually selected model info:", manuallySelectedModelInfo);
+    
+    // Only auto-select if no model was manually chosen OR if the manually chosen model is confirmed to be non-image
+    const shouldAutoSelect = !imageModel || (manuallySelectedModelInfo && manuallySelectedModelInfo.type !== "image");
+    
+    if (shouldAutoSelect) {
+      console.log("Auto-selecting image model because:", 
+        !imageModel ? "no model selected" : 
+        "selected model is confirmed to be non-image type");
+    } else if (imageModel && !manuallySelectedModelInfo) {
+      console.log("Using user-selected model even though not found in cache:", imageModel);
+    } else if (imageModel && manuallySelectedModelInfo) {
+      console.log("Using verified user-selected image model:", imageModel);
+    }
+    
+    if (shouldAutoSelect) {
+        
+      // If adult content is enabled, prefer uncensored image models
+      if (allowAdultContent) {
+        console.log("Adult content enabled, looking for uncensored image models...");
+        console.log("All available image models:", availableModels.filter(m => m.type === "image").map(m => m.id));
+        
+        const uncensoredImageModels = availableModels.filter(m => 
+          m.type === "image" && 
+          (m.id.toLowerCase().includes("uncensored") || 
+           m.id.toLowerCase().includes("nsfw") ||
+           m.id.toLowerCase().includes("flux") ||
+           m.id.toLowerCase().includes("hidream") ||
+           m.id.toLowerCase().includes("realism"))
+        );
+        console.log("Found uncensored image models:", uncensoredImageModels.map(m => m.id));
+        
+        if (uncensoredImageModels.length > 0) {
+          // Prefer specific uncensored models in order of preference
+          const fluxRealism = uncensoredImageModels.find(m => m.id.includes("flux-realism"));
+          const fluxDev = uncensoredImageModels.find(m => m.id.includes("flux-dev"));
+          const hiDreamModel = uncensoredImageModels.find(m => m.id.includes("hidream"));
+          const anyFlux = uncensoredImageModels.find(m => m.id.includes("flux"));
+          
+          imageModel = fluxRealism?.id || fluxDev?.id || hiDreamModel?.id || anyFlux?.id || uncensoredImageModels[0].id;
+          console.log("Selected uncensored image model for adult content:", imageModel);
+        } else {
+          // No explicitly uncensored models found, use best available
+          imageModel = selectBestImageModel(availableModels, allowAdultContent) || "venice-sd35";
+          console.log("No explicitly uncensored models found, using best available:", imageModel);
+        }
+      } else {
+        imageModel = selectBestImageModel(availableModels, allowAdultContent) || "venice-sd35";
+      }
     }
     console.log("Final image model selected:", imageModel);
     console.log("Available image models:", availableModels.filter(m => m.type === "image").map(m => m.id));
+    
+    // Debug what model will actually be sent to Venice API
+    const finalModelToSend = model || imageModel;
+    console.log("Model that will be sent to Venice API:", finalModelToSend);
+    console.log("Original model parameter:", model);
+    console.log("Computed imageModel:", imageModel);
 
     const imageResponse = await fetch(
       "https://api.venice.ai/api/v1/image/generate",
@@ -375,6 +527,7 @@ async function callVeniceAI(
           steps: 20,
           cfg_scale: 7.5,
           return_binary: false,
+          safe_mode: allowAdultContent ? false : true,
         }),
       }
     );
@@ -445,13 +598,24 @@ async function callVeniceAI(
     }
 
     const data = (await response.json()) as VeniceTextResponse;
+    
+    // Fallback token calculation if Venice doesn't provide usage data
+    let tokenCount = data.usage?.total_tokens || 0;
+    if (tokenCount === 0) {
+      // Estimate tokens: roughly 4 characters per token
+      const responseText = data.choices[0]?.message?.content || "";
+      const promptText = finalMessages.map(m => m.content).join(" ");
+      tokenCount = Math.ceil((promptText.length + responseText.length) / 4);
+      console.log(`[callVeniceAI] No usage data from Venice, estimated ${tokenCount} tokens`);
+    }
+    
     console.log(
-      `[callVeniceAI] Success! Got response with ${data.usage?.total_tokens || 0} tokens`,
+      `[callVeniceAI] Success! Got response with ${tokenCount} tokens`,
     );
     return {
       response: data.choices[0]?.message?.content || "No response generated",
       model: data.model || model || selectedModel,
-      tokens: data.usage?.total_tokens || 0,
+      tokens: tokenCount,
       responseTime: Date.now() - startTime,
     };
   } catch (error) {
@@ -528,6 +692,7 @@ export const routeSimple = action({
         intent,
         sessionId,
         isAnonymous: args.address === "anonymous",
+        address: args.address,
         model: args.model,
         allowAdultContent: args.allowAdultContent,
       });
@@ -569,6 +734,7 @@ export const route = action({
     address: v.optional(v.string()),
     model: v.optional(v.string()),
     allowAdultContent: v.optional(v.boolean()),
+    apiKey: v.optional(v.string()),
   },
   returns: v.object({
     response: v.string(),
@@ -586,6 +752,57 @@ export const route = action({
   handler: async (ctx, args): Promise<RouteReturnType> => {
     console.log("[route] Starting inference routing...");
     try {
+      // Rate limiting and daily limit checks
+      if (!args.isAnonymous && args.address) {
+        // Check rate limits for authenticated users
+        const userType = args.apiKey?.startsWith("dk_") ? "developer" :
+                        args.apiKey?.startsWith("ak_") ? "agent" : "user";
+        
+        const rateCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+          identifier: args.address,
+          userType,
+        });
+        
+        if (!rateCheck.allowed) {
+          return {
+            response: `Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfter || 0) / 1000)} seconds.`,
+            model: "error",
+            totalTokens: 0,
+            providerId: "error" as any,
+            provider: "System",
+            cost: 0,
+            responseTime: 0,
+            pointsAwarded: 0,
+            address: args.address,
+            intent: args.intent,
+            vcuCost: 0,
+          };
+        }
+        
+        // Check daily limits
+        const dailyCheck = await ctx.runMutation(api.rateLimit.checkDailyLimit, {
+          address: args.address,
+          apiKey: args.apiKey,
+        });
+        
+        if (!dailyCheck.allowed) {
+          const resetTime = new Date(dailyCheck.resetTime).toISOString();
+          return {
+            response: `Daily limit of ${dailyCheck.limit} requests reached. Resets at ${resetTime}.`,
+            model: "error",
+            totalTokens: 0,
+            providerId: "error" as any,
+            provider: "System",
+            cost: 0,
+            responseTime: 0,
+            pointsAwarded: 0,
+            address: args.address,
+            intent: args.intent,
+            vcuCost: 0,
+          };
+        }
+      }
+      
       console.log("[route] Fetching active providers...");
       const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
       console.log(`[route] Found ${providers.length} providers`);
@@ -671,7 +888,7 @@ export const route = action({
 
       console.log("[route] Recording inference...");
       await ctx.runMutation(api.inference.recordInference, {
-        address: 'anonymous',
+        address: args.address || 'anonymous',
         providerId: randomProvider._id,
         model: usedModel,
         intent: args.intent,
@@ -680,16 +897,33 @@ export const route = action({
         timestamp: Date.now(),
       });
 
+      // Award points using the new comprehensive system
       let pointsAwarded = 0;
+      
       if (tokens > 0) {
-        const points = Math.floor(tokens / 100);
-        if (points > 0) {
-          console.log(`[route] Awarding ${points} points to provider...`);
+        // Award points to provider (1 point per 100 tokens)
+        const providerPoints = Math.floor(tokens / 100);
+        if (providerPoints > 0) {
+          console.log(`[route] Awarding ${providerPoints} points to provider...`);
           await ctx.runMutation(internal.points.awardProviderPoints, {
             providerId: randomProvider._id,
             tokens: tokens,
           });
-          pointsAwarded = points;
+        }
+        
+        // Award points to user if authenticated
+        if (!args.isAnonymous && args.address) {
+          const userType = args.apiKey?.startsWith("dk_") ? "developer" :
+                          args.apiKey?.startsWith("ak_") ? "agent" : "user";
+          
+          const userPoints = await ctx.runMutation(internal.points.awardUserPoints, {
+            address: args.address,
+            userType,
+            apiKey: args.apiKey,
+          });
+          
+          console.log(`[route] Awarded ${userPoints} points to user (${userType})`);
+          pointsAwarded = userPoints;
         }
       }
 

@@ -3,45 +3,89 @@ import { query, mutation, internalMutation, internalAction, internalQuery } from
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-// Award points to user for making a prompt
+// Award points to user for making a prompt (according to specification)
 export const awardUserPoints = internalMutation({
   args: {
     address: v.string(),
-    amount: v.number(),
+    userType: v.optional(v.union(v.literal("user"), v.literal("developer"), v.literal("agent"))),
+    apiKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTimestamp = today.getTime();
-
+    // Calculate points per prompt based on user type
+    const userType = args.userType || getUserTypeFromApiKey(args.apiKey);
+    const pointsPerPrompt = getPointsPerPrompt(userType);
+    
+    const utcMidnight = getUTCMidnight();
+    
     const points = await ctx.db
       .query("userPoints")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
     if (points) {
-      // Check if we need to reset daily counters
-      const lastEarnedDate = new Date(points.lastEarned);
-      lastEarnedDate.setHours(0, 0, 0, 0);
-      const isNewDay = lastEarnedDate.getTime() < todayTimestamp;
+      // Check if we need to reset daily counters (UTC midnight)
+      const isNewDay = !points.lastReset || points.lastReset < utcMidnight;
 
       await ctx.db.patch(points._id, {
-        points: points.points + args.amount,
+        points: points.points + pointsPerPrompt,
         promptsToday: isNewDay ? 1 : points.promptsToday + 1,
-        pointsToday: isNewDay ? args.amount : points.pointsToday + args.amount,
+        pointsToday: isNewDay ? pointsPerPrompt : points.pointsToday + pointsPerPrompt,
         lastEarned: Date.now(),
+        lastReset: isNewDay ? utcMidnight : points.lastReset,
+        dailyLimit: getDailyLimit(userType),
       });
     } else {
       await ctx.db.insert("userPoints", {
         address: args.address,
-        points: args.amount,
+        points: pointsPerPrompt,
         promptsToday: 1,
-        pointsToday: args.amount,
+        pointsToday: pointsPerPrompt,
         lastEarned: Date.now(),
+        lastReset: utcMidnight,
+        dailyLimit: getDailyLimit(userType),
       });
     }
+    
+    return pointsPerPrompt;
   },
 });
+
+// Helper functions for points calculation
+function getUserTypeFromApiKey(apiKey?: string): "user" | "developer" | "agent" {
+  if (!apiKey) return "user";
+  if (apiKey.startsWith("dk_")) return "developer";
+  if (apiKey.startsWith("ak_")) return "agent";
+  return "user";
+}
+
+function getPointsPerPrompt(userType: string): number {
+  const rates = {
+    user: 1,      // 1 point per prompt
+    developer: 2, // 2 points per prompt
+    agent: 2      // 2 points per prompt
+  };
+  return rates[userType as keyof typeof rates] || 1;
+}
+
+function getDailyLimit(userType: string): number {
+  const limits = {
+    user: 100,      // 100 prompts/day
+    developer: 1000, // 1000 prompts/day
+    agent: 1000     // 1000 prompts/day
+  };
+  return limits[userType as keyof typeof limits] || 100;
+}
+
+function getUTCMidnight(): number {
+  const now = new Date();
+  const utcMidnight = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  return utcMidnight.getTime();
+}
 
 // Award points to provider
 export const awardProviderPoints = internalMutation({
@@ -120,54 +164,78 @@ export const updateProviderPointsInternal = internalMutation({
   },
 });
 
-// Daily VCU rewards for providers
+// Daily VCU rewards for providers (runs at UTC midnight as per specification)
 export const distributeDailyVCURewards = internalAction({
   args: {},
   handler: async (ctx) => {
-    console.log("Starting daily VCU rewards distribution...");
+    console.log("[VCU_REWARDS] Starting daily VCU rewards distribution at UTC midnight...");
+    
+    // Get all active providers for daily rewards
     const activeProviders = await ctx.runQuery(internal.providers.listActiveInternal);
+    console.log(`[VCU_REWARDS] Found ${activeProviders.length} active providers`);
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTimestamp = today.getTime();
-    
+    const utcMidnight = getUTCMidnightForCron();
     let totalAwarded = 0;
+    let providersAwarded = 0;
     
     for (const provider of activeProviders) {
-      const dailyReward = provider.vcuBalance || 0; // 1 point per VCU per day
-      
-      if (dailyReward > 0) {
+      try {
+        // Daily reward = VCU balance (1:1 ratio as per specification)
+        const dailyReward = provider.vcuBalance || 0;
+        
+        if (dailyReward <= 0) {
+          console.log(`[VCU_REWARDS] Skipping provider ${provider.name} - no VCU balance`);
+          continue;
+        }
+        
         // Get current points record
         const pointsRecord = await ctx.runQuery(internal.points.getProviderPointsInternal, {
           providerId: provider._id,
         });
         
-        // Check if already awarded today
-        if (pointsRecord && pointsRecord.lastDailyReward && pointsRecord.lastDailyReward >= todayTimestamp) {
-          console.log(`Already awarded daily points to provider ${provider.name} today`);
+        // Check if already awarded today (UTC midnight check)
+        if (pointsRecord?.lastDailyReward && pointsRecord.lastDailyReward >= utcMidnight) {
+          console.log(`[VCU_REWARDS] Already awarded daily points to provider ${provider.name} today`);
           continue;
         }
         
         const currentPoints = pointsRecord?.points ?? 0;
         const newTotalPoints = currentPoints + dailyReward;
         
-        // Update provider points - ACCUMULATE don't replace
+        // Award daily VCU points
         await ctx.runMutation(internal.points.updateProviderPointsInternal, {
           providerId: provider._id,
           points: newTotalPoints,
           totalPrompts: pointsRecord?.totalPrompts ?? 0,
           lastEarned: Date.now(),
-          lastDailyReward: todayTimestamp,
+          lastDailyReward: utcMidnight,
         });
         
-        console.log(`Awarded ${dailyReward} VCU points to ${provider.name}. Total now: ${newTotalPoints}`);
+        console.log(`[VCU_REWARDS] ✓ Awarded ${dailyReward} VCU points to ${provider.name}. Total: ${newTotalPoints}`);
         totalAwarded += dailyReward;
+        providersAwarded++;
+        
+      } catch (error) {
+        console.error(`[VCU_REWARDS] Error awarding points to provider ${provider._id}:`, error);
       }
     }
     
-    console.log(`Daily VCU rewards complete. Total points awarded: ${totalAwarded}`);
+    console.log(`[VCU_REWARDS] Completed: ${providersAwarded} providers awarded ${totalAwarded} total points`);
+    return { providersAwarded, totalAwarded };
   },
 });
+
+// Helper function for cron job UTC midnight calculation
+function getUTCMidnightForCron(): number {
+  const now = new Date();
+  const utcMidnight = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  return utcMidnight.getTime();
+}
 
 // Get provider points and stats (public query)
 export const getProviderPoints = query({
@@ -182,6 +250,28 @@ export const getProviderPoints = query({
       totalPrompts: pointsRecord?.totalPrompts ?? 0,
       lastEarned: pointsRecord?.lastEarned ?? 0,
     };
+  },
+});
+
+// Debug query to get all provider points
+export const getAllProviderPoints = query({
+  args: {},
+  handler: async (ctx) => {
+    const allProviderPoints = await ctx.db.query("providerPoints").collect();
+    const providersWithPoints = [];
+    
+    for (const pp of allProviderPoints) {
+      const provider = await ctx.db.get(pp.providerId);
+      providersWithPoints.push({
+        providerId: pp.providerId,
+        providerName: provider?.name || "Unknown",
+        points: pp.points,
+        totalPrompts: pp.totalPrompts,
+        lastEarned: pp.lastEarned,
+      });
+    }
+    
+    return providersWithPoints;
   },
 });
 
@@ -289,7 +379,7 @@ export const getProviderLeaderboardWithRank = query({
   },
 });
 
-// Get user stats
+// Get user stats - Updated to use new points system
 export const getUserStats = query({
   args: { address: v.string() },
   handler: async (ctx, args) => {
@@ -298,29 +388,32 @@ export const getUserStats = query({
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
+    // Default user limit (non-API key users get 100)
+    const defaultLimit = 100;
+
     if (!points) {
       return {
         points: 0,
         promptsToday: 0,
-        promptsRemaining: 50,
+        promptsRemaining: defaultLimit,
         canMakePrompt: true,
       };
     }
 
-    // Check if it's a new day
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const lastEarnedDate = new Date(points.lastEarned);
-    lastEarnedDate.setHours(0, 0, 0, 0);
+    // Check if it's a new day using UTC midnight (as per specification)
+    const utcMidnight = getUTCMidnight();
+    const isNewDay = !points.lastReset || points.lastReset < utcMidnight;
     
-    const isNewDay = lastEarnedDate.getTime() < today.getTime();
+    // Use current daily limit or default
+    const dailyLimit = points.dailyLimit || defaultLimit;
     const promptsToday = isNewDay ? 0 : points.promptsToday;
+    const promptsRemaining = Math.max(0, dailyLimit - promptsToday);
 
     return {
       points: points.points,
       promptsToday,
-      promptsRemaining: Math.max(0, 50 - promptsToday),
-      canMakePrompt: promptsToday < 50,
+      promptsRemaining,
+      canMakePrompt: promptsRemaining > 0,
     };
   },
 });

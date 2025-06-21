@@ -2,87 +2,208 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
-body {
-  background-color: #000000;
-  color: #ffffff;
+/* Apple-inspired base styles */
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-dark-1 text-white font-sans;
+    font-feature-settings: 'kern' 1;
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* Apple-style selection */
+  ::selection {
+    @apply bg-brand-500/30;
+  }
 }
 
-/* Custom scrollbar */
+/* Apple-inspired scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #FFD700;
-  border-radius: 4px;
+  @apply bg-white/20 rounded-full;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #B8860B;
+  @apply bg-white/30;
 }
 
-/* Gradient text utility */
-.text-gradient-gold {
-  background: linear-gradient(135deg, #FFD700 0%, #B8860B 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.text-gradient-red {
-  background: linear-gradient(135deg, #DC143C 0%, #8B0000 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-@layer base {
-  body {
-    color: #FFFFFF;
-  }
+/* Apple-style focus rings */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:ring-offset-2 focus:ring-offset-dark-1;
 }
 
 @layer components {
-  .connectWalletBtn {
-    @apply relative overflow-hidden rounded-lg bg-bg px-3 py-1.5 text-sm font-semibold text-gold hover:text-white transition-all;
+  /* Apple-inspired buttons */
+  .btn-primary {
+    @apply bg-brand-500 hover:bg-brand-600 text-black font-medium px-6 py-3 rounded-2xl transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] focus-ring;
   }
   
-  .connectWalletBtn::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, #D4AF37 0%, #E63946 100%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    transition: opacity 0.3s;
-    opacity: 0.6;
+  .btn-secondary {
+    @apply bg-dark-3 hover:bg-dark-4 text-white font-medium px-6 py-3 rounded-2xl transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] focus-ring;
   }
   
-  .connectWalletBtn:hover::before {
-    opacity: 0.8;
+  .btn-ghost {
+    @apply bg-transparent hover:bg-white/5 text-white/70 hover:text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 ease-out focus-ring;
   }
 
-  .primary-cta {
-    @apply inline-block rounded-xl bg-gradient-to-br from-red to-gold px-6 py-3 text-white font-semibold shadow-lg hover:scale-105 hover:shadow-2xl hover:shadow-red/30 hover:-translate-y-0.5 transition-all;
+  /* Apple-style cards */
+  .card {
+    @apply bg-dark-2 border border-dark-4 rounded-3xl overflow-hidden transition-all duration-300 ease-out;
+  }
+  
+  .card-hover {
+    @apply hover:bg-dark-3 hover:border-dark-5 hover:shadow-2xl hover:shadow-black/20 hover:-translate-y-1;
+  }
+  
+  .card-glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden;
   }
 
-  .secondary-cta {
-    @apply inline-block rounded-xl border border-gold text-gold px-6 py-3 font-semibold hover:bg-gold hover:text-bg transition-all;
+  /* Apple-style inputs */
+  .input {
+    @apply bg-dark-3 border border-dark-5 rounded-2xl px-4 py-3 text-white placeholder-white/50 transition-all duration-200 ease-out focus:border-brand-500 focus:bg-dark-4 focus-ring;
+  }
+  
+  .input-ghost {
+    @apply bg-transparent border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 transition-all duration-200 ease-out focus:border-white/30 focus:bg-white/5 focus-ring;
   }
 
-  .glass-card {
-    @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl shadow-lg shadow-black/40;
+  /* Sidebar styling */
+  .sidebar {
+    @apply bg-dark-2/95 backdrop-blur-xl border-r border-dark-4;
+  }
+  
+  .sidebar-item {
+    @apply flex items-center px-4 py-3 mx-2 rounded-2xl text-white/70 hover:text-white hover:bg-white/5 transition-all duration-200 ease-out cursor-pointer;
+  }
+  
+  .sidebar-item-active {
+    @apply bg-brand-500/10 text-brand-500 hover:bg-brand-500/15;
   }
 
-  .glass-card:hover {
-    @apply shadow-2xl shadow-red/20;
+  /* Message styling */
+  .message {
+    @apply max-w-[85%] rounded-3xl px-6 py-4 animate-slide-up;
+  }
+  
+  .message-user {
+    @apply bg-brand-500 text-black ml-auto;
+  }
+  
+  .message-assistant {
+    @apply bg-white text-black border border-gray-200;
+  }
+  
+  /* Message content styling */
+  .message p,
+  .message-content {
+    @apply text-black font-medium;
+  }
+  
+  /* Override any white text in messages */
+  .message .text-white,
+  .message .text-white\/90,
+  .message .text-white\/80,
+  .message .text-white\/70 {
+    @apply text-black;
+  }
+
+  /* Model selector */
+  .model-selector {
+    @apply bg-dark-3 border border-dark-5 rounded-2xl p-4 transition-all duration-200 ease-out hover:bg-dark-4 cursor-pointer;
+  }
+  
+  .model-selector-active {
+    @apply bg-brand-500/10 border-brand-500/50 text-brand-500;
+  }
+
+  /* Apple-style dropdowns */
+  .dropdown {
+    @apply bg-dark-2/95 backdrop-blur-xl border border-dark-4 rounded-3xl shadow-2xl shadow-black/50 overflow-hidden;
+    z-index: 9999;
+  }
+  
+  /* Ensure model dropdown is always on top */
+  .model-dropdown {
+    position: relative;
+    z-index: 1000;
+  }
+  
+  .model-dropdown .dropdown-backdrop {
+    z-index: 9998;
+  }
+  
+  .model-dropdown .dropdown-menu {
+    z-index: 9999;
+  }
+  
+  .dropdown-item {
+    @apply px-6 py-4 text-white/80 hover:text-white hover:bg-white/5 transition-all duration-150 ease-out cursor-pointer border-b border-dark-4 last:border-b-0;
+  }
+  
+  .dropdown-item-selected {
+    @apply bg-brand-500/10 text-brand-500;
+  }
+
+  /* Status indicators */
+  .status-online {
+    @apply w-2 h-2 bg-system-green rounded-full;
+  }
+  
+  .status-offline {
+    @apply w-2 h-2 bg-neutral-500 rounded-full;
+  }
+
+  /* Loading states */
+  .loading-spinner {
+    @apply animate-spin rounded-full border-2 border-white/20 border-t-brand-500;
+  }
+  
+  .loading-dots {
+    @apply flex space-x-1;
+  }
+  
+  .loading-dot {
+    @apply w-2 h-2 bg-white/40 rounded-full animate-pulse;
+  }
+
+  /* Apple-style badges */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply bg-brand-500/20 text-brand-500;
+  }
+  
+  .badge-secondary {
+    @apply bg-white/10 text-white/70;
+  }
+
+  /* Capability icons */
+  .capability-icon {
+    @apply w-5 h-5 flex items-center justify-center text-sm;
+  }
+
+  /* Smooth transitions for everything */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
   }
 }

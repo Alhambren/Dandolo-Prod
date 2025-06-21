@@ -6,6 +6,7 @@ import ProvidersPage from './components/ProvidersPage';
 import DevelopersPage from './components/DevelopersPage';
 import DashboardPage from './components/DashboardPage';
 import { WalletConnectButton } from './components/WalletConnectButton';
+import { Logo } from './components/Logo';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<
@@ -13,45 +14,46 @@ export default function App() {
   >('home');
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
+    <div className="min-h-screen bg-dark-1 text-white">
       <Toaster position="bottom-right" />
       
-      <nav className="bg-black/50 backdrop-blur-lg border-b border-white/10">
-        <div className="container mx-auto px-4">
+      {/* Navigation bar - always visible */}
+      <nav className="bg-dark-2/95 backdrop-blur-xl border-b border-dark-4">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center">
               <button 
                 onClick={() => setCurrentPage('home')}
-                className="text-xl font-bold bg-gradient-to-r from-red to-gold bg-clip-text text-transparent"
+                className="hover:opacity-80 transition-opacity"
               >
-                Dandolo.ai
+                <Logo variant="shield" className="h-8 w-auto" showText={true} />
               </button>
             </div>
 
             {/* Navigation */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6">
               <button
                 onClick={() => setCurrentPage('chat')}
-                className={`text-gray-300 hover:text-white ${currentPage === 'chat' ? 'text-white font-medium' : ''}`}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'chat' ? 'text-white font-medium' : ''}`}
               >
                 Chat
               </button>
               <button
                 onClick={() => setCurrentPage('providers')}
-                className={`text-gray-300 hover:text-white ${currentPage === 'providers' ? 'text-white font-medium' : ''}`}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'providers' ? 'text-white font-medium' : ''}`}
               >
                 Providers
               </button>
               <button
                 onClick={() => setCurrentPage('dashboard')}
-                className={`text-gray-300 hover:text-white ${currentPage === 'dashboard' ? 'text-white font-medium' : ''}`}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'dashboard' ? 'text-white font-medium' : ''}`}
               >
                 Dashboard
               </button>
               <button
                 onClick={() => setCurrentPage('developers')}
-                className={`text-gray-300 hover:text-white ${currentPage === 'developers' ? 'text-white font-medium' : ''}`}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'developers' ? 'text-white font-medium' : ''}`}
               >
                 Developers
               </button>
@@ -63,8 +65,8 @@ export default function App() {
         </div>
       </nav>
       
-      <main className="container mx-auto px-4 py-8">
-        {currentPage === 'home' && <HomePage />}
+      <main className={currentPage === 'home' || currentPage === 'chat' ? '' : 'max-w-7xl mx-auto px-6 py-8'}>
+        {currentPage === 'home' && <HomePage onNavigate={setCurrentPage} />}
         {currentPage === 'chat' && <ChatPage />}
         {currentPage === 'providers' && <ProvidersPage setCurrentPage={setCurrentPage} />}
         {currentPage === 'dashboard' && <DashboardPage />}

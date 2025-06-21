@@ -115,6 +115,8 @@ http.route({
         intent,
         sessionId: `api-${keyData._id}`,
         isAnonymous: false,
+        address: keyData.address,
+        apiKey: apiKey,
       });
 
       await ctx.runMutation(api.apiKeys.recordUsage, {
@@ -209,9 +211,10 @@ export const routeRequest = action({
     intentType: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<any> => {
-    // Check rate limit
+    // Check rate limit for anonymous users
     const rateLimit = await ctx.runMutation(api.rateLimit.checkRateLimit, {
-      sessionId: args.sessionId,
+      identifier: args.sessionId,
+      userType: "user",
     });
     
     if (!rateLimit.allowed) {
@@ -290,6 +293,75 @@ http.route({
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }),
+});
+
+// API Balance endpoint
+http.route({
+  path: "/api/v1/balance",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Missing or invalid authorization header" }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const apiKey = authHeader.substring(7);
+
+      // Validate API key
+      const keyData = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!keyData) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key" }),
+          { status: 401, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Get usage limits
+      const usageLimit = await ctx.runQuery(api.apiKeys.checkDailyUsageLimit, { key: apiKey });
+      
+      // Get user points
+      const userPoints = await ctx.runQuery(api.points.getUserPoints, { 
+        address: keyData.address || `api-${keyData._id}` 
+      });
+
+      // Calculate reset time (next UTC midnight)
+      const now = new Date();
+      const nextMidnight = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        0, 0, 0, 0
+      ));
+
+      return new Response(
+        JSON.stringify({
+          address: keyData.address || `api-${keyData._id}`,
+          prompts_today: usageLimit.used,
+          prompts_remaining: usageLimit.remaining,
+          daily_limit: usageLimit.limit,
+          points_total: userPoints,
+          user_type: usageLimit.keyType,
+          reset_time: nextMidnight.toISOString(),
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    } catch (error) {
+      console.error("Balance endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "Internal server error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
     }
   }),
 });

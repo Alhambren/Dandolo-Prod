@@ -17,18 +17,70 @@ function hashApiKey(apiKey: string): string {
 export const validateVeniceApiKey = action({
   args: { apiKey: v.string() },
   handler: async (_ctx, args) => {
+    const key = args.apiKey.trim();
+    
+    // 1. Check against blocked patterns from other providers
+    const BLOCKED_PREFIXES = [
+      'sk-',     // OpenAI
+      'claude-', // Anthropic legacy
+      'sk-ant-', // Anthropic current
+      'key-',    // Generic/Perplexity
+      'hf_',     // HuggingFace
+      'api-',    // Generic
+      'gsk_',    // Groq
+      'pk-',     // Poe
+      'xai-',    // xAI
+    ];
+    
+    // Check if key starts with known non-Venice prefixes
+    for (const prefix of BLOCKED_PREFIXES) {
+      if (key.startsWith(prefix)) {
+        const providerName = prefix === 'sk-' ? 'OpenAI' :
+                            prefix === 'claude-' || prefix === 'sk-ant-' ? 'Anthropic' :
+                            prefix === 'hf_' ? 'HuggingFace' :
+                            prefix === 'gsk_' ? 'Groq' :
+                            prefix === 'xai-' ? 'xAI' :
+                            'another provider';
+        return { 
+          isValid: false, 
+          error: `This appears to be a ${providerName} API key. Dandolo requires Venice.ai keys for decentralized compute. Get your key from venice.ai`
+        };
+      }
+    }
+    
+    // 2. Basic format validation for Venice.ai keys
+    if (key.length < 16) {
+      return { 
+        isValid: false, 
+        error: "API key too short. Venice.ai keys are typically 32+ characters of alphanumeric text."
+      };
+    }
+    
     try {
-      // Query models to determine total context tokens
+      // 3. Test with actual Venice.ai API call
       const response = await fetch("https://api.venice.ai/api/v1/models", {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${args.apiKey}`,
+          "Authorization": `Bearer ${key}`,
           "Content-Type": "application/json",
         },
       });
 
       if (response.ok) {
         const data = await response.json();
+        
+        // 4. Verify response contains Venice.ai-specific model patterns
+        const veniceModelPrefixes = ['llama-', 'mixtral-', 'nous-', 'dolphin-', 'qwen-', 'deepseek-', 'claude-3'];
+        const hasVeniceModel = data.data?.some((model: any) => 
+          veniceModelPrefixes.some(prefix => model.id?.toLowerCase().includes(prefix.toLowerCase()))
+        );
+        
+        if (!hasVeniceModel && data.data?.length > 0) {
+          return { 
+            isValid: false, 
+            error: "This API key works but doesn't appear to be from Venice.ai. Please get your key from venice.ai"
+          };
+        }
 
         const totalContextTokens =
           data.data?.reduce((sum: number, model: any) => {
@@ -47,15 +99,22 @@ export const validateVeniceApiKey = action({
           contextTokens: totalContextTokens,
         };
       } else if (response.status === 401) {
-        return { isValid: false, error: "Invalid API key" };
+        return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
       } else if (response.status === 429) {
         // Rate limited but key is valid
         return { isValid: true, balance: 0, currency: "VCU" };
       } else {
-        return { isValid: false, error: `Venice.ai error: ${response.status}` };
+        return { isValid: false, error: `Venice.ai API error: ${response.status}` };
       }
     } catch (error) {
-      return { isValid: false, error: "Failed to connect to Venice.ai" };
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      // 5. Check for provider-specific error patterns
+      if (errorMessage.includes("Invalid API key provided")) {
+        return { isValid: false, error: "This appears to be an OpenAI-style error. Please use your Venice.ai API key." };
+      }
+      
+      return { isValid: false, error: "Failed to connect to Venice.ai. Please check your internet connection and API key." };
     }
   },
 });
@@ -492,36 +551,244 @@ export const updateVCUBalance = internalMutation({
   },
 });
 
-// Run health checks for all providers
+// Single health check implementation
+async function runSingleHealthCheck(provider: any): Promise<{
+  status: boolean;
+  responseTime: number;
+  error?: string;
+}> {
+  const start = Date.now();
+  
+  try {
+    // Use Venice.ai /models endpoint for lightweight health checks (as per MVP spec)
+    const response = await fetch('https://api.venice.ai/api/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${provider.veniceApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      // 30 second timeout for health checks
+      signal: AbortSignal.timeout(30000)
+    });
+    
+    const responseTime = Date.now() - start;
+    
+    if (response.ok) {
+      return { status: true, responseTime };
+    } else {
+      return { 
+        status: false, 
+        responseTime,
+        error: `HTTP ${response.status}: ${response.statusText}`
+      };
+    }
+  } catch (error) {
+    const responseTime = Date.now() - start;
+    return {
+      status: false,
+      responseTime,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+// Comprehensive health check system
 export const runHealthChecks = internalAction({
   args: {},
   handler: async (ctx) => {
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+    console.log("[HEALTH_CHECK] Starting provider health checks...");
     
-    for (const provider of providers) {
+    // Get all providers (including inactive ones to potentially reactivate)
+    const allProviders = await ctx.runQuery(internal.providers.getAllProviders);
+    console.log(`[HEALTH_CHECK] Found ${allProviders.length} total providers`);
+    
+    let healthyCount = 0;
+    let unhealthyCount = 0;
+    
+    for (const provider of allProviders) {
       try {
-        const startTime = Date.now();
-        const response = await fetch("https://api.venice.ai/api/v1/models", {
-          headers: {
-            "Authorization": `Bearer ${provider.veniceApiKey}`,
-          },
-        });
-        const responseTime = Date.now() - startTime;
+        console.log(`[HEALTH_CHECK] Checking provider: ${provider.name} (${provider._id})`);
+        const result = await runSingleHealthCheck(provider);
         
-        await ctx.runMutation(internal.providers.recordHealthCheck, {
+        // Record health check result
+        await ctx.runMutation(internal.providers.recordHealthCheckResult, {
           providerId: provider._id,
-          status: response.ok,
-          responseTime,
+          status: result.status,
+          responseTime: result.responseTime,
+          error: result.error,
         });
+        
+        // Update provider status based on consecutive failures
+        await ctx.runMutation(internal.providers.updateProviderStatus, {
+          providerId: provider._id,
+          healthCheckPassed: result.status,
+        });
+        
+        if (result.status) {
+          healthyCount++;
+          console.log(`[HEALTH_CHECK] ✓ Provider ${provider.name} is healthy (${result.responseTime}ms)`);
+        } else {
+          unhealthyCount++;
+          console.log(`[HEALTH_CHECK] ✗ Provider ${provider.name} failed: ${result.error}`);
+        }
+        
       } catch (error) {
-        console.error(`Health check failed for provider ${provider._id}:`, error);
-        await ctx.runMutation(internal.providers.recordHealthCheck, {
+        console.error(`[HEALTH_CHECK] Critical error checking provider ${provider._id}:`, error);
+        unhealthyCount++;
+        
+        // Record failed health check
+        await ctx.runMutation(internal.providers.recordHealthCheckResult, {
           providerId: provider._id,
           status: false,
           responseTime: 0,
+          error: error instanceof Error ? error.message : "Unknown error",
         });
       }
     }
+    
+    console.log(`[HEALTH_CHECK] Completed: ${healthyCount} healthy, ${unhealthyCount} unhealthy`);
+    return { healthy: healthyCount, unhealthy: unhealthyCount };
+  },
+});
+
+// Get all providers including inactive ones (internal)
+export const getAllProviders = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("providers").collect();
+  },
+});
+
+// Record health check result with detailed tracking
+export const recordHealthCheckResult = internalMutation({
+  args: {
+    providerId: v.id("providers"),
+    status: v.boolean(),
+    responseTime: v.number(),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Record in health tracking table
+    await ctx.db.insert("providerHealth", {
+      providerId: args.providerId,
+      status: args.status,
+      responseTime: args.responseTime,
+      timestamp: Date.now(),
+      error: args.error,
+    });
+    
+    // Update provider's last health check
+    await ctx.db.patch(args.providerId, {
+      lastHealthCheck: Date.now(),
+    });
+  },
+});
+
+// Update provider status based on health check results
+export const updateProviderStatus = internalMutation({
+  args: {
+    providerId: v.id("providers"),
+    healthCheckPassed: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) return;
+    
+    const currentFailures = provider.consecutiveFailures || 0;
+    
+    if (args.healthCheckPassed) {
+      // Health check passed - reset failures and activate
+      await ctx.db.patch(args.providerId, {
+        consecutiveFailures: 0,
+        isActive: true,
+        markedInactiveAt: undefined,
+      });
+    } else {
+      // Health check failed - increment failures
+      const newFailures = currentFailures + 1;
+      
+      // Mark inactive after 2 consecutive failures
+      const shouldMarkInactive = newFailures >= 2 && provider.isActive;
+      
+      await ctx.db.patch(args.providerId, {
+        consecutiveFailures: newFailures,
+        isActive: shouldMarkInactive ? false : provider.isActive,
+        markedInactiveAt: shouldMarkInactive ? Date.now() : provider.markedInactiveAt,
+      });
+      
+      if (shouldMarkInactive) {
+        console.log(`[HEALTH_CHECK] Marking provider ${provider.name} as inactive after ${newFailures} failures`);
+      }
+    }
+  },
+});
+
+// Calculate provider uptime based on recent health checks
+export const getProviderUptime = query({
+  args: { 
+    providerId: v.id("providers"),
+    hours: v.optional(v.number()),
+  },
+  returns: v.object({
+    uptime: v.number(),
+    totalChecks: v.number(),
+    successfulChecks: v.number(),
+    lastCheck: v.optional(v.number()),
+  }),
+  handler: async (ctx, args) => {
+    const hours = args.hours || 24;
+    const cutoff = Date.now() - (hours * 60 * 60 * 1000);
+    
+    const healthChecks = await ctx.db
+      .query("providerHealth")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .filter((q) => q.gte(q.field("timestamp"), cutoff))
+      .collect();
+    
+    if (healthChecks.length === 0) {
+      return { uptime: 0, totalChecks: 0, successfulChecks: 0 };
+    }
+    
+    const successfulChecks = healthChecks.filter(check => check.status).length;
+    const uptime = (successfulChecks / healthChecks.length) * 100;
+    const lastCheck = Math.max(...healthChecks.map(check => check.timestamp));
+    
+    return {
+      uptime: Math.round(uptime * 100) / 100, // Round to 2 decimal places
+      totalChecks: healthChecks.length,
+      successfulChecks,
+      lastCheck,
+    };
+  },
+});
+
+// Get recent health check history
+export const getHealthHistory = query({
+  args: { 
+    providerId: v.id("providers"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(v.object({
+    status: v.boolean(),
+    responseTime: v.number(),
+    timestamp: v.number(),
+    error: v.optional(v.string()),
+  })),
+  handler: async (ctx, args) => {
+    const limit = args.limit || 50;
+    
+    const healthChecks = await ctx.db
+      .query("providerHealth")
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
+      .order("desc")
+      .take(limit);
+    
+    return healthChecks.map(check => ({
+      status: check.status,
+      responseTime: check.responseTime,
+      timestamp: check.timestamp,
+      error: check.error,
+    }));
   },
 });
 
