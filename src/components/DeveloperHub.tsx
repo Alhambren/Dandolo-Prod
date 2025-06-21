@@ -1,9 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DeveloperPortal } from './DeveloperPortal';
 import { DeveloperDocs } from './DeveloperDocs';
 
 export function DeveloperHub() {
   const [activeView, setActiveView] = useState<'portal' | 'docs'>('portal');
+  
+  // Handle hash-based navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash === '#portal') {
+        setActiveView('portal');
+      } else if (window.location.hash === '#docs') {
+        setActiveView('docs');
+      }
+    };
+    
+    // Check initial hash
+    handleHashChange();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
   
   return (
     <div className="min-h-screen bg-dark-1 text-white">
