@@ -19,15 +19,10 @@ const DashboardPage: React.FC = () => {
   // Queries
   const userStats = useQuery(api.points.getUserStats, address ? { address } : "skip");
   const userPoints = useQuery(api.wallets.getUserPoints, address ? { address } : "skip");
-  const systemStats = useQuery(api.analytics.getSystemStats);
   const providers = useQuery(api.providers.list);
   const currentProvider = providers?.find(p => p.address === address);
   const providerStats = useQuery(
-    api.providers.getStats,
-    currentProvider?._id ? { providerId: currentProvider._id } : "skip"
-  );
-  const providerHealth = useQuery(
-    api.providers.getProviderHealth,
+    api.points.getProviderPoints,
     currentProvider?._id ? { providerId: currentProvider._id } : "skip"
   );
 
@@ -179,8 +174,8 @@ const DashboardPage: React.FC = () => {
                 <div className="text-sm text-gray-400">Prompts Served</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className="text-2xl font-bold text-gold">{(currentProvider.uptime || 0).toFixed(1)}%</div>
-                <div className="text-sm text-gray-400">Uptime</div>
+                <div className="text-2xl font-bold text-gold">{currentProvider.isActive ? '100%' : '0%'}</div>
+                <div className="text-sm text-gray-400">Status</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <AnimatedPointsCounter points={displayPoints} />
@@ -195,48 +190,19 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Health status */}
+            {/* Provider Info */}
             <div className="bg-white/5 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-300">Last Health Check</span>
-                <span className="text-white">
-                  {providerHealth?.lastCheck 
-                    ? `${Math.floor((Date.now() - providerHealth.lastCheck) / 60000)} minutes ago`
-                    : 'Pending'
-                  }
-                </span>
+                <span className="text-gray-300">Provider Address</span>
+                <span className="text-white font-mono text-sm">{currentProvider.address}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-300">Average Response Time</span>
-                <span className="text-white">{currentProvider.avgResponseTime || 0}ms</span>
+                <span className="text-gray-300">Registered</span>
+                <span className="text-white">
+                  {new Date(currentProvider._creationTime || 0).toLocaleDateString()}
+                </span>
               </div>
             </div>
-
-            {/* Health History Visualization */}
-            {providerStats?.recentHealthChecks && providerStats.recentHealthChecks.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold text-white mb-3">Health History</h3>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="flex space-x-1 mb-2">
-                    {providerStats.recentHealthChecks.slice(0, 30).map((check, index) => (
-                      <div
-                        key={index}
-                        className={`flex-1 h-8 rounded-sm ${
-                          check.status === 'success' ? 'bg-green-500' : 'bg-red-500'
-                        } hover:opacity-80 cursor-pointer`}
-                        title={`${new Date(check.timestamp).toLocaleString()} - ${
-                          check.responseTime ? `${check.responseTime}ms` : 'Failed'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>30 checks ago</span>
-                    <span>Now</span>
-                  </div>
-                </div>
-              </div>
-            )}
 
             <div className="mt-6 flex justify-end">
               <button

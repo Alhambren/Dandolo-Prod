@@ -1,10 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { WagmiProvider } from 'wagmi'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { config, queryClient } from './lib/wagmi'
 import "./index.css";
 import App from "./App.tsx";
-import { ContextProvider } from "./context";
-import { BrowserRouter } from 'react-router-dom'
 
 if (!import.meta.env.VITE_CONVEX_URL) {
   alert(
@@ -19,12 +20,12 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ContextProvider>
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
         <ConvexProvider client={convex}>
           <App />
         </ConvexProvider>
-      </ContextProvider>
-    </BrowserRouter>
+      </QueryClientProvider>
+    </WagmiProvider>
   </React.StrictMode>
 );

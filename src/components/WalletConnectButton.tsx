@@ -1,7 +1,5 @@
 import { useAppKit, useAppKitAccount, useAppKitState } from '@reown/appkit/react'
 import { useAccount, useSignMessage } from 'wagmi'
-import { useMutation } from "convex/react"
-import { api } from "../../convex/_generated/api"
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 
@@ -9,7 +7,6 @@ export function WalletConnectButton() {
   const { address } = useAccount()
   const { open } = useAppKit()
   const { signMessageAsync } = useSignMessage()
-  const verifyWallet = useMutation(api.wallets.verifyWallet)
   const [isVerified, setIsVerified] = useState(false)
 
   // Check connection status without auto-popup
