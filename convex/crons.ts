@@ -11,16 +11,16 @@ crons.interval(
   {}
 );
 
-// Update VCU balances every 4 hours and before daily rewards
+// Update VCU balances every hour for real-time accuracy
 crons.interval(
   "update-vcu-balances",
-  { hours: 4 },
+  { hours: 1 },
   internal.providers.refreshAllVCUBalances,
   {}
 );
 
 // Daily VCU rewards at midnight UTC (as per specification)
-// VCU balances are refreshed every 4 hours to ensure accuracy
+// VCU balances are refreshed hourly to ensure accuracy
 crons.interval(
   "daily-vcu-distribution",
   { hours: 24 },

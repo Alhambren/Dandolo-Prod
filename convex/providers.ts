@@ -325,43 +325,6 @@ export const updateProviderHealth = mutation({
   },
 });
 
-// Refresh VCU balance for a specific provider (manual refresh)
-export const refreshProviderVCU = action({
-  args: { 
-    providerId: v.id("providers"),
-    address: v.string() // For ownership verification
-  },
-  handler: async (ctx, args) => {
-    const provider = await ctx.runQuery(api.providers.getProvider, { 
-      providerId: args.providerId 
-    });
-    
-    if (!provider || provider.address !== args.address) {
-      throw new Error("Provider not found or unauthorized");
-    }
-    
-    // Get fresh VCU balance from Venice.ai
-    const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
-      apiKey: provider.veniceApiKey || ""
-    });
-    
-    if (validation.isValid && validation.balance !== undefined) {
-      await ctx.runMutation(internal.providers.updateVCUBalance, {
-        providerId: args.providerId,
-        vcuBalance: validation.balance
-      });
-      
-      return {
-        success: true,
-        oldBalance: provider.vcuBalance,
-        newBalance: validation.balance,
-        difference: validation.balance - (provider.vcuBalance || 0)
-      };
-    } else {
-      throw new Error(validation.error || "Failed to validate API key");
-    }
-  },
-});
 
 // Get provider stats for dashboard
 export const getStats = query({
@@ -398,13 +361,28 @@ export const getProviderHealth = query({
   },
 });
 
-// Get all providers (without API keys)
+// Get all providers (without API keys) and refresh VCU for active ones
 export const list = query({
   args: {},
   handler: async (ctx) => {
     const providers = await ctx.db
       .query("providers")
       .collect();
+
+    // Schedule VCU refresh for any providers with stale data (>2 hours old)
+    const staleThreshold = Date.now() - (2 * 60 * 60 * 1000); // 2 hours
+    
+    providers.forEach(async (provider) => {
+      if (provider.isActive && 
+          provider.veniceApiKey && 
+          provider.veniceApiKey.length > 30 &&
+          (!provider.lastHealthCheck || provider.lastHealthCheck < staleThreshold)) {
+        // Trigger background VCU refresh (fire and forget)
+        ctx.scheduler.runAfter(0, internal.providers.refreshSingleProviderVCU, {
+          providerId: provider._id
+        });
+      }
+    });
 
     return providers.map(provider => ({
       ...provider,
@@ -967,6 +945,58 @@ export const recordPromptServed = internalMutation({
   },
 });
 
+// Refresh VCU balance for a single provider (internal use)
+export const refreshSingleProviderVCU = internalAction({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    try {
+      const provider = await ctx.runQuery(internal.providers.getById, { 
+        id: args.providerId 
+      });
+      
+      if (!provider || !provider.veniceApiKey) {
+        return { success: false, error: "Provider not found or no API key" };
+      }
+
+      // Validate and get current VCU balance from Venice.ai
+      const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
+        apiKey: provider.veniceApiKey
+      });
+      
+      if (validation.isValid && validation.balance !== undefined) {
+        // Only update if balance has changed significantly (>5 VCU difference)
+        if (Math.abs(validation.balance - (provider.vcuBalance || 0)) > 5) {
+          await ctx.runMutation(internal.providers.updateVCUBalance, {
+            providerId: args.providerId,
+            vcuBalance: validation.balance
+          });
+          return { 
+            success: true, 
+            updated: true,
+            oldBalance: provider.vcuBalance,
+            newBalance: validation.balance
+          };
+        }
+        return { success: true, updated: false, message: "VCU balance unchanged" };
+      } else {
+        // Mark provider as inactive if API key is invalid
+        if (provider.isActive) {
+          await ctx.runMutation(internal.providers.updateProviderStatus, {
+            providerId: args.providerId,
+            healthCheckPassed: false
+          });
+        }
+        return { success: false, error: validation.error || "API key validation failed" };
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      };
+    }
+  },
+});
+
 // Automatically refresh VCU balances for all providers (called by cron)
 export const refreshAllVCUBalances = internalAction({
   args: {},
@@ -976,40 +1006,14 @@ export const refreshAllVCUBalances = internalAction({
     let errorCount = 0;
     
     for (const provider of providers) {
-      try {
-        // Validate and get current VCU balance from Venice.ai
-        const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
-          apiKey: provider.veniceApiKey
-        });
-        
-        if (validation.isValid && validation.balance !== undefined) {
-          // Only update if balance has changed significantly (>5 VCU difference)
-          if (Math.abs(validation.balance - (provider.vcuBalance || 0)) > 5) {
-            await ctx.runMutation(internal.providers.updateVCUBalance, {
-              providerId: provider._id,
-              vcuBalance: validation.balance
-            });
-            updatedCount++;
-          }
-        } else {
-          // Mark provider as inactive if API key is invalid
-          if (provider.isActive) {
-            await ctx.runMutation(internal.providers.updateProviderStatus, {
-              providerId: provider._id,
-              healthCheckPassed: false
-            });
-          }
-          errorCount++;
-        }
-      } catch (error) {
+      const result = await ctx.runAction(internal.providers.refreshSingleProviderVCU, {
+        providerId: provider._id
+      });
+      
+      if (result.success && result.updated) {
+        updatedCount++;
+      } else if (!result.success) {
         errorCount++;
-        // Mark provider as having issues
-        if (provider.isActive) {
-          await ctx.runMutation(internal.providers.updateProviderStatus, {
-            providerId: provider._id,
-            healthCheckPassed: false
-          });
-        }
       }
     }
     
