@@ -34,9 +34,9 @@ export function DeveloperDocs() {
             <div>
               <h3 className="text-lg font-semibold mb-3">What is Dandolo?</h3>
               <p className="text-gray-300">
-                Dandolo is a decentralized AI inference network. We route your requests 
-                across multiple independent compute providers, ensuring high availability 
-                and no vendor lock-in.
+                Dandolo is an AI inference router that gives you access to a large, 
+                uncensored pool of AI models. We route your requests across multiple 
+                compute providers for better reliability and performance.
               </p>
             </div>
             
@@ -60,8 +60,8 @@ export function DeveloperDocs() {
             <div>
               <h3 className="text-lg font-semibold mb-3">2. Make Your First Request</h3>
               <p className="text-gray-300 mb-3">
-                Dandolo uses the same API format as OpenAI and Venice.ai. 
-                Just change your endpoint:
+                Dandolo uses standard chat completion API format. 
+                Connect with any HTTP client:
               </p>
               <pre className="bg-black/50 p-4 rounded-lg">
 {`curl https://dandolo.ai/api/chat/completions \\
@@ -77,10 +77,10 @@ export function DeveloperDocs() {
             <div className="mt-8 p-4 bg-green-500/20 border border-green-500 rounded-lg">
               <p className="font-semibold">✨ Why Dandolo?</p>
               <ul className="text-sm mt-2 space-y-1">
-                <li>• No single point of failure</li>
+                <li>• Access to uncensored AI model pool</li>
+                <li>• Higher reliability through multiple providers</li>
                 <li>• Privacy-first (no logging or tracking)</li>
-                <li>• 20+ open models available</li>
-                <li>• Compatible with existing AI tools</li>
+                <li>• Standard API format - use any client</li>
               </ul>
             </div>
           </div>
@@ -152,31 +152,15 @@ export function DeveloperDocs() {
         <div className="space-y-6">
           <div className="mb-6 p-4 bg-blue-500/20 border border-blue-500 rounded-lg">
             <p className="text-sm">
-              💡 <strong>Tip:</strong> Dandolo works with any OpenAI-compatible client. 
-              Just set your base URL to <code className="bg-gray-800 px-2 py-1 rounded">https://dandolo.ai/api</code> and use your Dandolo key.
+              💡 <strong>Tip:</strong> Dandolo uses standard chat completion API format. 
+              Use any HTTP client - point to <code className="bg-gray-800 px-2 py-1 rounded">https://dandolo.ai/api</code> with your Dandolo key.
             </p>
           </div>
           
           <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Python - Multiple Options</h3>
+            <h3 className="text-lg font-semibold mb-4">Python</h3>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
-{`# Option 1: Using OpenAI Python SDK
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="dk_your_dandolo_key",
-    base_url="https://dandolo.ai/api"
-)
-
-# Option 2: Using Venice SDK  
-from venice import Venice
-
-client = Venice(
-    api_key="dk_your_dandolo_key",
-    base_url="https://dandolo.ai/api"
-)
-
-# Option 3: Using requests
+{`# Option 1: Using requests (most direct)
 import requests
 
 response = requests.post(
@@ -188,7 +172,18 @@ response = requests.post(
     }
 )
 
-# All three methods work identically!`}
+# Option 2: Using any compatible client library
+from openai import OpenAI  # Compatible client library
+
+client = OpenAI(
+    api_key="dk_your_dandolo_key",
+    base_url="https://dandolo.ai/api"
+)
+
+response = client.chat.completions.create(
+    model="llama-3.3-70b-instruct",
+    messages=[{"role": "user", "content": "Hello!"}]
+)`}
             </pre>
           </GlassCard>
           
@@ -294,7 +289,7 @@ function ModelsList() {
           {models.map((model: any) => (
             <div key={model.id} className="p-3 bg-white/5 rounded-lg">
               <code className="text-sm text-blue-400">{model.id}</code>
-              <p className="text-xs text-gray-400 mt-1">by {model.owned_by || 'Venice.ai'}</p>
+              <p className="text-xs text-gray-400 mt-1">Available through Dandolo</p>
             </div>
           ))}
         </div>
@@ -304,7 +299,7 @@ function ModelsList() {
         </div>
       )}
       <p className="text-sm text-gray-400 mt-4">
-        * All Venice.ai models are available through Dandolo
+        * Models are continuously updated in our inference pool
       </p>
     </GlassCard>
   );

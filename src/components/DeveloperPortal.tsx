@@ -189,7 +189,7 @@ export function DeveloperPortal() {
       <GlassCard className="p-6">
         <h2 className="text-xl font-semibold mb-4">Quick Start</h2>
         <pre className="bg-black/50 p-4 rounded-lg overflow-x-auto text-sm">
-{`// Use any OpenAI-compatible client with Dandolo
+{`// Use any compatible client with Dandolo
 import { OpenAI } from 'openai';
 
 const client = new OpenAI({
