@@ -9,7 +9,6 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
-  const topProviders = useQuery(api.providers.getTopProviders, { limit: 3 });
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPaused, setIsVideoPaused] = React.useState(false);
 
@@ -33,7 +32,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         video.style.opacity = '1';
       });
       
-      video.addEventListener('error', (e) => {
+      video.addEventListener('error', () => {
         console.log('Hero video failed to load, using fallback background');
         if (video.parentElement) {
           video.parentElement.style.background = 'linear-gradient(135deg, rgba(255, 201, 71, 0.1) 0%, rgba(0, 0, 0, 0.8) 100%)';
@@ -171,26 +170,30 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="card card-hover p-8 text-center">
             <div className="text-4xl font-bold text-brand-500 mb-2">
-              {networkStats?.totalProviders || 0}
+              {networkStats?.activeProviders || 0}
             </div>
             <div className="text-white/80 font-medium mb-1">Active Providers</div>
-            <div className="text-white/50 text-sm">Contributing compute power</div>
+            <div className="text-white/50 text-sm">Online and serving requests</div>
           </div>
           
           <div className="card card-hover p-8 text-center">
             <div className="text-4xl font-bold text-system-green mb-2">
-              {networkStats?.totalPrompts ? (networkStats.totalPrompts / 1000).toFixed(1) + 'k' : '0'}
+              {networkStats?.totalPrompts ? 
+                networkStats.totalPrompts >= 1000 ? 
+                  (networkStats.totalPrompts / 1000).toFixed(1) + 'k' : 
+                  networkStats.totalPrompts.toLocaleString() 
+                : '0'}
             </div>
-            <div className="text-white/80 font-medium mb-1">Total Prompts</div>
-            <div className="text-white/50 text-sm">AI requests processed</div>
+            <div className="text-white/80 font-medium mb-1">Total Requests</div>
+            <div className="text-white/50 text-sm">AI inferences processed</div>
           </div>
           
           <div className="card card-hover p-8 text-center">
             <div className="text-4xl font-bold text-system-blue mb-2">
-              {networkStats?.activeUsers || '0'}
+              {networkStats?.activeUsers || 0}
             </div>
             <div className="text-white/80 font-medium mb-1">Active Users</div>
-            <div className="text-white/50 text-sm">Using the network</div>
+            <div className="text-white/50 text-sm">Using the network today</div>
           </div>
         </div>
       </div>
@@ -199,7 +202,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       <div className="max-w-7xl mx-auto px-6 py-24">
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">Why Choose Dandolo</h2>
-          <p className="text-white/60 text-lg">Built for privacy, performance, and developer experience</p>
+          <p className="text-white/60 text-lg">The anonymous alternative to centralized AI platforms</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -209,8 +212,8 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             </div>
             <h3 className="text-xl font-semibold mb-3">Anonymous by Default</h3>
             <p className="text-white/60 leading-relaxed">
-              No account required. No conversation history stored. 
-              Complete privacy for your AI interactions.
+              Zero tracking, no accounts, no conversation storage. 
+              Your privacy is guaranteed, not just promised.
             </p>
           </div>
           
@@ -218,10 +221,10 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div className="w-12 h-12 bg-system-blue/10 rounded-2xl flex items-center justify-center mb-6">
               <span className="text-2xl">⚡</span>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Lightning Fast</h3>
+            <h3 className="text-xl font-semibold mb-3">Better Uptime</h3>
             <p className="text-white/60 leading-relaxed">
-              Global provider network ensures low latency and 
-              high availability for all your AI requests.
+              Decentralized infrastructure eliminates single points of failure.
+              When one provider goes down, others keep you online.
             </p>
           </div>
           
@@ -229,10 +232,10 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div className="w-12 h-12 bg-system-purple/10 rounded-2xl flex items-center justify-center mb-6">
               <span className="text-2xl">🌐</span>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Decentralized</h3>
+            <h3 className="text-xl font-semibold mb-3">No Subscriptions</h3>
             <p className="text-white/60 leading-relaxed">
-              No single point of failure. Providers earn rewards 
-              for contributing compute to the network.
+              Pay per use, not per month. No commitments, no contracts,
+              no recurring charges for features you don't use.
             </p>
           </div>
           
@@ -240,10 +243,10 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div className="w-12 h-12 bg-system-green/10 rounded-2xl flex items-center justify-center mb-6">
               <span className="text-2xl">🔧</span>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Developer Ready</h3>
+            <h3 className="text-xl font-semibold mb-3">Drop-in Replacement</h3>
             <p className="text-white/60 leading-relaxed">
-              OpenAI-compatible API endpoints. Easy integration 
-              with existing applications and workflows.
+              Compatible with existing tools and workflows.
+              Switch from centralized providers in minutes, not days.
             </p>
           </div>
           
@@ -251,10 +254,10 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div className="w-12 h-12 bg-system-orange/10 rounded-2xl flex items-center justify-center mb-6">
               <span className="text-2xl">🎨</span>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Multi-Modal</h3>
+            <h3 className="text-xl font-semibold mb-3">Censorship Resistant</h3>
             <p className="text-white/60 leading-relaxed">
-              Text, code, image generation, and analysis. 
-              All in one unified platform.
+              Decentralized infrastructure means no single entity
+              controls your access to AI capabilities.
             </p>
           </div>
           
@@ -262,54 +265,15 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div className="w-12 h-12 bg-system-pink/10 rounded-2xl flex items-center justify-center mb-6">
               <span className="text-2xl">💰</span>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Fair Pricing</h3>
+            <h3 className="text-xl font-semibold mb-3">Transparent Pricing</h3>
             <p className="text-white/60 leading-relaxed">
-              Pay only for what you use. No subscriptions, 
-              no hidden fees, transparent token-based pricing.
+              No hidden costs or surprise bills. Market-driven pricing
+              keeps costs competitive and fair for everyone.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Top Providers Section */}
-      {topProviders && topProviders.length > 0 && (
-        <div className="max-w-7xl mx-auto px-6 py-24">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Top Providers</h2>
-            <p className="text-white/60 text-lg">Leading contributors to our network</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {topProviders.map((provider, index) => (
-              <div key={provider._id} className="card card-hover p-6" data-testid="provider-card">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-10 h-10 bg-brand-500/10 rounded-2xl flex items-center justify-center">
-                    <span className="text-brand-500 font-bold">#{index + 1}</span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">{provider.name}</h3>
-                    <div className="flex items-center gap-2">
-                      <div className="status-online"></div>
-                      <span className="text-xs text-white/50">Online</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Total Requests</span>
-                    <span className="font-medium">{provider.totalPrompts}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">VCU Balance</span>
-                    <span className="font-medium text-brand-500">{provider.vcuBalance}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* CTA Section */}
       <div className="bg-dark-2 border-y border-dark-4">
@@ -327,6 +291,12 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                 className="btn-primary text-lg px-8 py-4"
               >
                 Start Free Chat
+              </button>
+              <button 
+                onClick={() => handleNavigation('providers')}
+                className="btn-secondary text-lg px-8 py-4"
+              >
+                Add Inference
               </button>
               <button 
                 onClick={() => handleNavigation('developers')}

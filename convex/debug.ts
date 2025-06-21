@@ -249,4 +249,155 @@ export const listAllProvidersPublic = query({
       apiKeyPreview: p.veniceApiKey ? `${p.veniceApiKey.substring(0, 10)}...` : 'none'
     }));
   },
+});
+
+// Create multiple test providers with realistic data
+export const createTestProviders = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const testProviders = [
+      { name: "Test 1", totalPrompts: 1245, vcuBalance: 8500, responseTime: 850 },
+      { name: "Test 2", totalPrompts: 892, vcuBalance: 6200, responseTime: 920 },
+      { name: "Test 3", totalPrompts: 2134, vcuBalance: 12000, responseTime: 780 },
+      { name: "Test 4", totalPrompts: 567, vcuBalance: 3500, responseTime: 1100 },
+      { name: "Test 5", totalPrompts: 1789, vcuBalance: 9800, responseTime: 650 },
+    ];
+
+    const createdProviders = [];
+
+    for (let i = 0; i < testProviders.length; i++) {
+      const testData = testProviders[i];
+      const address = `0x${(i + 1).toString().repeat(40)}`;
+      
+      // Check if provider already exists
+      const existingProvider = await ctx.db
+        .query("providers")
+        .filter((q) => q.eq(q.field("name"), testData.name))
+        .first();
+
+      if (existingProvider) {
+        // Update existing provider with realistic data
+        await ctx.db.patch(existingProvider._id, {
+          totalPrompts: testData.totalPrompts,
+          vcuBalance: testData.vcuBalance,
+          avgResponseTime: testData.responseTime,
+          isActive: true,
+        });
+
+        // Update or create provider points
+        const providerPoints = await ctx.db
+          .query("providerPoints")
+          .withIndex("by_provider", (q) => q.eq("providerId", existingProvider._id))
+          .first();
+
+        const points = Math.floor(testData.totalPrompts * 100); // 100 points per prompt
+
+        if (providerPoints) {
+          await ctx.db.patch(providerPoints._id, {
+            points: points,
+            totalPrompts: testData.totalPrompts,
+            lastEarned: Date.now(),
+          });
+        } else {
+          await ctx.db.insert("providerPoints", {
+            providerId: existingProvider._id,
+            points: points,
+            totalPrompts: testData.totalPrompts,
+            lastEarned: Date.now(),
+          });
+        }
+
+        createdProviders.push({ id: existingProvider._id, name: testData.name, updated: true });
+        console.log(`Updated existing provider: ${testData.name} with ${testData.totalPrompts} prompts`);
+        continue;
+      }
+
+      // Create new provider
+      const providerId = await ctx.db.insert("providers", {
+        address: address,
+        name: testData.name,
+        description: `Test provider with ${testData.totalPrompts} served requests`,
+        veniceApiKey: `test_key_${testData.name.toLowerCase().replace(' ', '_')}_${Date.now()}`,
+        apiKeyHash: `hash_${i}_${Date.now()}`,
+        vcuBalance: testData.vcuBalance,
+        isActive: true,
+        totalPrompts: testData.totalPrompts,
+        registrationDate: Date.now() - (Math.random() * 30 * 24 * 60 * 60 * 1000), // Random date in last 30 days
+        avgResponseTime: testData.responseTime,
+        status: "active" as const,
+      });
+
+      // Create provider points
+      const points = Math.floor(testData.totalPrompts * 100); // 100 points per prompt
+      await ctx.db.insert("providerPoints", {
+        providerId: providerId,
+        points: points,
+        totalPrompts: testData.totalPrompts,
+        lastEarned: Date.now(),
+      });
+
+      createdProviders.push({ id: providerId, name: testData.name, created: true });
+      console.log(`Created new provider: ${testData.name} with ${testData.totalPrompts} prompts`);
+    }
+
+    return {
+      message: `Processed ${testProviders.length} test providers`,
+      providers: createdProviders,
+    };
+  },
+});
+
+// Fix provider data by syncing totalPrompts between providers and providerPoints tables
+export const fixProviderPromptCounts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const providers = await ctx.db.query("providers").collect();
+    const fixes = [];
+
+    for (const provider of providers) {
+      const providerPoints = await ctx.db
+        .query("providerPoints")
+        .withIndex("by_provider", (q) => q.eq("providerId", provider._id))
+        .first();
+
+      if (providerPoints) {
+        // Sync the counts - use the higher value
+        const actualPrompts = Math.max(provider.totalPrompts || 0, providerPoints.totalPrompts || 0);
+        const actualPoints = Math.max(providerPoints.points || 0, actualPrompts * 100);
+
+        // Update provider record
+        if (provider.totalPrompts !== actualPrompts) {
+          await ctx.db.patch(provider._id, {
+            totalPrompts: actualPrompts,
+          });
+          fixes.push(`Updated ${provider.name} totalPrompts: ${provider.totalPrompts} -> ${actualPrompts}`);
+        }
+
+        // Update provider points
+        if (providerPoints.totalPrompts !== actualPrompts || providerPoints.points !== actualPoints) {
+          await ctx.db.patch(providerPoints._id, {
+            totalPrompts: actualPrompts,
+            points: actualPoints,
+            lastEarned: Date.now(),
+          });
+          fixes.push(`Updated ${provider.name} points: ${providerPoints.points} -> ${actualPoints}`);
+        }
+      } else {
+        // Create missing provider points record
+        const points = (provider.totalPrompts || 0) * 100;
+        await ctx.db.insert("providerPoints", {
+          providerId: provider._id,
+          points: points,
+          totalPrompts: provider.totalPrompts || 0,
+          lastEarned: Date.now(),
+        });
+        fixes.push(`Created missing provider points for ${provider.name}`);
+      }
+    }
+
+    return {
+      message: `Fixed ${fixes.length} provider data issues`,
+      fixes: fixes,
+    };
+  },
 }); 

@@ -33,11 +33,17 @@ export function DeveloperDocs() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-3">What is Dandolo?</h3>
-              <p className="text-gray-300">
-                Dandolo is an AI inference router that gives you access to a large, 
-                uncensored pool of AI models. We route your requests across multiple 
-                compute providers for better reliability and performance.
+              <p className="text-gray-300 mb-3">
+                Dandolo is a decentralized AI inference platform that provides access to 
+                uncensored open-source models through a network of verified providers.
               </p>
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-sm text-blue-300">
+                  <strong>Key Difference:</strong> Unlike centralized AI providers, Dandolo routes 
+                  your requests to independent compute providers, ensuring better uptime, 
+                  uncensored responses, and no conversation logging.
+                </p>
+              </div>
             </div>
             
             <div>
@@ -160,7 +166,7 @@ export function DeveloperDocs() {
           <GlassCard className="p-6">
             <h3 className="text-lg font-semibold mb-4">Python</h3>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
-{`# Option 1: Using requests (most direct)
+{`# Direct HTTP requests (recommended)
 import requests
 
 response = requests.post(
@@ -172,8 +178,12 @@ response = requests.post(
     }
 )
 
-# Option 2: Using any compatible client library
-from openai import OpenAI  # Compatible client library
+data = response.json()
+print(data['choices'][0]['message']['content'])
+
+# Alternative: Using OpenAI-compatible client
+# Install: pip install openai
+from openai import OpenAI
 
 client = OpenAI(
     api_key="dk_your_dandolo_key",
@@ -183,7 +193,9 @@ client = OpenAI(
 response = client.chat.completions.create(
     model="llama-3.3-70b-instruct",
     messages=[{"role": "user", "content": "Hello!"}]
-)`}
+)
+
+print(response.choices[0].message.content)`}
             </pre>
           </GlassCard>
           
@@ -197,7 +209,7 @@ const DANDOLO_CONFIG = {
 };
 
 // Works with LangChain
-import { ChatOpenAI } from "langchain/chat_models/openai";
+import { ChatOpenAI } from "@langchain/openai";
 
 const llm = new ChatOpenAI({
   openAIApiKey: DANDOLO_CONFIG.apiKey,
@@ -206,8 +218,10 @@ const llm = new ChatOpenAI({
   }
 });
 
-// Works with AutoGPT, BabyAGI, etc.
-// Just configure the base URL and use your agent key`}
+// Works with any framework that supports OpenAI API format:
+// - AutoGPT, BabyAGI, LangGraph
+// - LiteLLM, LangSmith, CrewAI
+// - Just configure base URL to: https://dandolo.ai/api`}
             </pre>
           </GlassCard>
           

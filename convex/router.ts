@@ -369,7 +369,7 @@ http.route({
 // Transparent Venice.ai proxy - handles ALL Venice endpoints
 http.route({
   path: "/api/*",
-  method: ["GET", "POST", "PUT", "DELETE"],
+  method: "POST",
   handler: httpAction(async (ctx, request) => {
     try {
       // 1. Extract and validate API key

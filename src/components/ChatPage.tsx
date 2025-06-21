@@ -1113,7 +1113,7 @@ const ChatPage: React.FC = () => {
                     </div>
                     <p className="text-xs text-brand-400 leading-relaxed">
                       We NEVER store your conversations or data. Everything stays local in your browser. 
-                      We don't even look at your prompts - they go directly to AI providers.
+                      We route to uncensored AI and open source models - your prompts go directly to providers.
                     </p>
                   </div>
                 </div>
