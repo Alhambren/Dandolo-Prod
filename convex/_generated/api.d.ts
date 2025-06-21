@@ -25,6 +25,7 @@ import type * as providers from "../providers.js";
 import type * as rateLimit from "../rateLimit.js";
 import type * as router from "../router.js";
 import type * as stats from "../stats.js";
+import type * as wallets from "../wallets.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   rateLimit: typeof rateLimit;
   router: typeof router;
   stats: typeof stats;
+  wallets: typeof wallets;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

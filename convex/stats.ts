@@ -63,15 +63,12 @@ export const getNetworkStats = query({
     today.setHours(0, 0, 0, 0);
     const todayTimestamp = today.getTime();
     const todayInferences = inferences.filter(i => i.timestamp >= todayTimestamp);
-    // Calculate real average response time from actual inferences
+    // Calculate average response time from providers (since individual inferences don't track response time)
     let avgResponseTime = 0;
-    if (inferences.length > 0) {
-      const recentInferences = inferences.filter(i => 
-        i.timestamp >= Date.now() - (24 * 60 * 60 * 1000) && // Last 24 hours
-        i.responseTime && i.responseTime > 0 // Only include valid response times
-      );
-      if (recentInferences.length > 0) {
-        avgResponseTime = recentInferences.reduce((sum, i) => sum + (i.responseTime || 0), 0) / recentInferences.length;
+    if (activeProviders.length > 0) {
+      const providersWithResponseTime = activeProviders.filter(p => p.avgResponseTime && p.avgResponseTime > 0);
+      if (providersWithResponseTime.length > 0) {
+        avgResponseTime = providersWithResponseTime.reduce((sum, p) => sum + (p.avgResponseTime || 0), 0) / providersWithResponseTime.length;
       }
     }
     // Calculate active users from today's inferences only

@@ -73,13 +73,13 @@ export default defineSchema({
     address: v.string(),            // Owner wallet
     name: v.string(),              // User-friendly name
     key: v.string(),               // dk_ or ak_ prefixed
-    keyType: v.union(v.literal("developer"), v.literal("agent")),
+    keyType: v.optional(v.union(v.literal("developer"), v.literal("agent"))),
     isActive: v.boolean(),
     createdAt: v.number(),
     lastUsed: v.optional(v.number()),
     totalUsage: v.number(),        // Lifetime request count
-    dailyUsage: v.number(),        // Resets at midnight
-    lastReset: v.number(),         // Last daily reset
+    dailyUsage: v.optional(v.number()),        // Resets at midnight
+    lastReset: v.optional(v.number()),         // Last daily reset
   })
     .index("by_address", ["address"])
     .index("by_key", ["key"]),

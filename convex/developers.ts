@@ -10,7 +10,7 @@ export const generateApiKey = mutation({
     keyType: v.union(v.literal("developer"), v.literal("agent")),
   },
   returns: v.string(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<string> => {
     // Check existing keys (limit 5 per user for MVP)
     const existingKeys = await ctx.db
       .query("apiKeys")
@@ -35,8 +35,8 @@ export const generateApiKey = mutation({
       .first();
     
     if (existingKey) {
-      // Regenerate if collision (recursive call)
-      return await ctx.runMutation(api.developers.generateApiKey, args);
+      // Collision detected - use a different approach to avoid recursion
+      throw new Error("Key generation collision - please try again");
     }
     
     await ctx.db.insert("apiKeys", {
@@ -79,13 +79,13 @@ export const getUserApiKeys = query({
     return keys.map(k => ({
       _id: k._id,
       name: k.name,
-      keyType: k.keyType,
+      keyType: k.keyType || "developer",
       maskedKey: k.key.substring(0, 7) + "..." + k.key.substring(k.key.length - 4),
       isActive: k.isActive,
       createdAt: k.createdAt,
       lastUsed: k.lastUsed,
-      dailyUsage: k.dailyUsage,
-      dailyLimit: k.keyType === "agent" ? 5000 : 500,
+      dailyUsage: k.dailyUsage || 0,
+      dailyLimit: (k.keyType || "developer") === "agent" ? 5000 : 500,
     }));
   },
 });
@@ -132,8 +132,8 @@ export const validateApiKey = query({
     }
     
     // Check daily rate limit
-    const limit = keyRecord.keyType === "agent" ? 5000 : 500;
-    if (keyRecord.dailyUsage >= limit) {
+    const limit = (keyRecord.keyType || "developer") === "agent" ? 5000 : 500;
+    if ((keyRecord.dailyUsage || 0) >= limit) {
       return { 
         isValid: false, 
         error: `Daily limit exceeded (${limit} requests). Resets at midnight UTC.`,
@@ -145,7 +145,7 @@ export const validateApiKey = query({
       isValid: true, 
       keyId: keyRecord._id,
       keyType: keyRecord.keyType,
-      usage: keyRecord.dailyUsage,
+      usage: keyRecord.dailyUsage || 0,
       limit 
     };
   },
@@ -164,7 +164,7 @@ export const recordUsage = mutation({
     
     // Increment usage
     await ctx.db.patch(args.keyId, {
-      dailyUsage: key.dailyUsage + 1,
+      dailyUsage: (key.dailyUsage || 0) + 1,
       totalUsage: key.totalUsage + args.tokens,
       lastUsed: Date.now(),
     });

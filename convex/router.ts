@@ -412,9 +412,9 @@ http.route({
       const veniceResponse = await fetch(veniceUrl, {
         method: request.method,
         headers: {
-          ...Object.fromEntries(request.headers.entries()),
           'Authorization': `Bearer ${provider.veniceApiKey}`,
           'Host': 'api.venice.ai',
+          'Content-Type': 'application/json',
         },
         body: body,
       });
@@ -438,7 +438,7 @@ http.route({
       }
       
       // 7. Record usage and award points
-      if (usage > 0) {
+      if (usage > 0 && keyRecord.keyId) {
         await ctx.runMutation(api.developers.recordUsage, { 
           keyId: keyRecord.keyId,
           tokens: usage 
@@ -453,13 +453,16 @@ http.route({
       // 8. Return Venice response as-is
       return new Response(responseBody, {
         status: veniceResponse.status,
-        headers: Object.fromEntries(veniceResponse.headers.entries()),
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       });
       
     } catch (error) {
       return new Response(JSON.stringify({ 
         error: "Internal proxy error", 
-        details: error.message 
+        details: error instanceof Error ? error.message : String(error)
       }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
