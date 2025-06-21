@@ -54,7 +54,6 @@ http.route({
         }
       );
     } catch (error) {
-      console.error("Chat endpoint error:", error);
       return new Response(
         JSON.stringify({
           error: error instanceof Error ? error.message : "Internal server error",
@@ -160,7 +159,6 @@ http.route({
         }
       );
     } catch (error) {
-      console.error("API endpoint error:", error);
       return new Response(
         JSON.stringify({
           error: error instanceof Error ? error.message : "Internal server error",
@@ -355,7 +353,6 @@ http.route({
         }
       );
     } catch (error) {
-      console.error("Balance endpoint error:", error);
       return new Response(
         JSON.stringify({
           error: error instanceof Error ? error.message : "Internal server error",
@@ -460,7 +457,6 @@ http.route({
       });
       
     } catch (error) {
-      console.error('Proxy error:', error);
       return new Response(JSON.stringify({ 
         error: "Internal proxy error", 
         details: error.message 

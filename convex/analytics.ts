@@ -101,7 +101,6 @@ export const logUsage = mutation({
   handler: async (ctx, args) => {
     // Only insert if we have a valid providerId
     if (!args.providerId) {
-      console.warn("logUsage called without providerId, skipping log");
       return;
     }
     

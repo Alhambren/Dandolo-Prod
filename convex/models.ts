@@ -59,7 +59,6 @@ export const getAvailableModels = query({
     // If cache is missing or expired, return fallback models
     // This ensures the system doesn't fail even with cache issues
     if (!cached || Date.now() - cached.lastUpdated >= CACHE_TTL) {
-      console.log("Model cache expired or missing, returning fallback models");
       
       // Return basic fallback models to keep the system functional
       return [
@@ -84,7 +83,6 @@ export const refreshModelCache = action({
       const providers = await ctx.runQuery(internal.providers.listActiveInternal);
 
       if (providers.length === 0) {
-        console.log("No providers available for model refresh");
         return null;
       }
 
@@ -110,16 +108,10 @@ export const refreshModelCache = action({
             return null;
           }
         } catch (error) {
-          console.error(
-            "Error fetching models from provider:",
-            provider.name,
-            error,
-          );
           continue;
         }
       }
     } catch (error) {
-      console.error("Model cache refresh error:", error);
     }
     return null;
   },
@@ -129,14 +121,11 @@ export const refreshModelCache = action({
 export const fetchAndCategorizeModels = action({
   args: {},
   handler: async (ctx) => {
-    console.log("Fetching models from Venice.ai...");
 
     try {
       const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-      console.log(`Found ${providers.length} providers for model fetch`);
 
       if (providers.length === 0) {
-        console.log("No providers available");
         return {
           text: [],
           code: [],
@@ -189,22 +178,13 @@ export const fetchAndCategorizeModels = action({
             });
           }
         } catch (error) {
-          console.error(`Error fetching ${modelType} models:`, error);
         }
       }
 
       // Log categorization results
-      console.log("Model categorization results:", {
-        text: categorized.text.length,
-        code: categorized.code.length,
-        image: categorized.image.length,
-        multimodal: categorized.multimodal.length,
-        audio: categorized.audio.length,
-      });
 
       return categorized;
     } catch (error) {
-      console.error("Error in fetchAndCategorizeModels:", error);
       throw error;
     }
   },
@@ -282,7 +262,6 @@ export const cleanupOldModelCache = mutation({
 
     if (cache && Array.isArray((cache as any).models)) {
       await ctx.db.delete(cache._id);
-      console.log("Deleted old format model cache");
       return { deleted: true };
     }
 
@@ -299,13 +278,10 @@ export const refreshModelCacheInternal = internalAction({
       await ctx.runMutation(api.models.cleanupOldModelCache);
       const providers = await ctx.runQuery(internal.providers.listActiveInternal);
       if (providers.length === 0) {
-        console.log("No providers available for model refresh");
         return;
       }
       for (const provider of providers) {
         try {
-          console.log("[refreshModelCacheInternal] Using provider:", provider.name);
-          console.log("[refreshModelCacheInternal] API key preview:", provider.veniceApiKey.substring(0, 10) + "...");
           
           const categorized = {
             text: [] as any[],
@@ -321,24 +297,19 @@ export const refreshModelCacheInternal = internalAction({
           
           for (const modelType of modelTypes) {
             try {
-              console.log(`[refreshModelCacheInternal] Fetching models for type: ${modelType}`);
               const response = await fetch(`https://api.venice.ai/api/v1/models?type=${modelType}`, {
                 headers: {
                   Authorization: `Bearer ${provider.veniceApiKey}`,
                   "Content-Type": "application/json",
                 },
               });
-              console.log(`[refreshModelCacheInternal] API response status for ${modelType}:`, response.status);
               if (response.ok) {
                 const data = await response.json();
                 const models = data.data || [];
-                console.log(`[refreshModelCacheInternal] Number of ${modelType} models found:`, models.length);
                 if (models.length > 0) {
-                  console.log(`[refreshModelCacheInternal] First ${modelType} model:`, JSON.stringify(models[0], null, 2));
                 }
                 // Log each model's type for debugging
                 models.forEach((model: any) => {
-                  console.log(`[refreshModelCacheInternal] Model ${model.id}: type="${model.type}", object="${model.object}"`);
                 });
                 models.forEach((model: any) => {
                   const modelInfo = {
@@ -363,29 +334,22 @@ export const refreshModelCacheInternal = internalAction({
                   }
                 });
               } else {
-                console.log(`[refreshModelCacheInternal] API request failed for ${modelType} with status:`, response.status);
                 const errorText = await response.text();
-                console.log(`[refreshModelCacheInternal] Error response for ${modelType}:`, errorText);
               }
             } catch (error) {
-              console.error(`Error fetching ${modelType} models from provider:`, provider.name, error);
             }
           }
           
-          console.log("[refreshModelCacheInternal] Final categorized models:", JSON.stringify(categorized, null, 2));
           await ctx.runMutation(internal.models.updateModelCacheInternal, {
             models: categorized,
             timestamp: Date.now(),
           });
-          console.log("Model cache updated successfully with categorized models");
           return;
         } catch (error) {
-          console.error("Error fetching from provider:", provider.name, error);
           continue;
         }
       }
     } catch (error) {
-      console.error("Model cache refresh error:", error);
     }
   },
 });
@@ -437,13 +401,10 @@ export const testVeniceAPI = internalAction({
     try {
       const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
       if (providers.length === 0) {
-        console.log("No providers available for API test");
         return { success: false, error: "No providers available" };
       }
       
       const provider: any = providers[0];
-      console.log("Testing Venice API with provider:", provider.name);
-      console.log("API key preview:", provider.veniceApiKey.substring(0, 10) + "...");
       
       // Test the image models endpoint
       const response: Response = await fetch("https://api.venice.ai/api/v1/models?type=image", {
@@ -453,20 +414,15 @@ export const testVeniceAPI = internalAction({
         },
       });
       
-      console.log("API response status:", response.status);
       
       if (response.ok) {
         const data: any = await response.json();
-        console.log("Image models found:", data.data?.length || 0);
-        console.log("First image model:", data.data?.[0]?.id);
         return { success: true, imageModels: data.data?.length || 0 };
       } else {
         const errorText: string = await response.text();
-        console.log("API error:", errorText);
         return { success: false, error: errorText };
       }
     } catch (error: any) {
-      console.error("API test error:", error);
       return { success: false, error: error.message };
     }
   },

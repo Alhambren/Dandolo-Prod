@@ -203,10 +203,6 @@ export const registerProviderWithVCU = mutation({
 
     // No duplicate API keys
     const cleanApiKey = args.veniceApiKey.trim().replace(/['"]/g, "");
-    console.log("DEBUG: Original API key:", JSON.stringify(args.veniceApiKey));
-    console.log("DEBUG: Cleaned API key:", JSON.stringify(cleanApiKey));
-    console.log("DEBUG: Cleaned API key length:", cleanApiKey.length);
-    console.log("DEBUG: Cleaned API key is truthy:", !!cleanApiKey);
     
     const apiKeyHash = hashApiKey(cleanApiKey);
     const duplicateKey = await ctx.db
@@ -407,10 +403,8 @@ export const listActiveInternal = internalQuery({
         .filter((q) => q.eq(q.field("isActive"), true))
         .collect();
       
-      console.log(`listActiveInternal: Found ${providers?.length || 0} active providers`);
       return providers || [];
     } catch (error) {
-      console.error("Error in listActiveInternal:", error);
       return [];
     }
   },
@@ -546,7 +540,6 @@ export const updateVCUBalance = internalMutation({
         vcuBalance: args.vcuBalance,
       });
     } catch (error) {
-      console.error("Error updating VCU balance:", error);
     }
   },
 });
@@ -596,18 +589,14 @@ async function runSingleHealthCheck(provider: any): Promise<{
 export const runHealthChecks = internalAction({
   args: {},
   handler: async (ctx) => {
-    console.log("[HEALTH_CHECK] Starting provider health checks...");
-    
     // Get all providers (including inactive ones to potentially reactivate)
     const allProviders = await ctx.runQuery(internal.providers.getAllProviders);
-    console.log(`[HEALTH_CHECK] Found ${allProviders.length} total providers`);
     
     let healthyCount = 0;
     let unhealthyCount = 0;
     
     for (const provider of allProviders) {
       try {
-        console.log(`[HEALTH_CHECK] Checking provider: ${provider.name} (${provider._id})`);
         const result = await runSingleHealthCheck(provider);
         
         // Record health check result
@@ -626,14 +615,11 @@ export const runHealthChecks = internalAction({
         
         if (result.status) {
           healthyCount++;
-          console.log(`[HEALTH_CHECK] ✓ Provider ${provider.name} is healthy (${result.responseTime}ms)`);
         } else {
           unhealthyCount++;
-          console.log(`[HEALTH_CHECK] ✗ Provider ${provider.name} failed: ${result.error}`);
         }
         
       } catch (error) {
-        console.error(`[HEALTH_CHECK] Critical error checking provider ${provider._id}:`, error);
         unhealthyCount++;
         
         // Record failed health check
@@ -646,7 +632,6 @@ export const runHealthChecks = internalAction({
       }
     }
     
-    console.log(`[HEALTH_CHECK] Completed: ${healthyCount} healthy, ${unhealthyCount} unhealthy`);
     return { healthy: healthyCount, unhealthy: unhealthyCount };
   },
 });
@@ -716,9 +701,6 @@ export const updateProviderStatus = internalMutation({
         markedInactiveAt: shouldMarkInactive ? Date.now() : provider.markedInactiveAt,
       });
       
-      if (shouldMarkInactive) {
-        console.log(`[HEALTH_CHECK] Marking provider ${provider.name} as inactive after ${newFailures} failures`);
-      }
     }
   },
 });
@@ -947,44 +929,3 @@ export const recordPromptServed = internalMutation({
   },
 });
 
-// DEVELOPMENT: Create a test provider for development
-export const createTestProvider = mutation({
-  args: {},
-  handler: async (ctx) => {
-    // Check if test provider already exists
-    const existingTestProvider = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("name"), "Test Provider"))
-      .first();
-
-    if (existingTestProvider) {
-      return existingTestProvider._id;
-    }
-
-    // Create test provider
-    const providerId = await ctx.db.insert("providers", {
-      address: "0x0000000000000000000000000000000000000000",
-      name: "Test Provider",
-      description: "Development test provider",
-      veniceApiKey: "test_api_key_123",
-      apiKeyHash: "test_hash",
-      vcuBalance: 1000,
-      isActive: true,
-      totalPrompts: 0,
-      registrationDate: Date.now(),
-      avgResponseTime: 1000,
-      status: "active" as const,
-    });
-
-    // Initialize points
-    await ctx.db.insert("providerPoints", {
-      providerId: providerId,
-      points: 0,
-      totalPrompts: 0,
-      lastEarned: Date.now(),
-    });
-
-    console.log("Created test provider:", providerId);
-    return providerId;
-  },
-});

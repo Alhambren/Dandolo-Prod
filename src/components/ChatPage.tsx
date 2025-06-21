@@ -169,9 +169,6 @@ const ModelSelector: React.FC<{
     };
 
     models.forEach(model => {
-      console.log('[MODEL_DEBUG] Model:', model.id, 'Type:', model.type, 'Capabilities:', model.capabilities);
-      console.log('[MODEL_DEBUG] Intent type:', selectedIntent.type);
-      console.log('[MODEL_DEBUG] Has matching capability:', model.capabilities?.includes(selectedIntent.type));
       
       if (model.capabilities?.includes(selectedIntent.type)) {
         modelsByType.recommended.push(model);
@@ -191,11 +188,7 @@ const ModelSelector: React.FC<{
       }
     });
 
-    console.log('[MODEL_SELECTOR] Selected intent:', selectedIntent.type);
-    console.log('[MODEL_SELECTOR] Total models passed:', models.length);
-    console.log('[MODEL_SELECTOR] Recommended models:', modelsByType.recommended.length);
-    console.log('[MODEL_SELECTOR] Image models found:', modelsByType.image.length);
-    console.log('[MODEL_SELECTOR] Image model IDs:', modelsByType.image.map(m => m.id));
+    // Model selection logic for recommended models
 
     return modelsByType;
   }, [models, selectedIntent.type]);
@@ -278,11 +271,7 @@ const ModelSelector: React.FC<{
               </button>
 
               {/* Recommended models for current intent */}
-              {(() => {
-                console.log('[DROPDOWN_RENDER] Recommended models length:', recommendedModels.length);
-                console.log('[DROPDOWN_RENDER] Recommended model IDs:', recommendedModels.map(m => m.id));
-                return recommendedModels.length > 0;
-              })() && (
+              {recommendedModels.length > 0 && (
                 <>
                   <div className="px-6 py-3 bg-dark-4/50 border-b border-dark-4">
                     <div className="text-xs font-medium text-brand-500 uppercase tracking-wide">
@@ -331,11 +320,7 @@ const ModelSelector: React.FC<{
                       All Models ({models.length - recommendedModels.length} remaining)
                     </div>
                   </div>
-                  {(() => {
-                    const remainingModels = models.filter(m => !recommendedModels.find(rm => rm.id === m.id));
-                    console.log('[DROPDOWN_DEBUG] Remaining models to show:', remainingModels.map(m => m.id));
-                    return remainingModels;
-                  })().map((model) => (
+                  {models.filter(m => !recommendedModels.find(rm => rm.id === m.id)).map((model) => (
                     <button
                       key={model.id}
                       onClick={() => {
@@ -441,8 +426,6 @@ const ChatPage: React.FC = () => {
   // Sync local count when userStats changes
   useEffect(() => {
     if (userStats?.promptsToday !== undefined) {
-      console.log('[CHAT] User stats updated:', userStats);
-      console.log('[CHAT] Setting localUsageCount to:', userStats.promptsToday);
       setLocalUsageCount(userStats.promptsToday);
     }
   }, [userStats?.promptsToday]);
@@ -450,7 +433,6 @@ const ChatPage: React.FC = () => {
   // Debug provider points
   useEffect(() => {
     if (allProviderPoints) {
-      console.log('[PROVIDER_POINTS] All provider points:', allProviderPoints);
     }
   }, [allProviderPoints]);
   
@@ -462,14 +444,9 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     const loadModels = async () => {
       try {
-        console.log('[FRONTEND] Fetching models...');
         const models = await fetchModels();
-        console.log('[FRONTEND] Fetched models:', models);
-        console.log('[FRONTEND] Image models count:', models?.image?.length || 0);
-        console.log('[FRONTEND] Image models:', models?.image?.map((m: any) => m.id) || []);
         setAvailableModels(models);
       } catch (error) {
-        console.error('Failed to fetch models:', error);
       }
     };
     loadModels();
@@ -599,8 +576,18 @@ const ChatPage: React.FC = () => {
 
     let currentChat = getCurrentChat();
     if (!currentChat) {
-      createNewChat();
-      currentChat = chats[0];
+      // Create a new chat and use it immediately
+      const newChat: Chat = {
+        id: `chat_${Date.now()}`,
+        title: 'New Chat',
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        intentType: selectedIntent.type,
+      };
+      setChats([newChat, ...chats]);
+      setActiveChat(newChat.id);
+      currentChat = newChat;
     }
 
     const userMessage: Message = {
@@ -629,12 +616,11 @@ const ChatPage: React.FC = () => {
       updatedAt: Date.now(),
     };
 
-    setChats(chats.map(c => c.id === currentChat!.id ? updatedChat : c));
+    setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? updatedChat : c));
     setMessage('');
     setIsLoading(true);
 
     try {
-      console.log('[CHAT] Sending message with address:', address || 'anonymous');
       const response = await routeInference({
         prompt: message,
         address: address || 'anonymous',
@@ -642,7 +628,6 @@ const ChatPage: React.FC = () => {
         model: selectedModel || undefined,
         allowAdultContent,
       });
-      console.log('[CHAT] Received response:', response);
 
       const assistantMessage: Message = {
         id: `msg_${Date.now()}_response`,
@@ -668,7 +653,7 @@ const ChatPage: React.FC = () => {
       const finalMessages = updatedMessages.slice(0, -1).concat([assistantMessage]);
       const finalChat = { ...updatedChat, messages: finalMessages };
       
-      setChats(chats.map(c => c.id === currentChat!.id ? finalChat : c));
+      setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? finalChat : c));
       
       // Force refresh user stats to show updated count
       setStatsRefreshKey(prev => prev + 1);
@@ -692,7 +677,7 @@ const ChatPage: React.FC = () => {
       const errorMessages = updatedMessages.slice(0, -1).concat([errorMessage]);
       const errorChat = { ...updatedChat, messages: errorMessages };
       
-      setChats(chats.map(c => c.id === currentChat!.id ? errorChat : c));
+      setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? errorChat : c));
       toast.error('Failed to send message');
     } finally {
       setIsLoading(false);
@@ -768,9 +753,6 @@ const ChatPage: React.FC = () => {
       index === self.findIndex((m) => m.id === model.id)
     );
     
-    console.log('[FRONTEND] Processed models total:', uniqueModels.length);
-    console.log('[FRONTEND] Processed image models:', uniqueModels.filter(m => m.type === 'image').map(m => m.id));
-    console.log('[FRONTEND] All processed models:', uniqueModels.map(m => ({ id: m.id, type: m.type, name: m.name })));
     return uniqueModels;
   }, [availableModels]);
 
@@ -910,7 +892,6 @@ const ChatPage: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            console.log('Deleting chat:', chat.id);
                             deleteChat(chat.id);
                           }}
                           className="opacity-70 group-hover:opacity-100 p-2 hover:bg-red-500/20 rounded-lg transition-all flex-shrink-0"
@@ -976,7 +957,6 @@ const ChatPage: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log('Deleting chat:', chat.id);
                           deleteChat(chat.id);
                         }}
                         className="opacity-70 group-hover:opacity-100 ml-2 p-2 hover:bg-red-500/20 rounded-lg transition-all"

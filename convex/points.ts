@@ -168,11 +168,8 @@ export const updateProviderPointsInternal = internalMutation({
 export const distributeDailyVCURewards = internalAction({
   args: {},
   handler: async (ctx) => {
-    console.log("[VCU_REWARDS] Starting daily VCU rewards distribution at UTC midnight...");
-    
     // Get all active providers for daily rewards
     const activeProviders = await ctx.runQuery(internal.providers.listActiveInternal);
-    console.log(`[VCU_REWARDS] Found ${activeProviders.length} active providers`);
     
     const utcMidnight = getUTCMidnightForCron();
     let totalAwarded = 0;
@@ -184,7 +181,6 @@ export const distributeDailyVCURewards = internalAction({
         const dailyReward = provider.vcuBalance || 0;
         
         if (dailyReward <= 0) {
-          console.log(`[VCU_REWARDS] Skipping provider ${provider.name} - no VCU balance`);
           continue;
         }
         
@@ -195,7 +191,6 @@ export const distributeDailyVCURewards = internalAction({
         
         // Check if already awarded today (UTC midnight check)
         if (pointsRecord?.lastDailyReward && pointsRecord.lastDailyReward >= utcMidnight) {
-          console.log(`[VCU_REWARDS] Already awarded daily points to provider ${provider.name} today`);
           continue;
         }
         
@@ -211,16 +206,14 @@ export const distributeDailyVCURewards = internalAction({
           lastDailyReward: utcMidnight,
         });
         
-        console.log(`[VCU_REWARDS] ✓ Awarded ${dailyReward} VCU points to ${provider.name}. Total: ${newTotalPoints}`);
         totalAwarded += dailyReward;
         providersAwarded++;
         
       } catch (error) {
-        console.error(`[VCU_REWARDS] Error awarding points to provider ${provider._id}:`, error);
+        // Error awarding points - continue to next provider
       }
     }
     
-    console.log(`[VCU_REWARDS] Completed: ${providersAwarded} providers awarded ${totalAwarded} total points`);
     return { providersAwarded, totalAwarded };
   },
 });

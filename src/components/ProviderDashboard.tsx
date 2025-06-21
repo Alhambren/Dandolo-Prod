@@ -367,7 +367,6 @@ export const ProviderDashboard: React.FC = () => {
     
     const interval = setInterval(() => {
       // In real app, this would trigger from WebSocket events
-      console.log('Simulating points earned event');
     }, 3000);
     
     return () => clearInterval(interval);

@@ -24,7 +24,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     if (video) {
       // Hide poster after video starts playing
       video.addEventListener('loadeddata', () => {
-        console.log('Hero video loaded successfully');
         video.style.opacity = '1';
       });
       
@@ -33,7 +32,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       });
       
       video.addEventListener('error', () => {
-        console.log('Hero video failed to load, using fallback background');
         if (video.parentElement) {
           video.parentElement.style.background = 'linear-gradient(135deg, rgba(255, 201, 71, 0.1) 0%, rgba(0, 0, 0, 0.8) 100%)';
           video.style.display = 'none';
@@ -43,7 +41,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       // Set a timeout to hide poster if video takes too long
       const timeoutId = setTimeout(() => {
         if (video.networkState === video.NETWORK_LOADING || video.readyState < video.HAVE_ENOUGH_DATA) {
-          console.log('Video loading timeout, removing poster');
           video.removeAttribute('poster');
           video.style.opacity = '0.5';
         }
