@@ -1,17 +1,42 @@
 import { v } from "convex/values";
 import { query, mutation, action, internalMutation, internalAction, internalQuery } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { 
+  encryptApiKey, 
+  decryptApiKey, 
+  createApiKeyFingerprint, 
+  createSecureHash,
+  validateApiKeyFormat 
+} from "./crypto";
 
-// Simple hash function for API keys (crypto not available in Convex)
+// DEPRECATED: Legacy hash function - replaced with secure fingerprinting
+// Kept temporarily for migration compatibility
 function hashApiKey(apiKey: string): string {
-  let hash = 0;
-  for (let i = 0; i < apiKey.length; i++) {
-    const char = apiKey.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(36);
+  return createSecureHash(apiKey);
 }
+
+// Internal function to securely decrypt API keys for inference
+export const getDecryptedApiKey = internalQuery({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) {
+      throw new Error("Provider not found");
+    }
+
+    // For new encrypted providers
+    if (provider.apiKeySalt) {
+      try {
+        return decryptApiKey(provider.veniceApiKey, provider.apiKeySalt);
+      } catch (error) {
+        throw new Error("Failed to decrypt API key");
+      }
+    }
+    
+    // Legacy plaintext providers (to be migrated)
+    return provider.veniceApiKey;
+  },
+});
 
 // Validate Venice.ai API key and calculate available VCU
 export const validateVeniceApiKey = action({
@@ -155,25 +180,35 @@ export const registerProvider = mutation({
       throw new Error("One provider per wallet address");
     }
 
-    // No duplicate API keys
+    // No duplicate API keys - use secure fingerprinting
     const cleanApiKey = args.veniceApiKey.trim().replace(/['"]/g, "");
-    const apiKeyHash = hashApiKey(cleanApiKey);
+    
+    // Validate API key format before processing
+    if (!validateApiKeyFormat(cleanApiKey)) {
+      throw new Error("Invalid API key format. Please use a valid Venice.ai API key.");
+    }
+    
+    const apiKeyFingerprint = createApiKeyFingerprint(cleanApiKey);
     const duplicateKey = await ctx.db
       .query("providers")
-      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyHash))
+      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyFingerprint))
       .first();
 
     if (duplicateKey) {
       throw new Error("This API key is already registered");
     }
 
-    // Create provider
+    // Encrypt API key before storage
+    const { encrypted: encryptedApiKey, salt } = encryptApiKey(cleanApiKey);
+
+    // Create provider with encrypted API key
     const providerId = await ctx.db.insert("providers", {
       address: args.address,
       name: args.name,
       description: args.description,
-      veniceApiKey: cleanApiKey,
-      apiKeyHash: apiKeyHash,
+      veniceApiKey: encryptedApiKey, // Store encrypted key
+      apiKeySalt: salt, // Store salt for decryption
+      apiKeyHash: apiKeyFingerprint,
       vcuBalance: 0,
       isActive: false,
       totalPrompts: 0,
@@ -222,28 +257,35 @@ export const registerProviderWithVCU = mutation({
       throw new Error("One provider per wallet address");
     }
 
-    // No duplicate API keys
+    // No duplicate API keys - use secure fingerprinting
     const cleanApiKey = args.veniceApiKey.trim().replace(/['"]/g, "");
     
-    const apiKeyHash = hashApiKey(cleanApiKey);
+    // Validate API key format before processing
+    if (!validateApiKeyFormat(cleanApiKey)) {
+      throw new Error("Invalid API key format. Please use a valid Venice.ai API key.");
+    }
+    
+    const apiKeyFingerprint = createApiKeyFingerprint(cleanApiKey);
     const duplicateKey = await ctx.db
       .query("providers")
-      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyHash))
+      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyFingerprint))
       .first();
 
     if (duplicateKey) {
       throw new Error("This API key is already registered");
     }
 
-    // Create provider with actual VCU balance
-    const cleanApiKey2 = args.veniceApiKey.trim().replace(/['"]/g, "");
-    const apiKeyHash2 = hashApiKey(cleanApiKey2);
+    // Encrypt API key before storage
+    const { encrypted: encryptedApiKey, salt } = encryptApiKey(cleanApiKey);
+
+    // Create provider with actual VCU balance and encrypted API key
     const providerId = await ctx.db.insert("providers", {
       address: walletAddress,
       name: args.name,
       description: "Venice.ai Provider",
-      veniceApiKey: cleanApiKey2,
-      apiKeyHash: apiKeyHash2,
+      veniceApiKey: encryptedApiKey, // Store encrypted key
+      apiKeySalt: salt, // Store salt for decryption
+      apiKeyHash: apiKeyFingerprint,
       vcuBalance: args.vcuBalance, // Use actual VCU from validation
       isActive: true,
       totalPrompts: 0,

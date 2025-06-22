@@ -4,7 +4,26 @@ import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 
-const http = httpRouter();
+// Secure CORS policy - only allow trusted domains
+function getSecureCorsHeaders(request?: Request): Record<string, string> {
+  const trustedDomains = [
+    "https://dandolo.ai",
+    "https://www.dandolo.ai", 
+    "http://localhost:5173",
+    "http://localhost:3000"
+  ];
+  
+  const origin = request?.headers.get("origin");
+  const allowedOrigin = trustedDomains.includes(origin || "") ? origin : 
+    (process.env.NODE_ENV === "production" ? "https://dandolo.ai" : "http://localhost:5173");
+  
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin || "https://dandolo.ai",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400"
+  };
+}\n\nconst http = httpRouter();
 
 // Anonymous chat endpoint
 http.route({
@@ -231,67 +250,21 @@ export const routeRequest = action({
   },
 });
 
-// Simple image generation endpoint
+// DEPRECATED: Image generation endpoint - DISABLED for security
+// This endpoint was exposing provider API keys without authentication
 http.route({
   path: "/image/generate",
-  method: "POST",
+  method: "POST", 
   handler: httpAction(async (ctx, request) => {
-    try {
-      const body = await request.json();
-      const { prompt } = body;
-      
-      if (!prompt) {
-        return new Response(JSON.stringify({ error: "Prompt is required" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Get provider
-      const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-      if (providers.length === 0) {
-        return new Response(JSON.stringify({ error: "No providers available" }), {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const apiKey = providers[0].veniceApiKey;
-
-      // Call Venice API directly
-      const response = await fetch("https://api.venice.ai/api/v1/image/generate", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "venice-sd35",
-          prompt: prompt,
-          width: 512,
-          height: 512,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return new Response(JSON.stringify({ error: errorText }), {
-          status: response.status,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const data = await response.json();
-      return new Response(JSON.stringify(data), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error: any) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    return new Response(JSON.stringify({ 
+      error: "Image generation endpoint disabled for security reasons. Use the authenticated API instead." 
+    }), {
+      status: 410, // Gone
+      headers: { 
+        "Content-Type": "application/json",
+        ...getSecureCorsHeaders(request)
+      },
+    });
   }),
 });
 
@@ -455,7 +428,7 @@ http.route({
         status: veniceResponse.status,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+          ...getSecureCorsHeaders(request),
         },
       });
       

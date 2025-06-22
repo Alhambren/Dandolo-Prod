@@ -776,8 +776,10 @@ export const route = action({
       const randomProvider: Provider =
         validProviders[Math.floor(Math.random() * validProviders.length)];
 
-      // Get API key securely (legacy support maintained)
-      const apiKey = randomProvider.veniceApiKey;
+      // Get API key securely (decrypted from secure storage)
+      const apiKey = await ctx.runQuery(internal.providers.getDecryptedApiKey, {
+        providerId: randomProvider._id
+      });
 
       if (!apiKey) {
         throw new Error("Provider API key not available");

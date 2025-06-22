@@ -10,7 +10,8 @@ export default defineSchema({
     address: v.string(),                    // Wallet address (unique)
     name: v.string(),
     description: v.optional(v.string()),
-    veniceApiKey: v.string(),               // Legacy or placeholder for encrypted keys
+    veniceApiKey: v.string(),               // API key (encrypted for new providers, plaintext for legacy)
+    apiKeySalt: v.optional(v.string()),     // Salt for decrypting API key
     encryptedApiKey: v.optional(v.string()), // Encrypted Venice API key (new secure system)
     salt: v.optional(v.string()),           // Salt for encryption (new secure system)
     secureProvider: v.optional(v.boolean()), // Flag for providers using secure registration
@@ -174,6 +175,19 @@ export default defineSchema({
     .index("by_provider", ["providerId"])
     .index("by_timestamp", ["timestamp"])
     .index("by_type", ["transactionType"]),
+
+  // ADMIN ACTIONS: Audit log for admin operations
+  adminActions: defineTable({
+    adminAddress: v.string(),              // Admin wallet address
+    action: v.string(),                   // Action type (e.g., EMERGENCY_PAUSE)
+    timestamp: v.number(),                // When action was performed
+    details: v.string(),                  // Description of the action
+    signature: v.string(),                // Cryptographic signature
+    sessionId: v.optional(v.string()),    // Admin session ID if applicable
+  })
+    .index("by_admin", ["adminAddress"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_action", ["action"]),
 
   // Legacy points history (keeping for backward compatibility)
   points_history: defineTable({
