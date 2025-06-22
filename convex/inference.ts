@@ -776,10 +776,17 @@ export const route = action({
       const randomProvider: Provider =
         validProviders[Math.floor(Math.random() * validProviders.length)];
 
+      // Get API key securely (legacy support maintained)
+      const apiKey = randomProvider.veniceApiKey;
+
+      if (!apiKey) {
+        throw new Error("Provider API key not available");
+      }
+
       const { response, model: usedModel, tokens, responseTime } =
         await callVeniceAI(
           ctx,
-          randomProvider.veniceApiKey as string,
+          apiKey,
           args.messages,
           args.intent,
           args.messages[0]?.content,
@@ -803,14 +810,17 @@ export const route = action({
       let pointsAwarded = 0;
       
       if (tokens > 0) {
-        // Award points to provider (1 point per 100 tokens)
-        const providerPoints = Math.floor(tokens / 100);
-        if (providerPoints > 0) {
-          await ctx.runMutation(internal.points.awardProviderPoints, {
-            providerId: randomProvider._id,
-            tokens: tokens,
-          });
-        }
+        // Award points to provider using comprehensive system (1 point per 100 tokens)
+        const transactionType = args.apiKey?.startsWith("dk_") ? "developer_api" :
+                              args.apiKey?.startsWith("ak_") ? "agent_api" : "prompt_served";
+        
+        await ctx.runMutation(api.providers.awardProviderPoints, {
+          providerId: randomProvider._id,
+          promptsServed: 1,
+          tokensProcessed: tokens,
+          transactionType: transactionType,
+          apiKeyType: args.apiKey?.substring(0, 3) || "anonymous",
+        });
         
         // Award points to user if authenticated
         if (!args.isAnonymous && args.address) {

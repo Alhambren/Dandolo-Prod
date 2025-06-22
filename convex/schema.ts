@@ -10,7 +10,10 @@ export default defineSchema({
     address: v.string(),                    // Wallet address (unique)
     name: v.string(),
     description: v.optional(v.string()),
-    veniceApiKey: v.string(),               // Encrypted Venice API key
+    veniceApiKey: v.string(),               // Legacy or placeholder for encrypted keys
+    encryptedApiKey: v.optional(v.string()), // Encrypted Venice API key (new secure system)
+    salt: v.optional(v.string()),           // Salt for encryption (new secure system)
+    secureProvider: v.optional(v.boolean()), // Flag for providers using secure registration
     apiKeyHash: v.string(),                 // For duplicate detection
     vcuBalance: v.number(),                 // Available compute units
     isActive: v.boolean(),
@@ -28,6 +31,17 @@ export default defineSchema({
     .index("by_address", ["address"])
     .index("by_api_key_hash", ["apiKeyHash"]),
 
+  // REGISTRATION TOKENS: Secure provider registration
+  registrationTokens: defineTable({
+    token: v.string(),                      // Unique registration token
+    address: v.string(),                    // Wallet address for registration
+    name: v.string(),                       // Provider name
+    expires: v.number(),                    // Token expiration timestamp
+    used: v.boolean(),                      // Whether token has been used
+  })
+    .index("by_token", ["token"])
+    .index("by_address", ["address"]),
+
   // USER POINTS: Track user rewards
   userPoints: defineTable({
     address: v.string(),            // Wallet address
@@ -39,14 +53,22 @@ export default defineSchema({
     dailyLimit: v.optional(v.number()), // Current daily limit (100 or 1000)
   }).index("by_address", ["address"]),
 
-  // PROVIDER POINTS: Track provider rewards
+  // PROVIDER POINTS: Track provider rewards with detailed breakdown
   providerPoints: defineTable({
     providerId: v.id("providers"),
-    points: v.number(),
+    address: v.string(),                    // Wallet address (persists even if provider removed)
+    totalPoints: v.number(),                // All-time total points
+    vcuProviderPoints: v.number(),          // Points from providing VCU (daily rewards)
+    promptServicePoints: v.number(),        // Points from serving prompts (per request)
+    developerApiPoints: v.number(),         // Points from developer API usage
+    agentApiPoints: v.number(),             // Points from agent API usage
     totalPrompts: v.number(),
     lastEarned: v.number(),
     lastDailyReward: v.optional(v.number()),
-  }).index("by_provider", ["providerId"]),
+    isProviderActive: v.optional(v.boolean()), // Track if provider is still active
+  })
+    .index("by_provider", ["providerId"])
+    .index("by_address", ["address"]),      // Index by address for persistent tracking
 
   // INFERENCES: Track AI requests
   inferences: defineTable({
@@ -125,6 +147,35 @@ export default defineSchema({
     createdAt: v.number(),
   }),
 
+  // POINTS TRANSACTIONS: Detailed transaction log for all point earnings
+  pointsTransactions: defineTable({
+    address: v.string(),                    // Wallet address earning points
+    providerId: v.optional(v.id("providers")), // Provider ID if applicable
+    pointsEarned: v.number(),              // Points awarded in this transaction
+    transactionType: v.union(
+      v.literal("vcu_daily_reward"),       // Daily VCU holding reward
+      v.literal("prompt_served"),          // Serving a user prompt
+      v.literal("developer_api"),          // Developer API usage
+      v.literal("agent_api"),              // Agent API usage
+      v.literal("bonus"),                  // Special bonus
+      v.literal("adjustment")              // Manual adjustment
+    ),
+    details: v.optional(v.object({
+      tokensProcessed: v.optional(v.number()),
+      requestCount: v.optional(v.number()),
+      vcuAmount: v.optional(v.number()),
+      apiKeyType: v.optional(v.string()),
+      description: v.optional(v.string()),
+    })),
+    timestamp: v.number(),
+    isProviderActive: v.optional(v.boolean()), // Was provider active when earned
+  })
+    .index("by_address", ["address"])
+    .index("by_provider", ["providerId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_type", ["transactionType"]),
+
+  // Legacy points history (keeping for backward compatibility)
   points_history: defineTable({
     address: v.string(),
     points: v.optional(v.number()),

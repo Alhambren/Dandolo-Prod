@@ -87,37 +87,8 @@ function getUTCMidnight(): number {
   return utcMidnight.getTime();
 }
 
-// Award points to provider
-export const awardProviderPoints = internalMutation({
-  args: { 
-    providerId: v.id("providers"),
-    tokens: v.number(),
-  },
-  handler: async (ctx, args) => {
-    // Award 1 point per 100 tokens
-    const pointsToAward = Math.floor(args.tokens / 100);
-    
-    const pointsRecord = await ctx.db
-      .query("providerPoints")
-      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
-      .first();
-
-    if (pointsRecord) {
-      await ctx.db.patch(pointsRecord._id, {
-        points: pointsRecord.points + pointsToAward,
-        totalPrompts: pointsRecord.totalPrompts + 1,
-        lastEarned: Date.now(),
-      });
-    } else {
-      await ctx.db.insert("providerPoints", {
-        providerId: args.providerId,
-        points: pointsToAward,
-        totalPrompts: 1,
-        lastEarned: Date.now(),
-      });
-    }
-  },
-});
+// Note: Provider points are now handled by the comprehensive system in providers.ts
+// This ensures proper categorization and transaction logging
 
 // Internal query to get provider points (for use in actions)
 export const getProviderPointsInternal = internalQuery({
@@ -135,7 +106,7 @@ export const getProviderPointsInternal = internalQuery({
 export const updateProviderPointsInternal = internalMutation({
   args: {
     providerId: v.id("providers"),
-    points: v.number(),
+    totalPoints: v.number(),
     totalPrompts: v.number(),
     lastEarned: v.number(),
     lastDailyReward: v.optional(v.number()),
@@ -147,7 +118,7 @@ export const updateProviderPointsInternal = internalMutation({
       .first();
 
     const updateData = {
-      points: args.points,
+      totalPoints: args.totalPoints,
       totalPrompts: args.totalPrompts,
       lastEarned: args.lastEarned,
       ...(args.lastDailyReward !== undefined && { lastDailyReward: args.lastDailyReward }),
@@ -156,8 +127,17 @@ export const updateProviderPointsInternal = internalMutation({
     if (pointsRecord) {
       await ctx.db.patch(pointsRecord._id, updateData);
     } else {
+      const provider = await ctx.db.get(args.providerId);
+      if (!provider) return;
+      
       await ctx.db.insert("providerPoints", {
         providerId: args.providerId,
+        address: provider.address,
+        vcuProviderPoints: 0,
+        promptServicePoints: 0,
+        developerApiPoints: 0,
+        agentApiPoints: 0,
+        isProviderActive: provider.isActive,
         ...updateData,
       });
     }
@@ -197,13 +177,13 @@ export const distributeDailyVCURewards = internalAction({
           continue;
         }
         
-        const currentPoints = pointsRecord?.points ?? 0;
+        const currentPoints = pointsRecord?.totalPoints ?? 0;
         const newTotalPoints = currentPoints + dailyReward;
         
         // Award daily VCU points
         await ctx.runMutation(internal.points.updateProviderPointsInternal, {
           providerId: provider._id,
-          points: newTotalPoints,
+          totalPoints: newTotalPoints,
           totalPrompts: pointsRecord?.totalPrompts ?? 0,
           lastEarned: Date.now(),
           lastDailyReward: utcMidnight,
@@ -242,7 +222,7 @@ export const getProviderPoints = query({
       .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
       .first();
     return {
-      points: pointsRecord?.points ?? 0,
+      points: pointsRecord?.totalPoints ?? 0,
       totalPrompts: pointsRecord?.totalPrompts ?? 0,
       lastEarned: pointsRecord?.lastEarned ?? 0,
     };
@@ -261,7 +241,7 @@ export const getAllProviderPoints = query({
       providersWithPoints.push({
         providerId: pp.providerId,
         providerName: provider?.name || "Unknown",
-        points: pp.points,
+        points: pp.totalPoints,
         totalPrompts: pp.totalPrompts,
         lastEarned: pp.lastEarned,
       });
@@ -339,7 +319,7 @@ export const getProviderLeaderboardWithRank = query({
           providerId: pp.providerId,
           name: provider?.name ?? "Unknown Provider",
           address: provider?.address ?? "",
-          points: pp.points,
+          points: pp.totalPoints,
           totalPrompts: pp.totalPrompts,
           vcuBalance: provider?.vcuBalance ?? 0,
           lastEarned: pp.lastEarned,

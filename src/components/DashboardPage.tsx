@@ -11,7 +11,9 @@ const DashboardPage: React.FC = () => {
   const { address } = useAccount();
   const [providerName, setProviderName] = useState('');
   const [veniceApiKey, setVeniceApiKey] = useState('');
-  const [vcuBalance, setVcuBalance] = useState('');
+  
+  // SECURITY NOTE: API key is only temporarily stored in memory during registration
+  // and is immediately cleared. It's never persisted or logged.
   const [isRegistering, setIsRegistering] = useState(false);
   const [displayPoints, setDisplayPoints] = useState(0);
   const [dailyVCUPoints, setDailyVCUPoints] = useState(0);
@@ -25,6 +27,10 @@ const DashboardPage: React.FC = () => {
   const providerStats = useQuery(
     api.points.getProviderPoints,
     currentProvider?._id ? { providerId: currentProvider._id } : "skip"
+  );
+  const addressPoints = useQuery(
+    api.providers.getPointsByAddress,
+    address ? { address } : "skip"
   );
 
   // Mutations and Actions
@@ -44,7 +50,11 @@ const DashboardPage: React.FC = () => {
 
   // Animate points counter
   useEffect(() => {
-    const targetPoints = providerStats?.points || userPoints || 0;
+    // For providers: combine provider points + user points
+    // For non-providers: just user points
+    const providerPoints = providerStats?.points || 0;
+    const personalPoints = userPoints || 0;
+    const targetPoints = currentProvider ? (providerPoints + personalPoints) : personalPoints;
     if (targetPoints !== displayPoints) {
       const startPoints = displayPoints;
       const endPoints = targetPoints;
@@ -67,7 +77,7 @@ const DashboardPage: React.FC = () => {
 
       requestAnimationFrame(animate);
     }
-  }, [providerStats?.points, userPoints]);
+  }, [providerStats?.points, userPoints, currentProvider]);
 
   const triggerConfetti = () => {
     const duration = 3 * 1000;
@@ -120,30 +130,28 @@ const DashboardPage: React.FC = () => {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      // Use automatically detected VCU balance if available, otherwise use manual input
+      // Use automatically detected VCU balance
       const detectedVcuBalance = validation.balance || 0;
-      const userVcuBalance = detectedVcuBalance > 0 ? detectedVcuBalance : (parseFloat(vcuBalance) || 0);
       
       if (validation.warning) {
         toast.warning(validation.warning);
       }
       
       if (detectedVcuBalance > 0) {
-        toast.success(`✅ Validated! Detected ${detectedVcuBalance.toLocaleString()} VCU available (${validation.models || 0} models)`);
+        toast.success(`✅ Validated! Detected ${detectedVcuBalance.toFixed(2)} VCU available (${validation.models || 0} models)`);
       } else {
-        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Using manual VCU input.`);
+        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). VCU balance will be updated automatically.`);
       }
 
-      await registerProviderWithVCU({
+      const providerId = await registerProviderWithVCU({
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
-        vcuBalance: userVcuBalance,
+        vcuBalance: detectedVcuBalance,
       });
 
       setProviderName("");
       setVeniceApiKey("");
-      setVcuBalance("");
       toast.success("🎉 Provider registered successfully!");
       triggerConfetti();
     } catch (error) {
@@ -180,8 +188,11 @@ const DashboardPage: React.FC = () => {
             {/* Real-time stats grid */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className="text-2xl font-bold text-gold">{currentProvider.vcuBalance}</div>
+                <div className="text-2xl font-bold text-gold">{currentProvider.vcuBalance?.toFixed(2) || '0.00'}</div>
                 <div className="text-sm text-gray-400">VCU Available</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Updates hourly
+                </div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <div className="text-2xl font-bold text-red">{currentProvider.totalPrompts}</div>
@@ -203,6 +214,63 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Points Breakdown */}
+            {addressPoints && (
+              <div className="bg-white/5 rounded-lg p-4 mb-4">
+                <h3 className="text-lg font-semibold mb-4 text-white">Points Breakdown</h3>
+                
+                {/* Provider Points */}
+                <div className="mb-6">
+                  <h4 className="text-md font-medium mb-3 text-gray-300">Provider Earnings</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-yellow-400">{addressPoints.breakdown.vcuProviding.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400">VCU Providing</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-blue-400">{addressPoints.breakdown.promptService.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400">Prompt Service</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-green-400">{addressPoints.breakdown.developerApi.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400">Developer API</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-purple-400">{addressPoints.breakdown.agentApi.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400">Agent API</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* User Points */}
+                <div className="mb-4 border-t border-gray-700 pt-4">
+                  <h4 className="text-md font-medium mb-3 text-gray-300">Personal Usage</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-cyan-400">{userPoints || 0}</div>
+                      <div className="text-xs text-gray-400">Chat Points</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-cyan-400">{userStats?.promptsToday || 0}</div>
+                      <div className="text-xs text-gray-400">Prompts Today</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xl font-bold text-cyan-400">{userStats?.promptsRemaining || 0}</div>
+                      <div className="text-xs text-gray-400">Remaining Today</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center border-t border-gray-700 pt-3">
+                  <div className="text-2xl font-bold text-gold">{((addressPoints.totalPoints || 0) + (userPoints || 0)).toLocaleString()}</div>
+                  <div className="text-sm text-gray-400">Total Points (Provider + Personal)</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Provider: {addressPoints.totalPoints.toLocaleString()} • Personal: {(userPoints || 0).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Provider Info */}
             <div className="bg-white/5 rounded-lg p-4 mb-4">
@@ -288,26 +356,9 @@ const DashboardPage: React.FC = () => {
                 disabled={isRegistering}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Your Current VCU Balance
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={vcuBalance}
-                onChange={(e) => setVcuBalance(e.target.value)}
-                placeholder="Enter your current VCU balance (e.g., 2445.52)"
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gold"
-                disabled={isRegistering}
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Check your VCU balance on Venice.ai dashboard and enter it here. This enables accurate points calculation.
-              </p>
-            </div>
             <button
               onClick={validateAndRegister}
-              disabled={isRegistering || !veniceApiKey.trim() || !vcuBalance.trim() || !address}
+              disabled={isRegistering || !veniceApiKey.trim() || !address}
               className="w-full px-4 py-3 bg-gradient-to-r from-red to-gold text-white font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
             >
               {isRegistering ? (
@@ -330,7 +381,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-4 p-4 bg-gold/10 border border-gold/30 rounded-lg">
             <p className="text-sm text-gold">
-              Your Venice.ai VCU will be added to the shared network pool and you'll earn 1 point per VCU per day. Since Venice.ai doesn't provide a balance API, please enter your current VCU balance manually.
+              Your Venice.ai VCU will be automatically detected and added to the shared network pool. You'll earn 1 point per VCU per day, plus additional points for serving requests. VCU balances update automatically every hour.
             </p>
           </div>
         </GlassCard>

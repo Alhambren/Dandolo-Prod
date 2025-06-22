@@ -42,6 +42,17 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                 )}
               </div>
               <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-gray-400">Total VCU</span>
+                  <div className="text-xs text-gray-500">Updates hourly</div>
+                </div>
+                {isLoading ? (
+                  <div className="w-12 h-6 bg-gray-700 rounded animate-pulse"></div>
+                ) : (
+                  <span className="text-2xl font-bold text-blue-400">{networkStats?.totalVCU?.toFixed(2) || '0.00'}</span>
+                )}
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-gray-400">Total Requests</span>
                 {isLoading ? (
                   <div className="w-12 h-6 bg-gray-700 rounded animate-pulse"></div>
@@ -147,7 +158,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                         <div className="flex gap-6 text-right">
                           <div>
                             <p className="text-xs text-gray-400">VCU Balance</p>
-                            <p className="font-semibold text-blue-400">{provider.vcuBalance.toLocaleString()}</p>
+                            <p className="font-semibold text-blue-400">{provider.vcuBalance.toFixed(2)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-400">Requests Served</p>
@@ -202,8 +213,8 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                   <span className="text-blue-400 font-bold text-sm">1</span>
                 </div>
                 <div>
-                  <p className="font-medium text-white">Get AI Compute Access</p>
-                  <p className="text-sm text-gray-400 mt-1">Obtain Venice.ai VCU tokens for AI model access</p>
+                  <p className="font-medium text-white">Obtain Venice VCU Allowance</p>
+                  <p className="text-sm text-gray-400 mt-1">Stake VVV tokens to get Venice VCU allowance for AI model access</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">
@@ -211,8 +222,19 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                   <span className="text-purple-400 font-bold text-sm">2</span>
                 </div>
                 <div>
-                  <p className="font-medium text-white">Connect Your Wallet</p>
-                  <p className="text-sm text-gray-400 mt-1">Link your Ethereum wallet for provider verification</p>
+                  <p className="font-medium text-white">Connect Wallet & Register</p>
+                  <p className="text-sm text-gray-400 mt-1">Link your Ethereum wallet and register with your Venice.ai "inference only" API key</p>
+                  <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.898-.833-2.598 0L3.732 8.5c-.77.833-.192 2.5 1.306 2.5z" />
+                      </svg>
+                      <span className="text-red-400 font-medium text-sm">CRITICAL WARNING</span>
+                    </div>
+                    <p className="text-red-300 text-xs leading-tight">
+                      <strong>Never use an admin key!</strong> Only use "inference only" API keys. Admin keys could give attackers access to your VVV tokens.
+                    </p>
+                  </div>
                 </div>
               </div>
               <div className="flex items-start gap-4">
@@ -221,7 +243,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                 </div>
                 <div>
                   <p className="font-medium text-white">Start Earning Points</p>
-                  <p className="text-sm text-gray-400 mt-1">Process requests and earn 1 point per 100 tokens</p>
+                  <p className="text-sm text-gray-400 mt-1">Process inference requests and earn 1 point per 100 tokens</p>
                 </div>
               </div>
             </div>

@@ -22,8 +22,8 @@ export const modal = createAppKit({
   metadata: {
     name: 'Dandolo.ai',
     description: 'Decentralized AI Inference Platform',
-    url: window.location.origin,
-    icons: [`${window.location.origin}/favicon.ico`]
+    url: typeof window !== 'undefined' ? window.location.origin : 'https://dandolo.ai',
+    icons: [typeof window !== 'undefined' ? `${window.location.origin}/favicon.ico` : '/favicon.ico']
   },
   features: {
     analytics: false,

@@ -70,7 +70,7 @@ export const validateVeniceApiKey = action({
         const rateLimitsData = await rateLimitsResponse.json();
         
         // Extract VCU balance from rate limits response
-        const vcuBalance = rateLimitsData.balances?.VCU || 0;
+        const vcuBalance = rateLimitsData.data?.balances?.VCU || 0;
         
         return {
           isValid: true,
@@ -185,9 +185,15 @@ export const registerProvider = mutation({
     // Initialize points
     await ctx.db.insert("providerPoints", {
       providerId: providerId,
-      points: 0,
+      address: args.address,
+      totalPoints: 0,
+      vcuProviderPoints: 0,
+      promptServicePoints: 0,
+      developerApiPoints: 0,
+      agentApiPoints: 0,
       totalPrompts: 0,
       lastEarned: Date.now(),
+      isProviderActive: false,
     });
 
     return providerId;
@@ -249,9 +255,15 @@ export const registerProviderWithVCU = mutation({
     // Initialize points
     await ctx.db.insert("providerPoints", {
       providerId: providerId,
-      points: 0,
+      address: walletAddress,
+      totalPoints: 0,
+      vcuProviderPoints: 0,
+      promptServicePoints: 0,
+      developerApiPoints: 0,
+      agentApiPoints: 0,
       totalPrompts: 0,
       lastEarned: Date.now(),
+      isProviderActive: true,
     });
 
     return providerId;
@@ -280,6 +292,13 @@ export const awardProviderPoints = mutation({
     providerId: v.id("providers"),
     promptsServed: v.number(),
     tokensProcessed: v.optional(v.number()),
+    transactionType: v.optional(v.union(
+      v.literal("prompt_served"),
+      v.literal("developer_api"),
+      v.literal("agent_api"),
+      v.literal("vcu_daily_reward")
+    )),
+    apiKeyType: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
@@ -290,29 +309,93 @@ export const awardProviderPoints = mutation({
       ? Math.floor(args.tokensProcessed / 100)
       : args.promptsServed * 100;
 
+    const transactionType = args.transactionType || "prompt_served";
+
+    // Update provider stats
     await ctx.db.patch(args.providerId, {
       totalPrompts: (provider.totalPrompts ?? 0) + args.promptsServed,
     });
 
+    // Get or create provider points record
     const pointsRecord = await ctx.db
       .query("providerPoints")
       .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
       .first();
 
     if (pointsRecord) {
-      await ctx.db.patch(pointsRecord._id, {
-        points: (pointsRecord.points ?? 0) + pointsEarned,
+      // Update existing record with categorized points
+      const updates: any = {
+        totalPoints: (pointsRecord.totalPoints ?? 0) + pointsEarned,
         totalPrompts: (pointsRecord.totalPrompts ?? 0) + args.promptsServed,
         lastEarned: Date.now(),
-      });
+        isProviderActive: provider.isActive,
+      };
+
+      // Categorize points by type
+      switch (transactionType) {
+        case "prompt_served":
+          updates.promptServicePoints = (pointsRecord.promptServicePoints ?? 0) + pointsEarned;
+          break;
+        case "developer_api":
+          updates.developerApiPoints = (pointsRecord.developerApiPoints ?? 0) + pointsEarned;
+          break;
+        case "agent_api":
+          updates.agentApiPoints = (pointsRecord.agentApiPoints ?? 0) + pointsEarned;
+          break;
+        case "vcu_daily_reward":
+          updates.vcuProviderPoints = (pointsRecord.vcuProviderPoints ?? 0) + pointsEarned;
+          break;
+      }
+
+      await ctx.db.patch(pointsRecord._id, updates);
     } else {
-      await ctx.db.insert("providerPoints", {
+      // Create new provider points record
+      const newRecord: any = {
         providerId: args.providerId,
-        points: pointsEarned,
+        address: provider.address,
+        totalPoints: pointsEarned,
+        vcuProviderPoints: 0,
+        promptServicePoints: 0,
+        developerApiPoints: 0,
+        agentApiPoints: 0,
         totalPrompts: args.promptsServed,
         lastEarned: Date.now(),
-      });
+        isProviderActive: provider.isActive,
+      };
+
+      // Set category-specific points
+      switch (transactionType) {
+        case "prompt_served":
+          newRecord.promptServicePoints = pointsEarned;
+          break;
+        case "developer_api":
+          newRecord.developerApiPoints = pointsEarned;
+          break;
+        case "agent_api":
+          newRecord.agentApiPoints = pointsEarned;
+          break;
+        case "vcu_daily_reward":
+          newRecord.vcuProviderPoints = pointsEarned;
+          break;
+      }
+
+      await ctx.db.insert("providerPoints", newRecord);
     }
+
+    // Log detailed transaction
+    await ctx.db.insert("pointsTransactions", {
+      address: provider.address,
+      providerId: args.providerId,
+      pointsEarned,
+      transactionType,
+      details: {
+        tokensProcessed: args.tokensProcessed,
+        requestCount: args.promptsServed,
+        apiKeyType: args.apiKeyType,
+      },
+      timestamp: Date.now(),
+      isProviderActive: provider.isActive,
+    });
   },
 });
 
@@ -341,7 +424,7 @@ export const updateProviderHealth = mutation({
 });
 
 
-// Get provider stats for dashboard
+// Get provider stats for dashboard with detailed points breakdown
 export const getStats = query({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args) => {
@@ -350,14 +433,78 @@ export const getStats = query({
 
     const points = await ctx.db
       .query("providerPoints")
-      .filter((q) => q.eq(q.field("providerId"), args.providerId))
+      .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
       .first();
 
     return {
       ...provider,
       veniceApiKey: undefined, // Never expose API key
       apiKeyHash: undefined, // Never expose hash
-      points: points?.points ?? 0,
+      points: points?.totalPoints ?? 0,
+      pointsBreakdown: points ? {
+        total: points.totalPoints ?? 0,
+        vcuProviding: points.vcuProviderPoints ?? 0,
+        promptService: points.promptServicePoints ?? 0,
+        developerApi: points.developerApiPoints ?? 0,
+        agentApi: points.agentApiPoints ?? 0,
+      } : {
+        total: 0,
+        vcuProviding: 0,
+        promptService: 0,
+        developerApi: 0,
+        agentApi: 0,
+      }
+    };
+  },
+});
+
+// Get comprehensive points breakdown by address (persists even after provider removal)
+export const getPointsByAddress = query({
+  args: { address: v.string() },
+  handler: async (ctx, args) => {
+    // Get all points records for this address (including inactive providers)
+    const pointsRecords = await ctx.db
+      .query("providerPoints")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .collect();
+
+    // Get recent transactions for this address
+    const recentTransactions = await ctx.db
+      .query("pointsTransactions")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .order("desc")
+      .take(50);
+
+    // Aggregate all points across all provider records
+    const totalBreakdown = pointsRecords.reduce((acc, record) => {
+      acc.total += record.totalPoints ?? 0;
+      acc.vcuProviding += record.vcuProviderPoints ?? 0;
+      acc.promptService += record.promptServicePoints ?? 0;
+      acc.developerApi += record.developerApiPoints ?? 0;
+      acc.agentApi += record.agentApiPoints ?? 0;
+      return acc;
+    }, {
+      total: 0,
+      vcuProviding: 0,
+      promptService: 0,
+      developerApi: 0,
+      agentApi: 0,
+    });
+
+    return {
+      address: args.address,
+      totalPoints: totalBreakdown.total,
+      breakdown: totalBreakdown,
+      activeProviders: pointsRecords.filter(r => r.isProviderActive).length,
+      totalProviders: pointsRecords.length,
+      recentTransactions: recentTransactions.map(tx => ({
+        id: tx._id,
+        points: tx.pointsEarned,
+        type: tx.transactionType,
+        timestamp: tx.timestamp,
+        details: tx.details,
+        wasProviderActive: tx.isProviderActive,
+      })),
     };
   },
 });
@@ -451,7 +598,7 @@ export const incrementPromptCount = mutation({
 
     if (pointsRecord) {
       await ctx.db.patch(pointsRecord._id, {
-        points: (pointsRecord.points ?? 0) + 100,
+        totalPoints: (pointsRecord.totalPoints ?? 0) + 100,
         totalPrompts: (pointsRecord.totalPrompts ?? 0) + 1,
       });
     }
@@ -480,20 +627,40 @@ export const recordHealthCheck = internalMutation({
   },
 });
 
-// Remove provider and associated provider points
+// Remove provider but preserve points history
 export const remove = mutation({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args) => {
-    // Remove provider
-    await ctx.db.delete(args.providerId);
-    // Remove associated provider points
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) return;
+
+    // Mark provider points as inactive but don't delete them
     const points = await ctx.db
       .query("providerPoints")
       .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
       .first();
+    
     if (points) {
-      await ctx.db.delete(points._id);
+      await ctx.db.patch(points._id, {
+        isProviderActive: false,
+      });
     }
+
+    // Log the provider removal as a transaction
+    await ctx.db.insert("pointsTransactions", {
+      address: provider.address,
+      providerId: args.providerId,
+      pointsEarned: 0,
+      transactionType: "adjustment",
+      details: {
+        description: "Provider removed - points preserved",
+      },
+      timestamp: Date.now(),
+      isProviderActive: false,
+    });
+
+    // Remove the provider itself
+    await ctx.db.delete(args.providerId);
   },
 });
 
@@ -515,7 +682,7 @@ export const getTopProviders = query({
 
         return {
           ...provider,
-          points: points?.points ?? 0,
+          points: points?.totalPoints ?? 0,
           veniceApiKey: undefined,
           apiKeyHash: undefined,
         };
@@ -664,6 +831,35 @@ export const getAllProviders = internalQuery({
     return await ctx.db.query("providers").collect();
   },
 });
+
+// Debug function to test VCU validation
+export const debugVCUValidation = action({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    const provider: any = await ctx.runQuery(internal.providers.getById, { 
+      id: args.providerId 
+    });
+    
+    if (!provider || !provider.veniceApiKey) {
+      return { error: "Provider not found or no API key" };
+    }
+
+    // Get current VCU balance from Venice.ai rate limits endpoint
+    const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
+      apiKey: provider.veniceApiKey
+    });
+    
+    return {
+      provider: {
+        name: provider.name,
+        currentVCUBalance: provider.vcuBalance,
+        isActive: provider.isActive
+      },
+      validation: validation
+    };
+  },
+});
+
 
 // Record health check result with detailed tracking
 export const recordHealthCheckResult = internalMutation({
@@ -823,7 +1019,7 @@ export const getLeaderboard = query({
           ...provider,
           veniceApiKey: undefined,
           apiKeyHash: undefined,
-          points: points?.points ?? 0,
+          points: points?.totalPoints ?? 0,
           totalPrompts: points?.totalPrompts ?? 0,
         };
       })
@@ -860,7 +1056,7 @@ export const getProviderStats = query({
     return {
       totalPrompts: provider.totalPrompts ?? 0,
       avgResponseTime: provider.avgResponseTime ?? 0,
-      points: providerPoints?.points ?? 0,
+      points: providerPoints?.totalPoints ?? 0,
       isActive: provider.isActive,
     };
   },
@@ -968,18 +1164,23 @@ export const refreshSingleProviderVCU = internalAction({
         apiKey: provider.veniceApiKey
       });
       
-      if (validation.isValid && validation.balance !== undefined) {
-        // Only update if balance has changed significantly (>5 VCU difference)
-        if (Math.abs(validation.balance - (provider.vcuBalance || 0)) > 5) {
+      if (validation.isValid) {
+        // Use the detected balance if available, or 0 if not detected
+        const newBalance = validation.balance || 0;
+        
+        // Always update if current balance is 0, otherwise only update if balance has changed significantly (>5 VCU difference)
+        const shouldUpdate = (provider.vcuBalance || 0) === 0 || Math.abs(newBalance - (provider.vcuBalance || 0)) > 5;
+        
+        if (shouldUpdate) {
           await ctx.runMutation(internal.providers.updateVCUBalance, {
             providerId: args.providerId,
-            vcuBalance: validation.balance
+            vcuBalance: newBalance
           });
           return { 
             success: true, 
             updated: true,
             oldBalance: provider.vcuBalance,
-            newBalance: validation.balance
+            newBalance: newBalance
           };
         }
         return { success: true, updated: false, message: "VCU balance unchanged" };
