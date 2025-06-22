@@ -11,7 +11,7 @@ crons.interval(
   {}
 );
 
-// Update VCU balances every hour for real-time accuracy
+// Update VCU balances every hour using Venice.ai rate limits endpoint
 crons.interval(
   "update-vcu-balances",
   { hours: 1 },
@@ -19,8 +19,7 @@ crons.interval(
   {}
 );
 
-// Daily VCU rewards at midnight UTC (as per specification)
-// VCU balances are refreshed hourly to ensure accuracy
+// Daily VCU rewards at midnight UTC (after VCU balance refresh)
 crons.interval(
   "daily-vcu-distribution",
   { hours: 24 },

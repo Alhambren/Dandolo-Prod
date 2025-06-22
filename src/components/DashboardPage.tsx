@@ -11,6 +11,7 @@ const DashboardPage: React.FC = () => {
   const { address } = useAccount();
   const [providerName, setProviderName] = useState('');
   const [veniceApiKey, setVeniceApiKey] = useState('');
+  const [vcuBalance, setVcuBalance] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [displayPoints, setDisplayPoints] = useState(0);
   const [dailyVCUPoints, setDailyVCUPoints] = useState(0);
@@ -119,17 +120,30 @@ const DashboardPage: React.FC = () => {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      toast.success(`✅ Validated! ${(validation.balance || 0).toLocaleString()} VCU available (${validation.models || 0} models)`);
+      // Use automatically detected VCU balance if available, otherwise use manual input
+      const detectedVcuBalance = validation.balance || 0;
+      const userVcuBalance = detectedVcuBalance > 0 ? detectedVcuBalance : (parseFloat(vcuBalance) || 0);
+      
+      if (validation.warning) {
+        toast.warning(validation.warning);
+      }
+      
+      if (detectedVcuBalance > 0) {
+        toast.success(`✅ Validated! Detected ${detectedVcuBalance.toLocaleString()} VCU available (${validation.models || 0} models)`);
+      } else {
+        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Using manual VCU input.`);
+      }
 
       await registerProviderWithVCU({
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
-        vcuBalance: validation.balance || 0,
+        vcuBalance: userVcuBalance,
       });
 
       setProviderName("");
       setVeniceApiKey("");
+      setVcuBalance("");
       toast.success("🎉 Provider registered successfully!");
       triggerConfetti();
     } catch (error) {
@@ -274,9 +288,26 @@ const DashboardPage: React.FC = () => {
                 disabled={isRegistering}
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Your Current VCU Balance
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={vcuBalance}
+                onChange={(e) => setVcuBalance(e.target.value)}
+                placeholder="Enter your current VCU balance (e.g., 2445.52)"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gold"
+                disabled={isRegistering}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Check your VCU balance on Venice.ai dashboard and enter it here. This enables accurate points calculation.
+              </p>
+            </div>
             <button
               onClick={validateAndRegister}
-              disabled={isRegistering || !veniceApiKey.trim() || !address}
+              disabled={isRegistering || !veniceApiKey.trim() || !vcuBalance.trim() || !address}
               className="w-full px-4 py-3 bg-gradient-to-r from-red to-gold text-white font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
             >
               {isRegistering ? (
@@ -299,7 +330,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-4 p-4 bg-gold/10 border border-gold/30 rounded-lg">
             <p className="text-sm text-gold">
-              Your Venice.ai VCU will be added to the shared network pool and you'll earn 1 point per VCU per day.
+              Your Venice.ai VCU will be added to the shared network pool and you'll earn 1 point per VCU per day. Since Venice.ai doesn't provide a balance API, please enter your current VCU balance manually.
             </p>
           </div>
         </GlassCard>

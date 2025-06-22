@@ -57,8 +57,8 @@ export const validateVeniceApiKey = action({
     }
     
     try {
-      // 3. Test with actual Venice.ai API call
-      const response = await fetch("https://api.venice.ai/api/v1/models", {
+      // 3. Get VCU balance from Venice.ai rate limits endpoint
+      const rateLimitsResponse = await fetch("https://api.venice.ai/api/v1/api_keys/rate_limits", {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${key}`,
@@ -66,45 +66,60 @@ export const validateVeniceApiKey = action({
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (rateLimitsResponse.ok) {
+        const rateLimitsData = await rateLimitsResponse.json();
         
-        // 4. Verify response contains Venice.ai-specific model patterns
-        const veniceModelPrefixes = ['llama-', 'mixtral-', 'nous-', 'dolphin-', 'qwen-', 'deepseek-', 'claude-3'];
-        const hasVeniceModel = data.data?.some((model: any) => 
-          veniceModelPrefixes.some(prefix => model.id?.toLowerCase().includes(prefix.toLowerCase()))
-        );
+        // Extract VCU balance from rate limits response
+        const vcuBalance = rateLimitsData.balances?.VCU || 0;
         
-        if (!hasVeniceModel && data.data?.length > 0) {
-          return { 
-            isValid: false, 
-            error: "This API key works but doesn't appear to be from Venice.ai. Please get your key from venice.ai"
-          };
-        }
-
-        const totalContextTokens =
-          data.data?.reduce((sum: number, model: any) => {
-            return sum + (model.model_spec?.availableContextTokens || 0);
-          }, 0) || 0;
-
-        // Adjust VCU calculation. 1 VCU equals 270.54 context tokens
-        // instead of 135.27 due to doubled token usage.
-        const totalVCU = Math.round(totalContextTokens / 270.54);
-
         return {
           isValid: true,
-          balance: totalVCU,
+          balance: vcuBalance,
           currency: "VCU",
-          models: data.data?.length || 0,
-          contextTokens: totalContextTokens,
+          models: 0, // Not available from this endpoint
+          rateLimitsData: rateLimitsData, // For debugging
         };
-      } else if (response.status === 401) {
-        return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
-      } else if (response.status === 429) {
-        // Rate limited but key is valid
-        return { isValid: true, balance: 0, currency: "VCU" };
       } else {
-        return { isValid: false, error: `Venice.ai API error: ${response.status}` };
+        // Rate limits endpoint failed, fallback to models endpoint for validation
+        const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (modelsResponse.ok) {
+          const modelsData = await modelsResponse.json();
+          
+          // Verify response contains Venice.ai-specific model patterns
+          const veniceModelPrefixes = ['llama-', 'mixtral-', 'nous-', 'dolphin-', 'qwen-', 'deepseek-', 'venice-'];
+          const hasVeniceModel = modelsData.data?.some((model: any) => 
+            veniceModelPrefixes.some(prefix => model.id?.toLowerCase().includes(prefix.toLowerCase()))
+          );
+          
+          if (!hasVeniceModel && modelsData.data?.length > 0) {
+            return { 
+              isValid: false, 
+              error: "This API key works but doesn't appear to be from Venice.ai. Please get your key from venice.ai"
+            };
+          }
+
+          return {
+            isValid: true,
+            balance: 0, // Could not get balance from rate limits endpoint
+            currency: "VCU",
+            models: modelsData.data?.length || 0,
+            warning: "VCU balance could not be retrieved. Please enter manually during registration."
+          };
+        } else if (modelsResponse.status === 401) {
+          return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
+        } else if (modelsResponse.status === 429) {
+          // Rate limited but key is valid
+          return { isValid: true, balance: 0, currency: "VCU", warning: "Rate limited during validation" };
+        } else {
+          return { isValid: false, error: `Venice.ai API error: ${modelsResponse.status}` };
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -372,17 +387,7 @@ export const list = query({
     // Schedule VCU refresh for any providers with stale data (>2 hours old)
     const staleThreshold = Date.now() - (2 * 60 * 60 * 1000); // 2 hours
     
-    providers.forEach(async (provider) => {
-      if (provider.isActive && 
-          provider.veniceApiKey && 
-          provider.veniceApiKey.length > 30 &&
-          (!provider.lastHealthCheck || provider.lastHealthCheck < staleThreshold)) {
-        // Trigger background VCU refresh (fire and forget)
-        ctx.scheduler.runAfter(0, internal.providers.refreshSingleProviderVCU, {
-          providerId: provider._id
-        });
-      }
-    });
+    // Note: Background VCU refresh is handled by hourly cron job
 
     return providers.map(provider => ({
       ...provider,
@@ -948,9 +953,9 @@ export const recordPromptServed = internalMutation({
 // Refresh VCU balance for a single provider (internal use)
 export const refreshSingleProviderVCU = internalAction({
   args: { providerId: v.id("providers") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; updated?: boolean; oldBalance?: number; newBalance?: number; message?: string; error?: string }> => {
     try {
-      const provider = await ctx.runQuery(internal.providers.getById, { 
+      const provider: any = await ctx.runQuery(internal.providers.getById, { 
         id: args.providerId 
       });
       
@@ -958,8 +963,8 @@ export const refreshSingleProviderVCU = internalAction({
         return { success: false, error: "Provider not found or no API key" };
       }
 
-      // Validate and get current VCU balance from Venice.ai
-      const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
+      // Get current VCU balance from Venice.ai rate limits endpoint
+      const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
         apiKey: provider.veniceApiKey
       });
       
@@ -1000,8 +1005,8 @@ export const refreshSingleProviderVCU = internalAction({
 // Automatically refresh VCU balances for all providers (called by cron)
 export const refreshAllVCUBalances = internalAction({
   args: {},
-  handler: async (ctx) => {
-    const providers = await ctx.runQuery(internal.providers.getAllProviders);
+  handler: async (ctx): Promise<{ totalProviders: number; updatedCount: number; errorCount: number }> => {
+    const providers: any[] = await ctx.runQuery(internal.providers.getAllProviders);
     let updatedCount = 0;
     let errorCount = 0;
     

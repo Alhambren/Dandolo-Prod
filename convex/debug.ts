@@ -71,6 +71,94 @@ export const cleanupTestProviders = mutation({
   },
 });
 
+// Find the correct Venice.ai API endpoint that returns VCU balance
+export const findVCUEndpoint = action({
+  args: { 
+    apiKeySuffix: v.optional(v.string()) // Last few chars of API key to identify provider
+  },
+  handler: async (ctx, args) => {
+    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    if (providers.length === 0) {
+      return { error: "No providers available" };
+    }
+    
+    // Find provider by API key suffix if provided
+    let targetProvider = providers[0];
+    if (args.apiKeySuffix) {
+      const found = providers.find(p => p.veniceApiKey?.endsWith(args.apiKeySuffix));
+      if (found) targetProvider = found;
+    }
+    
+    const apiKey = targetProvider.veniceApiKey;
+    const results = [];
+    
+    // Test different Venice.ai API endpoints that might return VCU balance
+    const endpointsToTest = [
+      "https://api.venice.ai/api/v1/account",
+      "https://api.venice.ai/api/v1/balance", 
+      "https://api.venice.ai/api/v1/billing",
+      "https://api.venice.ai/api/v1/credits",
+      "https://api.venice.ai/api/v1/usage",
+      "https://api.venice.ai/api/v1/user",
+      "https://api.venice.ai/api/v1/me",
+      "https://api.venice.ai/api/v1/subscription",
+      "https://api.venice.ai/api/v1/vcu",
+      "https://api.venice.ai/api/v1/account/balance",
+      "https://api.venice.ai/api/v1/account/credits",
+      "https://api.venice.ai/api/v1/account/usage"
+    ];
+    
+    for (const endpoint of endpointsToTest) {
+      try {
+        const response = await fetch(endpoint, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
+        
+        const responseText = await response.text();
+        let parsedData = null;
+        
+        try {
+          parsedData = JSON.parse(responseText);
+        } catch (e) {
+          // Response is not JSON
+        }
+        
+        results.push({
+          endpoint,
+          status: response.status,
+          ok: response.ok,
+          hasVCU: responseText.toLowerCase().includes('vcu') || 
+                  responseText.toLowerCase().includes('2445') ||
+                  (parsedData && JSON.stringify(parsedData).toLowerCase().includes('vcu')),
+          responseLength: responseText.length,
+          responsePreview: responseText.substring(0, 200) + (responseText.length > 200 ? '...' : ''),
+          contentType: response.headers.get('content-type'),
+          parsedData: parsedData ? Object.keys(parsedData) : null
+        });
+        
+      } catch (error: any) {
+        results.push({
+          endpoint,
+          error: error.message
+        });
+      }
+    }
+    
+    return {
+      providerInfo: {
+        name: targetProvider.name,
+        addressSuffix: targetProvider.address?.slice(-4),
+        apiKeySuffix: targetProvider.veniceApiKey?.slice(-4)
+      },
+      endpointResults: results
+    };
+  },
+});
+
 // Check current VCU balance from Venice.ai API
 export const checkVCUBalance = action({
   handler: async (ctx) => {
@@ -137,14 +225,14 @@ export const checkVCUBalance = action({
 
 // Update VCU balance for all providers
 export const updateAllVCUBalances = action({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ updatedCount: number; results: any[] }> => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     let updatedCount = 0;
-    const results = [];
+    const results: any[] = [];
     
     for (const provider of providers) {
       try {
-        const validation = await ctx.runAction(api.providers.validateVeniceApiKey, {
+        const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
           apiKey: provider.veniceApiKey
         });
         
@@ -178,6 +266,46 @@ export const updateAllVCUBalances = action({
     }
     
     return { updatedCount, results };
+  },
+});
+
+// Quick test of Venice.ai account endpoint
+export const testAccountEndpoint = action({
+  handler: async (ctx) => {
+    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    if (providers.length === 0) {
+      return { error: "No providers available" };
+    }
+    
+    const apiKey: string = providers[0].veniceApiKey;
+    
+    try {
+      const response = await fetch("https://api.venice.ai/api/v1/account", {
+        headers: { 
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      const responseText = await response.text();
+      let data = responseText;
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        // Keep as text if not JSON
+      }
+      
+      return {
+        status: response.status,
+        ok: response.ok,
+        data: data,
+        hasVCU: responseText.includes('vcu') || responseText.includes('VCU') || responseText.includes('2445')
+      };
+      
+    } catch (error: any) {
+      return { error: error.message };
+    }
   },
 });
 
@@ -218,7 +346,7 @@ export const testChatApiCall = action({
       return {
         status: response.status,
         ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries()),
+        headers: {},
         body: responseText,
         apiKeyPrefix: apiKey.substring(0, 10) + "...",
         provider: {
@@ -242,7 +370,7 @@ export const testChatApiCall = action({
   },
 });
 
-// Test Venice API endpoints
+// Test Venice.ai endpoints to find the VCU balance endpoint
 export const testVeniceEndpoints = action({
   handler: async (ctx): Promise<any[]> => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
@@ -253,23 +381,44 @@ export const testVeniceEndpoints = action({
     const apiKey: string = providers[0].veniceApiKey;
     const results: any[] = [];
     
-    // Test different endpoints
-    const endpoints = [
-      "https://api.venice.ai/api/v1/models",
-      "https://api.venice.ai/api/v1/models?type=text",
-      "https://api.venice.ai/api/v1/models?type=image",
+    // Test the most likely VCU balance endpoints based on common API patterns
+    const vcuEndpoints = [
+      "https://api.venice.ai/api/v1/account/balance",
+      "https://api.venice.ai/api/v1/account", 
+      "https://api.venice.ai/api/v1/balance",
+      "https://api.venice.ai/api/v1/user/balance",
+      "https://api.venice.ai/api/v1/credits",
+      "https://api.venice.ai/api/v1/billing/balance",
+      "https://api.venice.ai/api/v1/usage",
+      "https://api.venice.ai/api/v1/me"
     ];
     
-    for (const endpoint of endpoints) {
+    for (const endpoint of vcuEndpoints) {
       try {
         const response: Response = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${apiKey}` },
+          headers: { 
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
         });
+        const responseText = await response.text();
+        let parsedData = null;
+        
+        try {
+          parsedData = JSON.parse(responseText);
+        } catch (e) {
+          parsedData = responseText;
+        }
+        
         results.push({
           endpoint,
           status: response.status,
           ok: response.ok,
-          data: response.ok ? await response.json() : await response.text(),
+          hasVCU: responseText.toLowerCase().includes('vcu') || 
+                  responseText.toLowerCase().includes('2445') ||
+                  responseText.toLowerCase().includes('balance'),
+          data: parsedData,
+          responseLength: responseText.length
         });
       } catch (error: any) {
         results.push({
