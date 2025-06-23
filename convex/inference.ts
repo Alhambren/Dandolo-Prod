@@ -682,8 +682,16 @@ export const route = action({
   }),
   handler: async (ctx, args): Promise<RouteReturnType> => {
     try {
+      console.log("Route function called with args:", {
+        intent: args.intent,
+        isAnonymous: args.isAnonymous,
+        address: args.address,
+        model: args.model
+      });
+
       // Rate limiting and daily limit checks
       if (!args.isAnonymous && args.address) {
+        console.log("Checking rate limits for authenticated user");
         // Check rate limits for authenticated users
         const userType = args.apiKey?.startsWith("dk_") ? "developer" :
                         args.apiKey?.startsWith("ak_") ? "agent" : "user";
@@ -733,7 +741,9 @@ export const route = action({
         }
       }
       
+      console.log("Fetching active providers...");
       const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
+      console.log(`Found ${providers.length} total providers`);
       
       // Debug: Log each provider's details
       providers.forEach((provider, index) => {
@@ -756,11 +766,13 @@ export const route = action({
         };
       }
 
+      console.log("Filtering valid providers...");
       const validProviders = providers.filter((p) => 
         p.veniceApiKey && 
         !p.veniceApiKey.startsWith('test_') && 
         p.veniceApiKey.length > 30
       );
+      console.log(`Found ${validProviders.length} valid providers`);
       
       // Debug: Log which providers passed the filter
       validProviders.forEach((provider, index) => {
@@ -782,18 +794,23 @@ export const route = action({
         };
       }
 
+      console.log("Selecting random provider...");
       const randomProvider: Provider =
         validProviders[Math.floor(Math.random() * validProviders.length)];
+      console.log(`Selected provider: ${randomProvider.name} (${randomProvider._id})`);
 
       // Get API key securely (decrypted from secure storage)
+      console.log("Getting decrypted API key...");
       const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
         providerId: randomProvider._id
       });
+      console.log(`API key retrieved: ${apiKey ? 'yes' : 'no'}`);
 
       if (!apiKey) {
         throw new Error("Provider API key not available");
       }
 
+      console.log("Calling Venice AI...");
       const { response, model: usedModel, tokens, responseTime } =
         await callVeniceAI(
           ctx,
@@ -804,6 +821,7 @@ export const route = action({
           args.model,
           args.allowAdultContent
         );
+      console.log(`Venice AI call completed. Model: ${usedModel}, Tokens: ${tokens}`);
 
       const vcuCost = calculateVCUCost(tokens, usedModel);
 
@@ -862,7 +880,32 @@ export const route = action({
         vcuCost,
       };
     } catch (error) {
-      throw error;
+      console.error("Route function error:", error);
+      console.error("Error details:", {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        args: {
+          intent: args.intent,
+          isAnonymous: args.isAnonymous,
+          address: args.address,
+          model: args.model
+        }
+      });
+      
+      // Return error response instead of throwing
+      return {
+        response: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        model: "error",
+        totalTokens: 0,
+        providerId: "error" as any,
+        provider: "System",
+        cost: 0,
+        responseTime: 0,
+        pointsAwarded: 0,
+        address: args.address,
+        intent: args.intent,
+        vcuCost: 0,
+      };
     }
   },
 });
