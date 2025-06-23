@@ -56,7 +56,7 @@ export const debugProviderPoints = query({
         totalProviders: allProviderPoints.length,
         providers: allProviderPoints.map(pp => ({
           providerId: pp.providerId,
-          address: pp.address.substring(0, 8) + "...",
+          address: pp.address ? pp.address.substring(0, 8) + "..." : "N/A",
           totalPoints: pp.totalPoints,
           totalPrompts: pp.totalPrompts,
           lastEarned: new Date(pp.lastEarned).toISOString(),

@@ -59,7 +59,7 @@ export default defineSchema({
   // PROVIDER POINTS: Track provider rewards with detailed breakdown
   providerPoints: defineTable({
     providerId: v.id("providers"),
-    address: v.string(),                    // Wallet address (persists even if provider removed)
+    address: v.optional(v.string()),        // Wallet address (persists even if provider removed)
     totalPoints: v.number(),                // All-time total points
     vcuProviderPoints: v.number(),          // Points from providing VCU (daily rewards)
     promptServicePoints: v.number(),        // Points from serving prompts (per request)
