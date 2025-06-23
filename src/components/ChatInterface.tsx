@@ -513,10 +513,25 @@ export const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-gray-950">
-      {/* Slim Sidebar - Collapsible */}
+    <div className="flex h-[calc(100vh-4rem)] bg-gray-950 relative">
+      {/* Mobile overlay */}
+      {isSidebarExpanded && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsSidebarExpanded(false)}
+        />
+      )}
+      
+      {/* Slim Sidebar - Collapsible on desktop, overlay on mobile */}
       <div 
-        className={`${isSidebarExpanded ? 'w-64' : 'w-16'} transition-all duration-200 bg-gray-900 border-r border-gray-800 flex flex-col group`}
+        className={`${
+          isSidebarExpanded ? 'w-64' : 'w-16'
+        } transition-all duration-200 bg-gray-900 border-r border-gray-800 flex flex-col group
+        md:relative md:translate-x-0 ${
+          isSidebarExpanded 
+            ? 'fixed inset-y-0 left-0 z-50 md:relative' 
+            : 'hidden md:flex'
+        }`}
         onMouseEnter={() => setIsSidebarExpanded(true)}
         onMouseLeave={() => setIsSidebarExpanded(false)}
       >
@@ -695,7 +710,15 @@ export const ChatInterface: React.FC = () => {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Slim top bar with integrated controls */}
-        <div className="flex items-center gap-4 px-6 py-3 border-b border-gray-800 bg-gray-900/50">
+        <div className="flex items-center gap-4 px-4 md:px-6 py-3 border-b border-gray-800 bg-gray-900/50">
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
+          >
+            <Folder className="w-5 h-5" />
+          </button>
+          
           {/* Model Selector */}
           <div className="relative">
             <button
@@ -734,7 +757,7 @@ export const ChatInterface: React.FC = () => {
           </div>
           
           {/* Task Type - Icon Pills */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             {TASK_TYPES.map(({ type, icon: Icon, title }) => (
               <button
                 key={type}
@@ -752,8 +775,8 @@ export const ChatInterface: React.FC = () => {
           {/* Spacer */}
           <div className="flex-1" />
           
-          {/* Adult content toggle */}
-          <label className="flex items-center gap-2 text-xs text-gray-500">
+          {/* Adult content toggle - hidden on mobile */}
+          <label className="hidden md:flex items-center gap-2 text-xs text-gray-500">
             <input 
               type="checkbox" 
               checked={allowAdultContent}
@@ -766,7 +789,7 @@ export const ChatInterface: React.FC = () => {
         
         {/* Chat Messages Area */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-6 py-12">
+          <div className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-12">
             {currentChat ? (
               <div className="space-y-6">
                 {currentChat.messages.map((msg) => (
@@ -821,7 +844,7 @@ export const ChatInterface: React.FC = () => {
         </div>
         
         {/* Input Area - Floating */}
-        <div className="px-6 py-4 bg-gray-900/50 backdrop-blur">
+        <div className="px-4 md:px-6 py-4 bg-gray-900/50 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
               <textarea
@@ -829,7 +852,7 @@ export const ChatInterface: React.FC = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={getTaskTypePromptPlaceholder()}
-                className="w-full px-4 py-3 pr-12 bg-gray-800 border border-gray-700 rounded-xl resize-none focus:outline-none focus:border-gray-600 text-white placeholder-gray-400"
+                className="w-full px-4 py-3 pr-12 bg-gray-800 border border-gray-700 rounded-xl resize-none focus:outline-none focus:border-gray-600 text-white placeholder-gray-400 text-sm md:text-base"
                 rows={1}
                 disabled={isLoading}
                 onKeyDown={(e) => {

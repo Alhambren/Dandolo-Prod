@@ -75,9 +75,9 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </div>
         
         {/* Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-24 w-full">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
           <div className="text-center flex flex-col items-center">
-            <h1 className="text-6xl md:text-7xl font-bold tracking-tight mb-6 text-center">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-center">
               <span className="bg-gradient-to-r from-white to-white/90 bg-clip-text text-transparent drop-shadow-2xl">
                 The Anonymous Interface
               </span>
@@ -87,11 +87,11 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               </span>
             </h1>
             
-            <p className="text-xl md:text-2xl text-white/80 mb-4 max-w-4xl leading-relaxed drop-shadow-lg font-medium text-center">
+            <p className="text-lg sm:text-xl md:text-2xl text-white/80 mb-4 max-w-4xl leading-relaxed drop-shadow-lg font-medium text-center px-4">
               Better uptime, no subscriptions, zero tracking
             </p>
             
-            <p className="text-lg md:text-xl text-white/60 mb-8 max-w-3xl leading-relaxed text-center">
+            <p className="text-base sm:text-lg md:text-xl text-white/60 mb-8 max-w-3xl leading-relaxed text-center px-4">
               Connect to AI providers worldwide through our decentralized, 
               privacy-first infrastructure
             </p>

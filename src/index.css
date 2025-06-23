@@ -224,4 +224,48 @@
     min-height: 48px;
     max-height: 200px;
   }
+
+  /* Mobile-specific improvements */
+  @media (max-width: 768px) {
+    /* Improve touch targets on mobile */
+    button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    /* Better spacing for mobile text */
+    .message {
+      max-width: 95%;
+    }
+    
+    /* Prevent zoom on focus for iOS */
+    input[type="text"],
+    input[type="email"], 
+    input[type="password"],
+    textarea {
+      font-size: 16px;
+    }
+    
+    /* Improve mobile sidebar */
+    .sidebar {
+      backdrop-filter: blur(20px);
+    }
+    
+    /* Better mobile scrolling */
+    .overflow-y-auto {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+  
+  /* Handle safe areas on mobile devices */
+  @supports (padding: max(0px)) {
+    .mobile-safe-area {
+      padding-left: max(1rem, env(safe-area-inset-left));
+      padding-right: max(1rem, env(safe-area-inset-right));
+    }
+    
+    .mobile-safe-area-bottom {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+  }
 }
