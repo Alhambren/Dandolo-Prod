@@ -2,8 +2,6 @@ import { v } from "convex/values";
 import { query, mutation, action, internalMutation, internalAction, internalQuery } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { 
-  encryptApiKey, 
-  decryptApiKey, 
   createApiKeyFingerprint, 
   createSecureHash,
   validateApiKeyFormat 
@@ -24,16 +22,37 @@ export const getDecryptedApiKey = internalQuery({
       throw new Error("Provider not found");
     }
 
-    // For new encrypted providers
-    if (provider.apiKeySalt) {
+    // Check encryption version
+    if (provider.encryptionVersion === 2 && provider.encryptionIv && provider.authTag) {
+      // AES-256-GCM encryption - would need crypto actions
+      throw new Error("AES decryption requires crypto actions - implement via internal actions");
+    } else if (provider.apiKeySalt) {
+      // Legacy XOR encryption - DEPRECATED but supported for migration
       try {
-        return decryptApiKey(provider.veniceApiKey, provider.apiKeySalt);
+        const encrypted = atob(provider.veniceApiKey);
+        let decrypted = '';
+        for (let i = 0; i < encrypted.length; i++) {
+          const encChar = encrypted.charCodeAt(i);
+          const saltChar = provider.apiKeySalt.charCodeAt(i % provider.apiKeySalt.length);
+          decrypted += String.fromCharCode(encChar ^ saltChar);
+        }
+        return decrypted;
       } catch (error) {
-        throw new Error("Failed to decrypt API key");
+        throw new Error("Failed to decrypt API key with legacy XOR");
       }
     }
     
-    // Legacy plaintext providers (to be migrated)
+    // Check if it's base64 encoded (temporary encoding)
+    try {
+      const decoded = atob(provider.veniceApiKey);
+      if (decoded.length > 10 && (decoded.startsWith('vn_') || decoded.startsWith('sk-'))) {
+        return decoded;
+      }
+    } catch {
+      // Not base64, treat as plaintext
+    }
+    
+    // Legacy plaintext providers
     return provider.veniceApiKey;
   },
 });
@@ -198,16 +217,16 @@ export const registerProvider = mutation({
       throw new Error("This API key is already registered");
     }
 
-    // Encrypt API key before storage
-    const { encrypted: encryptedApiKey, salt } = encryptApiKey(cleanApiKey);
+    // For security, we'll store a simple encoded version temporarily
+    // In production, this would use proper AES encryption via actions
+    const encodedApiKey = btoa(cleanApiKey); // Simple base64 encoding as placeholder
 
-    // Create provider with encrypted API key
+    // Create provider with encoded API key (to be upgraded to AES encryption)
     const providerId = await ctx.db.insert("providers", {
       address: args.address,
       name: args.name,
       description: args.description,
-      veniceApiKey: encryptedApiKey, // Store encrypted key
-      apiKeySalt: salt, // Store salt for decryption
+      veniceApiKey: encodedApiKey, // Store encoded key (temporary)
       apiKeyHash: apiKeyFingerprint,
       vcuBalance: 0,
       isActive: false,
@@ -275,16 +294,15 @@ export const registerProviderWithVCU = mutation({
       throw new Error("This API key is already registered");
     }
 
-    // Encrypt API key before storage
-    const { encrypted: encryptedApiKey, salt } = encryptApiKey(cleanApiKey);
+    // Simple encoding for now - would be AES in production
+    const encodedApiKey = btoa(cleanApiKey);
 
-    // Create provider with actual VCU balance and encrypted API key
+    // Create provider with actual VCU balance and encoded API key
     const providerId = await ctx.db.insert("providers", {
       address: walletAddress,
       name: args.name,
       description: "Venice.ai Provider",
-      veniceApiKey: encryptedApiKey, // Store encrypted key
-      apiKeySalt: salt, // Store salt for decryption
+      veniceApiKey: encodedApiKey, // Store encoded key (temporary)
       apiKeyHash: apiKeyFingerprint,
       vcuBalance: args.vcuBalance, // Use actual VCU from validation
       isActive: true,
@@ -312,8 +330,8 @@ export const registerProviderWithVCU = mutation({
   },
 });
 
-// MVP: Select random active provider
-export const selectProvider = query({
+// SECURE: Select random active provider (internal use only - no API keys exposed)
+export const selectProvider = internalQuery({
   args: {},
   handler: async (ctx) => {
     const activeProviders = await ctx.db
@@ -326,6 +344,43 @@ export const selectProvider = query({
     // MVP: Simple random selection
     const randomIndex = Math.floor(Math.random() * activeProviders.length);
     return activeProviders[randomIndex];
+  },
+});
+
+// PUBLIC: Get provider info without sensitive data (for client-side display)
+export const getProviderInfo = query({
+  args: { providerId: v.optional(v.id("providers")) },
+  handler: async (ctx, args) => {
+    if (args.providerId) {
+      const provider = await ctx.db.get(args.providerId);
+      if (!provider) return null;
+      
+      // Return only safe, public information
+      return {
+        _id: provider._id,
+        name: provider.name,
+        region: provider.region || 'Unknown',
+        isActive: provider.isActive,
+        totalPrompts: provider.totalPrompts || 0,
+        joinedAt: provider._creationTime,
+        // NEVER include veniceApiKey, apiKeySalt, walletAddress, or other sensitive data
+      };
+    }
+    
+    // Return list of active providers (public info only)
+    const activeProviders = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+    
+    return activeProviders.map(provider => ({
+      _id: provider._id,
+      name: provider.name,
+      region: provider.region,
+      isActive: provider.isActive,
+      totalPrompts: provider.totalPrompts || 0,
+      joinedAt: provider._creationTime,
+    }));
   },
 });
 

@@ -1,27 +1,8 @@
 import { v } from "convex/values";
-import { randomBytes } from "crypto";
 
-// Secure encryption utilities for API keys and sensitive data
-const ENCRYPTION_KEY_LENGTH = 32; // 256-bit key
-const IV_LENGTH = 16; // 128-bit IV for AES-CBC
-const SALT_LENGTH = 32; // 256-bit salt
+// Basic crypto utilities that don't require Node.js
 
-// Generate cryptographically secure random bytes
-function generateSecureRandom(length: number): Uint8Array {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    return crypto.getRandomValues(new Uint8Array(length));
-  }
-
-  return randomBytes(length);
-}
-
-// Generate secure random string for tokens and keys
-export function generateSecureToken(length: number = 32): string {
-  const bytes = generateSecureRandom(length);
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-// Create secure hash using djb2 algorithm (better than simple hash)
+// Create secure hash using djb2 algorithm
 export function createSecureHash(input: string): string {
   let hash = 5381;
   for (let i = 0; i < input.length; i++) {
@@ -45,46 +26,6 @@ export function createSecureHash(input: string): string {
   }
   
   return extendedHash.substring(0, 32); // Return 32 character hash (128-bit equivalent)
-}
-
-// Simple XOR encryption for API keys (temporary solution)
-// In production, this should use proper AES encryption
-export function encryptApiKey(apiKey: string, salt?: string): { encrypted: string; salt: string } {
-  const useSalt = salt || generateSecureToken(16);
-  let encrypted = '';
-  
-  for (let i = 0; i < apiKey.length; i++) {
-    const keyChar = apiKey.charCodeAt(i);
-    const saltChar = useSalt.charCodeAt(i % useSalt.length);
-    encrypted += String.fromCharCode(keyChar ^ saltChar);
-  }
-  
-  // Base64 encode the result
-  const base64Encrypted = btoa(encrypted);
-  
-  return {
-    encrypted: base64Encrypted,
-    salt: useSalt
-  };
-}
-
-// Decrypt API key
-export function decryptApiKey(encryptedKey: string, salt: string): string {
-  try {
-    // Base64 decode
-    const encrypted = atob(encryptedKey);
-    let decrypted = '';
-    
-    for (let i = 0; i < encrypted.length; i++) {
-      const encChar = encrypted.charCodeAt(i);
-      const saltChar = salt.charCodeAt(i % salt.length);
-      decrypted += String.fromCharCode(encChar ^ saltChar);
-    }
-    
-    return decrypted;
-  } catch (error) {
-    throw new Error('Failed to decrypt API key');
-  }
 }
 
 // Validate API key format (Venice.ai keys start with specific prefixes)
@@ -115,28 +56,23 @@ export function createApiKeyFingerprint(apiKey: string): string {
   return `${hash}_${suffix}`;
 }
 
-// Generate secure API key for internal use
-export function generateApiKey(type: 'developer' | 'agent' = 'developer'): string {
-  const prefix = type === 'agent' ? 'ak_' : 'dk_';
-  const randomPart = generateSecureToken(24); // 48 hex characters
-  return `${prefix}${randomPart}`;
-}
-
-// Generate secure session token for admin authentication
-export function generateSessionToken(): string {
-  return generateSecureToken(32); // 64 hex characters
-}
-
-// Simple signature verification for admin actions
-// In production, this should use proper cryptographic signatures
-export function verifyActionSignature(message: string, signature: string, expectedSigner: string): boolean {
-  // Create expected signature by hashing message + signer
-  const expectedSignature = createSecureHash(message + expectedSigner + "admin_salt_2024");
-  return signature === expectedSignature;
-}
-
-// Generate action signature for admin operations
-export function generateActionSignature(action: string, timestamp: number, adminAddress: string): string {
-  const message = `${action}_${timestamp}_emergency`;
-  return createSecureHash(message + adminAddress + "admin_salt_2024");
+// Validate admin challenge format and timestamp
+export function validateAdminChallenge(challenge: string, maxAgeMs: number = 300000): boolean {
+  try {
+    const parts = challenge.split('_');
+    if (parts.length < 4 || parts[0] !== 'DANDOLO' || parts[1] !== 'ADMIN') {
+      return false;
+    }
+    
+    const timestamp = parseInt(parts[3]);
+    if (isNaN(timestamp)) {
+      return false;
+    }
+    
+    // Check if challenge is not too old (default: 5 minutes)
+    const age = Date.now() - timestamp;
+    return age >= 0 && age <= maxAgeMs;
+  } catch {
+    return false;
+  }
 }

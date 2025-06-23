@@ -23,7 +23,9 @@ function getSecureCorsHeaders(request?: Request): Record<string, string> {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400"
   };
-}\n\nconst http = httpRouter();
+}
+
+const http = httpRouter();
 
 // Anonymous chat endpoint
 http.route({
@@ -364,8 +366,8 @@ http.route({
         });
       }
       
-      // 3. Get active provider
-      const provider = await ctx.runQuery(api.providers.selectProvider, {});
+      // 3. Get active provider (using internal query to access sensitive data)
+      const provider = await ctx.runQuery(internal.providers.selectProvider, {});
       if (!provider) {
         return new Response(JSON.stringify({ 
           error: "No providers available. Please try again." 

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { encryptApiKey, validateApiKeyFormat } from "./crypto";
+import { validateApiKeyFormat } from "./crypto";
+// import { encryptApiKey } from "./cryptoActions"; // Would use crypto actions in production
 
 /**
  * Migration to encrypt existing plaintext API keys
@@ -43,13 +44,12 @@ export const migrateApiKeysToEncryption = internalMutation({
           continue;
         }
 
-        // Encrypt the API key
-        const { encrypted, salt } = encryptApiKey(provider.veniceApiKey);
+        // Simple encoding migration (AES would require crypto actions)
+        const encoded = btoa(provider.veniceApiKey);
 
-        // Update the provider with encrypted key and salt
+        // Update the provider with encoded key
         await ctx.db.patch(provider._id, {
-          veniceApiKey: encrypted,
-          apiKeySalt: salt,
+          veniceApiKey: encoded,
         });
 
         results.push({

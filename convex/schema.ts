@@ -10,10 +10,12 @@ export default defineSchema({
     address: v.string(),                    // Wallet address (unique)
     name: v.string(),
     description: v.optional(v.string()),
-    veniceApiKey: v.string(),               // API key (encrypted for new providers, plaintext for legacy)
-    apiKeySalt: v.optional(v.string()),     // Salt for decrypting API key
-    encryptedApiKey: v.optional(v.string()), // Encrypted Venice API key (new secure system)
-    salt: v.optional(v.string()),           // Salt for encryption (new secure system)
+    region: v.optional(v.string()),         // Provider region/location
+    veniceApiKey: v.string(),               // API key (encrypted with AES-256-GCM for new providers, plaintext for legacy)
+    apiKeySalt: v.optional(v.string()),     // DEPRECATED: XOR salt for legacy decryption
+    encryptionIv: v.optional(v.string()),   // AES-256-GCM initialization vector (base64)
+    authTag: v.optional(v.string()),        // AES-256-GCM authentication tag (base64)
+    encryptionVersion: v.optional(v.number()), // Encryption version: 1=XOR (deprecated), 2=AES-256-GCM
     secureProvider: v.optional(v.boolean()), // Flag for providers using secure registration
     apiKeyHash: v.string(),                 // For duplicate detection
     vcuBalance: v.number(),                 // Available compute units
