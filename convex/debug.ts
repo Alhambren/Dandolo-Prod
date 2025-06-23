@@ -601,4 +601,24 @@ export const systemHealth = query({
   },
 });
 
+// ADMIN-ONLY: Setup production environment with basic providers
+export const setupProduction = mutation({
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
+    
+    // Check if we already have providers
+    const existingProviders = await ctx.db.query("providers").collect();
+    if (existingProviders.length > 0) {
+      return `Production already has ${existingProviders.length} providers. Use cleanupTestProviders first if needed.`;
+    }
+    
+    // Note: This is just a placeholder. In production, you would need to add
+    // your actual provider data with real API keys
+    return "Setup function ready. Add your actual provider data manually through the dashboard or provider registration.";
+  },
+});
+
  

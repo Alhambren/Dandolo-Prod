@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "VITE_CONVEX_URL": "https://judicious-hornet-148.convex.cloud"
   }
 }
