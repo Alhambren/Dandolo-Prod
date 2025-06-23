@@ -573,6 +573,17 @@ export type RouteSimpleReturnType = {
 };
 
 /**
+ * Simple test function to verify Convex functionality
+ */
+export const testFunction = action({
+  args: { message: v.string() },
+  returns: v.object({ response: v.string() }),
+  handler: async (ctx, args) => {
+    return { response: `Test successful: ${args.message}` };
+  },
+});
+
+/**
  * Simplified routing wrapper matching the frontend parameters.
  * Converts a single prompt into message format and maps intent types.
  */
