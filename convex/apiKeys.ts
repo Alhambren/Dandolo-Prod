@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
+import { randomBytes } from "crypto";
 
 // API Key types and limits according to specification
 const API_KEY_TYPES = {
@@ -16,9 +17,7 @@ type ApiKeyType = keyof typeof API_KEY_TYPES;
  */
 function generateApiKey(type: ApiKeyType): string {
   const prefix = API_KEY_TYPES[type].prefix;
-  const randomPart = Array.from({ length: 32 }, () => 
-    Math.random().toString(36).charAt(2)
-  ).join('');
+  const randomPart = randomBytes(16).toString('hex');
   return `${prefix}${randomPart}`;
 }
 

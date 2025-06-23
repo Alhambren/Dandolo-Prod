@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { randomBytes } from "crypto";
 
 // Secure encryption utilities for API keys and sensitive data
 const ENCRYPTION_KEY_LENGTH = 32; // 256-bit key
@@ -7,27 +8,11 @@ const SALT_LENGTH = 32; // 256-bit salt
 
 // Generate cryptographically secure random bytes
 function generateSecureRandom(length: number): Uint8Array {
-  // In Node.js environment, use crypto.randomBytes
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     return crypto.getRandomValues(new Uint8Array(length));
   }
-  
-  // Enhanced fallback with better entropy sources
-  const bytes = new Uint8Array(length);
-  const now = Date.now();
-  const performance_now = typeof performance !== 'undefined' ? performance.now() : 0;
-  
-  for (let i = 0; i < length; i++) {
-    // Combine multiple entropy sources
-    const entropy1 = Math.random();
-    const entropy2 = (now + i) % 256;
-    const entropy3 = (performance_now * (i + 1)) % 256;
-    const entropy4 = (Math.random() * (i + 1) * now) % 256;
-    
-    // Mix entropy sources
-    bytes[i] = Math.floor((entropy1 * 256 + entropy2 + entropy3 + entropy4) % 256);
-  }
-  return bytes;
+
+  return randomBytes(length);
 }
 
 // Generate secure random string for tokens and keys
