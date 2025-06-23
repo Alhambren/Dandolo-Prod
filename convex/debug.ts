@@ -2,9 +2,21 @@ import { query, action, mutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 
-// Debug query to see what models are available
+// CRITICAL: Hardcoded admin address - only this wallet can access debug functions
+const ADMIN_ADDRESS = "0xC07481520d98c32987cA83B30EAABdA673cDbe8c";
+
+// Helper to verify admin access for debug operations
+function verifyAdminAccess(address?: string): boolean {
+  return address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+}
+
+// ADMIN-ONLY: Debug query to see what models are available
 export const debugModels = query({
-  handler: async (ctx) => {
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
     const cache = await ctx.db.query("modelCache").first();
     return {
       lastUpdated: cache?.lastUpdated,
@@ -14,17 +26,25 @@ export const debugModels = query({
   },
 });
 
-// Action to manually refresh models
+// ADMIN-ONLY: Action to manually refresh models
 export const manualRefreshModels = action({
-  handler: async (ctx) => {
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
     await ctx.runAction(internal.models.refreshModelCacheInternal);
     return "Model cache refreshed!";
   },
 });
 
-// Debug query to see current providers
+// ADMIN-ONLY: Debug query to see current providers (NO API KEYS EXPOSED)
 export const debugProviders = query({
-  handler: async (ctx) => {
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
     const providers = await ctx.db.query("providers").collect();
     return providers.map(p => ({
       id: p._id,
@@ -33,15 +53,20 @@ export const debugProviders = query({
       isActive: p.isActive,
       vcuBalance: p.vcuBalance,
       totalPrompts: p.totalPrompts,
-      hasValidKey: p.veniceApiKey && p.veniceApiKey.length > 30 && !p.veniceApiKey.startsWith('test_'),
-      keyPrefix: p.veniceApiKey ? p.veniceApiKey.substring(0, 10) + '...' : 'none'
+      hasValidKey: p.veniceApiKey && p.veniceApiKey.length > 30,
+      encryptionVersion: p.encryptionVersion || 1, // Show encryption status
+      // SECURITY: Never expose actual API keys or prefixes in debug output
     }));
   },
 });
 
-// Clean up test providers with invalid API keys
+// ADMIN-ONLY: Clean up test providers with invalid API keys
 export const cleanupTestProviders = mutation({
-  handler: async (ctx) => {
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
     const providers = await ctx.db.query("providers").collect();
     let removedCount = 0;
     
@@ -71,12 +96,16 @@ export const cleanupTestProviders = mutation({
   },
 });
 
-// Find the correct Venice.ai API endpoint that returns VCU balance
+// ADMIN-ONLY: Find the correct Venice.ai API endpoint that returns VCU balance
 export const findVCUEndpoint = action({
   args: { 
+    adminAddress: v.string(),
     apiKeySuffix: v.optional(v.string()) // Last few chars of API key to identify provider
   },
   handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
       return { error: "No providers available" };
@@ -89,7 +118,10 @@ export const findVCUEndpoint = action({
       if (found) targetProvider = found;
     }
     
-    const apiKey = targetProvider.veniceApiKey;
+    // Securely decrypt the API key for testing (admin only)
+    const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+      providerId: targetProvider._id
+    });
     const results = [];
     
     // Test different Venice.ai API endpoints that might return VCU balance

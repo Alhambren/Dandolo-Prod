@@ -7,25 +7,57 @@ import {
   validateApiKeyFormat 
 } from "./crypto";
 
+// Helper to verify wallet ownership for authenticated mutations
+async function verifyWalletOwnership(ctx: any, claimedAddress: string, signature: string, message: string): Promise<boolean> {
+  try {
+    return await ctx.runAction(internal.cryptoSecure.verifyEthereumSignature, {
+      message: message,
+      signature: signature,
+      expectedSigner: claimedAddress
+    });
+  } catch (error) {
+    console.error("Wallet verification failed:", error);
+    return false;
+  }
+}
+
 // DEPRECATED: Legacy hash function - replaced with secure fingerprinting
 // Kept temporarily for migration compatibility
 function hashApiKey(apiKey: string): string {
   return createSecureHash(apiKey);
 }
 
-// Internal function to securely decrypt API keys for inference
-export const getDecryptedApiKey = internalQuery({
+// Internal helper to get provider by ID
+export const getProviderById = internalQuery({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args) => {
-    const provider = await ctx.db.get(args.providerId);
+    return await ctx.db.get(args.providerId);
+  },
+});
+
+// Internal action to securely decrypt API keys for inference
+export const getDecryptedApiKey = internalAction({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args): Promise<string> => {
+    const provider = await ctx.runQuery(internal.providers.getProviderById, { 
+      providerId: args.providerId 
+    });
     if (!provider) {
       throw new Error("Provider not found");
     }
 
     // Check encryption version
     if (provider.encryptionVersion === 2 && provider.encryptionIv && provider.authTag) {
-      // AES-256-GCM encryption - would need crypto actions
-      throw new Error("AES decryption requires crypto actions - implement via internal actions");
+      // AES-256-GCM encryption - use secure crypto actions
+      try {
+        return await ctx.runAction(internal.cryptoSecure.decryptApiKey, {
+          encrypted: provider.veniceApiKey,
+          iv: provider.encryptionIv,
+          authTag: provider.authTag
+        });
+      } catch (error) {
+        throw new Error("Failed to decrypt API key with AES-256-GCM");
+      }
     } else if (provider.apiKeySalt) {
       // Legacy XOR encryption - DEPRECATED but supported for migration
       try {
@@ -178,16 +210,79 @@ export const validateVeniceApiKey = action({
   },
 });
 
-// MVP: Register provider with anti-Sybil checks
-export const registerProvider = mutation({
+// Helper mutation for provider registration
+export const createProviderMutation = internalMutation({
+  args: {
+    address: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+    encryptedKey: v.string(),
+    iv: v.string(),
+    authTag: v.string(),
+    apiKeyHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("providers", {
+      address: args.address,
+      name: args.name,
+      description: args.description,
+      veniceApiKey: args.encryptedKey,
+      encryptionIv: args.iv,
+      authTag: args.authTag,
+      encryptionVersion: 2,
+      apiKeyHash: args.apiKeyHash,
+      vcuBalance: 0,
+      isActive: false,
+      totalPrompts: 0,
+      registrationDate: Date.now(),
+      avgResponseTime: 0,
+    });
+  },
+});
+
+// Helper query to check existing providers
+export const checkExistingProvider = internalQuery({
+  args: { address: v.string(), apiKeyHash: v.string() },
+  handler: async (ctx, args) => {
+    const existingProvider = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("address"), args.address))
+      .first();
+
+    const duplicateKey = await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("apiKeyHash"), args.apiKeyHash))
+      .first();
+
+    return { existingProvider, duplicateKey };
+  },
+});
+
+// SECURE: Register provider with wallet ownership verification and anti-Sybil checks
+export const registerProvider = action({
   args: {
     address: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
     veniceApiKey: v.string(),
+    signature: v.string(), // Wallet signature proving ownership
+    timestamp: v.number(), // Timestamp to prevent replay attacks
   },
   handler: async (ctx, args) => {
     const walletAddress = args.address;
+    
+    // Verify timestamp is recent (within 10 minutes)
+    if (Math.abs(Date.now() - args.timestamp) > 10 * 60 * 1000) {
+      throw new Error("Registration signature expired. Please sign again.");
+    }
+    
+    // Verify wallet ownership - user must sign a message proving they control the wallet
+    const message = `DANDOLO_PROVIDER_REGISTRATION_${args.address}_${args.timestamp}`;
+    const isValidSignature = await verifyWalletOwnership(ctx, walletAddress, args.signature, message);
+    
+    if (!isValidSignature) {
+      throw new Error("Invalid wallet signature. You must prove ownership of the wallet address to register as a provider.");
+    }
 
     // One provider per wallet
     const existingProvider = await ctx.db
@@ -217,16 +312,20 @@ export const registerProvider = mutation({
       throw new Error("This API key is already registered");
     }
 
-    // For security, we'll store a simple encoded version temporarily
-    // In production, this would use proper AES encryption via actions
-    const encodedApiKey = btoa(cleanApiKey); // Simple base64 encoding as placeholder
+    // Encrypt API key with AES-256-GCM before storage
+    const encryptionResult = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
+      apiKey: cleanApiKey
+    });
 
-    // Create provider with encoded API key (to be upgraded to AES encryption)
+    // Create provider with AES-encrypted API key
     const providerId = await ctx.db.insert("providers", {
       address: args.address,
       name: args.name,
       description: args.description,
-      veniceApiKey: encodedApiKey, // Store encoded key (temporary)
+      veniceApiKey: encryptionResult.encrypted,
+      encryptionIv: encryptionResult.iv,
+      authTag: encryptionResult.authTag,
+      encryptionVersion: 2, // Mark as using AES-256-GCM
       apiKeyHash: apiKeyFingerprint,
       vcuBalance: 0,
       isActive: false,
@@ -294,15 +393,20 @@ export const registerProviderWithVCU = mutation({
       throw new Error("This API key is already registered");
     }
 
-    // Simple encoding for now - would be AES in production
-    const encodedApiKey = btoa(cleanApiKey);
+    // Encrypt API key with AES-256-GCM before storage
+    const encryptionResult = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
+      apiKey: cleanApiKey
+    });
 
-    // Create provider with actual VCU balance and encoded API key
+    // Create provider with actual VCU balance and AES-encrypted API key
     const providerId = await ctx.db.insert("providers", {
       address: walletAddress,
       name: args.name,
       description: "Venice.ai Provider",
-      veniceApiKey: encodedApiKey, // Store encoded key (temporary)
+      veniceApiKey: encryptionResult.encrypted,
+      encryptionIv: encryptionResult.iv,
+      authTag: encryptionResult.authTag,
+      encryptionVersion: 2, // Mark as using AES-256-GCM
       apiKeyHash: apiKeyFingerprint,
       vcuBalance: args.vcuBalance, // Use actual VCU from validation
       isActive: true,

@@ -297,7 +297,7 @@ export const getSecurityMetrics = query({
 /**
  * Emergency circuit breaker - requires multiple confirmations
  */
-export const emergencyCircuitBreaker = mutation({
+export const emergencyCircuitBreaker = action({
   args: {
     adminAddress: v.string(),
     action: v.union(v.literal("pause"), v.literal("resume")),
@@ -318,11 +318,16 @@ export const emergencyCircuitBreaker = mutation({
       throw new Error("Signature expired");
     }
 
-    // Verify signature for the action
+    // Verify cryptographic signature for the action
     const message = `${args.action}_${args.timestamp}_emergency`;
-    // Temporarily disabled crypto verification - would use verifyActionSignature in production
-    if (false && !args.signature) { // verifyActionSignature(message, args.signature, args.adminAddress)) {
-      throw new Error("Invalid action signature");
+    const isValidSignature = await ctx.runAction(internal.cryptoSecure.verifyEthereumSignature, {
+      message: message,
+      signature: args.signature,
+      expectedSigner: args.adminAddress
+    });
+    
+    if (!isValidSignature) {
+      throw new Error("Invalid action signature - admin action must be cryptographically signed");
     }
 
     // Implement circuit breaker logic

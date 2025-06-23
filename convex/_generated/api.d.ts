@@ -19,6 +19,7 @@ import type * as apiKeys from "../apiKeys.js";
 import type * as crons from "../crons.js";
 import type * as crypto from "../crypto.js";
 import type * as cryptoActions from "../cryptoActions.js";
+import type * as cryptoSecure from "../cryptoSecure.js";
 import type * as debug from "../debug.js";
 import type * as debugPoints from "../debugPoints.js";
 import type * as developers from "../developers.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   crypto: typeof crypto;
   cryptoActions: typeof cryptoActions;
+  cryptoSecure: typeof cryptoSecure;
   debug: typeof debug;
   debugPoints: typeof debugPoints;
   developers: typeof developers;
