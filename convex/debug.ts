@@ -575,4 +575,30 @@ export const listProviders = query({
   },
 });
 
+// Public diagnostic function to check system health
+export const systemHealth = query({
+  args: {},
+  handler: async (ctx) => {
+    const providers = await ctx.db.query("providers").collect();
+    const activeProviders = providers.filter(p => p.isActive);
+    const validProviders = activeProviders.filter(p => p.veniceApiKey && p.veniceApiKey.length > 30);
+    
+    return {
+      totalProviders: providers.length,
+      activeProviders: activeProviders.length,
+      validProviders: validProviders.length,
+      hasValidProviders: validProviders.length > 0,
+      providerIssues: providers
+        .filter(p => !p.veniceApiKey || p.veniceApiKey.length < 30 || p.name.toLowerCase().includes('test'))
+        .map(p => ({
+          id: p._id,
+          name: p.name,
+          issue: !p.veniceApiKey ? 'no_api_key' : 
+                 p.veniceApiKey.length < 30 ? 'short_api_key' :
+                 p.name.toLowerCase().includes('test') ? 'test_provider' : 'unknown'
+        }))
+    };
+  },
+});
+
  

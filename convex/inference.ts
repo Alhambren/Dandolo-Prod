@@ -629,7 +629,15 @@ export const routeSimple = action({
         responseTime: result.responseTime,
       };
     } catch (error) {
-      throw error;
+      console.error("RouteSimple error:", error);
+      // Return a user-friendly error instead of throwing
+      return {
+        response: "Sorry, I'm having trouble processing your request right now. Please try again in a moment.",
+        model: "error",
+        totalTokens: 0,
+        provider: "System",
+        responseTime: 0,
+      };
     }
   },
 });
