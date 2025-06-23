@@ -241,7 +241,7 @@ export const getAllProviderPoints = query({
       providersWithPoints.push({
         providerId: pp.providerId,
         providerName: provider?.name || "Unknown",
-        points: pp.totalPoints,
+        points: pp.totalPoints ?? pp.points ?? 0,
         totalPrompts: pp.totalPrompts,
         lastEarned: pp.lastEarned,
       });
@@ -319,7 +319,7 @@ export const getProviderLeaderboardWithRank = query({
           providerId: pp.providerId,
           name: provider?.name ?? "Unknown Provider",
           address: provider?.address ?? "",
-          points: pp.totalPoints,
+          points: pp.totalPoints ?? pp.points ?? 0,
           totalPrompts: pp.totalPrompts,
           vcuBalance: provider?.vcuBalance ?? 0,
           lastEarned: pp.lastEarned,

@@ -60,11 +60,12 @@ export default defineSchema({
   providerPoints: defineTable({
     providerId: v.id("providers"),
     address: v.optional(v.string()),        // Wallet address (persists even if provider removed)
-    totalPoints: v.number(),                // All-time total points
-    vcuProviderPoints: v.number(),          // Points from providing VCU (daily rewards)
-    promptServicePoints: v.number(),        // Points from serving prompts (per request)
-    developerApiPoints: v.number(),         // Points from developer API usage
-    agentApiPoints: v.number(),             // Points from agent API usage
+    totalPoints: v.optional(v.number()),    // All-time total points (legacy: stored as 'points')
+    points: v.optional(v.number()),         // Legacy field name for totalPoints
+    vcuProviderPoints: v.optional(v.number()), // Points from providing VCU (daily rewards)
+    promptServicePoints: v.optional(v.number()), // Points from serving prompts (per request)
+    developerApiPoints: v.optional(v.number()), // Points from developer API usage
+    agentApiPoints: v.optional(v.number()), // Points from agent API usage
     totalPrompts: v.number(),
     lastEarned: v.number(),
     lastDailyReward: v.optional(v.number()),

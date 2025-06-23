@@ -57,14 +57,14 @@ export const debugProviderPoints = query({
         providers: allProviderPoints.map(pp => ({
           providerId: pp.providerId,
           address: pp.address ? pp.address.substring(0, 8) + "..." : "N/A",
-          totalPoints: pp.totalPoints,
+          totalPoints: pp.totalPoints ?? pp.points ?? 0,
           totalPrompts: pp.totalPrompts,
           lastEarned: new Date(pp.lastEarned).toISOString(),
           breakdown: {
-            vcuProviding: pp.vcuProviderPoints,
-            promptService: pp.promptServicePoints,
-            developerApi: pp.developerApiPoints,
-            agentApi: pp.agentApiPoints,
+            vcuProviding: pp.vcuProviderPoints ?? 0,
+            promptService: pp.promptServicePoints ?? 0,
+            developerApi: pp.developerApiPoints ?? 0,
+            agentApi: pp.agentApiPoints ?? 0,
           }
         })),
       };
