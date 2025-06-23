@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { generateSecureToken } from '../../convex/crypto';
 import {
   Shield,
   Activity,
@@ -66,7 +67,7 @@ const AdminAuth: React.FC<{ onAuthenticated: (session: AdminSession) => void }> 
       
       // Create session token (1 hour expiry as per PRD)
       const session: AdminSession = {
-        token: `admin_${timestamp}_${Math.random().toString(36).substring(7)}`,
+        token: `admin_${timestamp}_${generateSecureToken(16)}`,
         expires: Date.now() + (60 * 60 * 1000), // 1 hour
         signature: signature as string
       };
