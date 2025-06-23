@@ -548,8 +548,10 @@ export const awardProviderPoints = mutation({
 
     if (pointsRecord) {
       // Update existing record with categorized points
+      // Handle legacy 'points' field if totalPoints is missing
+      const currentTotalPoints = pointsRecord.totalPoints ?? pointsRecord.points ?? 0;
       const updates: any = {
-        totalPoints: (pointsRecord.totalPoints ?? 0) + pointsEarned,
+        totalPoints: currentTotalPoints + pointsEarned,
         totalPrompts: (pointsRecord.totalPrompts ?? 0) + args.promptsServed,
         lastEarned: Date.now(),
         isProviderActive: provider.isActive,

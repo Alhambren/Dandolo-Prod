@@ -4,6 +4,7 @@
 // selects a model based on the intent (chat, code, image, analysis), calculates
 // the VCU cost of each request and records usage stats. All external calls are
 // wrapped with appropriate error handling.
+// Updated: 2025-01-23 - Fixed legacy schema compatibility
 
 import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
