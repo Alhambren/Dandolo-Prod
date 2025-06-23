@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, action, internalQuery } from "./_generated/server";
+import { query, mutation, action, internalQuery, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 // import { verifyActionSignature } from "./cryptoActions"; // Would use crypto actions in production
 
@@ -294,6 +294,26 @@ export const getSecurityMetrics = query({
   },
 });
 
+// Internal mutation to log admin actions
+export const logAdminActionInternal = internalMutation({
+  args: {
+    adminAddress: v.string(),
+    action: v.string(),
+    timestamp: v.number(),
+    details: v.string(),
+    signature: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("adminActions", {
+      adminAddress: args.adminAddress,
+      action: args.action,
+      timestamp: args.timestamp,
+      details: args.details,
+      signature: args.signature,
+    });
+  },
+});
+
 /**
  * Emergency circuit breaker - requires multiple confirmations
  */
@@ -333,7 +353,7 @@ export const emergencyCircuitBreaker = action({
     // Implement circuit breaker logic
     if (args.action === "pause") {
       // Log the pause action
-      await ctx.db.insert("adminActions", {
+      await ctx.runMutation(internal.admin.logAdminActionInternal, {
         adminAddress: args.adminAddress,
         action: "EMERGENCY_PAUSE",
         timestamp: Date.now(),
@@ -349,7 +369,7 @@ export const emergencyCircuitBreaker = action({
       };
     } else if (args.action === "resume") {
       // Log the resume action
-      await ctx.db.insert("adminActions", {
+      await ctx.runMutation(internal.admin.logAdminActionInternal, {
         adminAddress: args.adminAddress,
         action: "EMERGENCY_RESUME",
         timestamp: Date.now(),

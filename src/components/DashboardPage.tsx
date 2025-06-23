@@ -32,6 +32,17 @@ const DashboardPage: React.FC = () => {
     api.providers.getPointsByAddress,
     address ? { address } : "skip"
   );
+  
+  // Health and performance queries
+  const networkStats = useQuery(api.stats.getNetworkStats);
+  const providerHealth = useQuery(
+    api.providers.getProviderUptime,
+    currentProvider?._id ? { providerId: currentProvider._id, hours: 24 } : "skip"
+  );
+  const healthHistory = useQuery(
+    api.providers.getHealthHistory,
+    currentProvider?._id ? { providerId: currentProvider._id, limit: 6 } : "skip"
+  );
 
   // Mutations and Actions
   const validateVeniceApiKey = useAction(api.providers.validateVeniceApiKey);
@@ -186,7 +197,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Real-time stats grid */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <div className="text-2xl font-bold text-gold">{currentProvider.vcuBalance?.toFixed(2) || '0.00'}</div>
                 <div className="text-sm text-gray-400">VCU Available</div>
@@ -199,8 +210,22 @@ const DashboardPage: React.FC = () => {
                 <div className="text-sm text-gray-400">Prompts Served</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className="text-2xl font-bold text-gold">{currentProvider.isActive ? '100%' : '0%'}</div>
-                <div className="text-sm text-gray-400">Status</div>
+                <div className={`text-2xl font-bold ${providerHealth?.uptimePercentage >= 95 ? 'text-green-400' : providerHealth?.uptimePercentage >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {providerHealth?.uptimePercentage?.toFixed(1) || '0.0'}%
+                </div>
+                <div className="text-sm text-gray-400">24h Uptime</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {providerHealth?.totalChecks || 0} checks
+                </div>
+              </div>
+              <div className="text-center p-4 bg-white/5 rounded-lg">
+                <div className={`text-2xl font-bold ${currentProvider.avgResponseTime <= 1000 ? 'text-green-400' : currentProvider.avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {currentProvider.avgResponseTime ? `${currentProvider.avgResponseTime.toFixed(0)}ms` : 'N/A'}
+                </div>
+                <div className="text-sm text-gray-400">Avg Response</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Last 24h
+                </div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <AnimatedPointsCounter points={displayPoints} />
@@ -272,6 +297,73 @@ const DashboardPage: React.FC = () => {
               </div>
             )}
 
+            {/* Health & Performance Section */}
+            <div className="bg-white/5 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-semibold mb-4 text-white">Health & Performance</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Health Status */}
+                <div>
+                  <h4 className="text-md font-medium mb-3 text-gray-300">Health Status</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Last Health Check</span>
+                      <span className="text-sm text-white">
+                        {currentProvider.lastHealthCheck 
+                          ? new Date(currentProvider.lastHealthCheck).toLocaleString()
+                          : 'Never'
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Consecutive Failures</span>
+                      <span className={`text-sm font-semibold ${currentProvider.consecutiveFailures > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {currentProvider.consecutiveFailures || 0}
+                      </span>
+                    </div>
+                    {healthHistory && healthHistory.length > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-400">Recent Checks</span>
+                        <div className="flex space-x-1">
+                          {healthHistory.slice(0, 6).map((check, i) => (
+                            <div
+                              key={i}
+                              className={`w-3 h-3 rounded-full ${check.status ? 'bg-green-500' : 'bg-red-500'}`}
+                              title={`${check.status ? 'Healthy' : 'Failed'} - ${new Date(check.timestamp).toLocaleString()}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Network Stats */}
+                <div>
+                  <h4 className="text-md font-medium mb-3 text-gray-300">Network Overview</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Network Health</span>
+                      <span className={`text-sm font-semibold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {networkStats?.networkHealth?.toFixed(1) || '0.0'}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Network Avg Response</span>
+                      <span className="text-sm text-white">
+                        {networkStats?.avgResponseTime ? `${networkStats.avgResponseTime.toFixed(0)}ms` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-400">Active Providers</span>
+                      <span className="text-sm text-white">
+                        {networkStats?.activeProviders || 0} / {networkStats?.totalProviders || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Provider Info */}
             <div className="bg-white/5 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
@@ -310,7 +402,7 @@ const DashboardPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-4xl font-bold mb-8">Dashboard</h1>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <GlassCard className="p-4">
             <h3 className="text-lg font-semibold mb-2">Your Points</h3>
             <p className="text-2xl font-bold">{userPoints || 0}</p>
@@ -322,6 +414,15 @@ const DashboardPage: React.FC = () => {
           <GlassCard className="p-4">
             <h3 className="text-lg font-semibold mb-2">Remaining</h3>
             <p className="text-2xl font-bold">{userStats?.promptsRemaining || 50}</p>
+          </GlassCard>
+          <GlassCard className="p-4">
+            <h3 className="text-lg font-semibold mb-2">Network Health</h3>
+            <p className={`text-2xl font-bold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {networkStats?.networkHealth?.toFixed(1) || '0.0'}%
+            </p>
+            <div className="text-xs text-gray-400 mt-1">
+              {networkStats?.activeProviders || 0} active providers
+            </div>
           </GlassCard>
         </div>
         <GlassCard className="p-6">

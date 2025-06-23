@@ -35,6 +35,122 @@ export const getProviderById = internalQuery({
   },
 });
 
+// Internal mutation to check existing provider by address
+export const checkExistingProvider = internalMutation({
+  args: { address: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("address"), args.address))
+      .first();
+  },
+});
+
+// Internal mutation to check duplicate API key
+export const checkDuplicateApiKey = internalMutation({
+  args: { apiKeyHash: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("providers")
+      .filter((q) => q.eq(q.field("apiKeyHash"), args.apiKeyHash))
+      .first();
+  },
+});
+
+// Internal mutation to create provider
+export const createProviderMutation = internalMutation({
+  args: {
+    address: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+    veniceApiKey: v.string(),
+    encryptionIv: v.string(),
+    authTag: v.string(),
+    apiKeyHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const providerId = await ctx.db.insert("providers", {
+      address: args.address,
+      name: args.name,
+      description: args.description,
+      veniceApiKey: args.veniceApiKey,
+      encryptionIv: args.encryptionIv,
+      authTag: args.authTag,
+      encryptionVersion: 2, // Mark as using AES-256-GCM
+      apiKeyHash: args.apiKeyHash,
+      vcuBalance: 0,
+      isActive: false,
+      totalPrompts: 0,
+      registrationDate: Date.now(),
+      avgResponseTime: 0,
+      status: "pending",
+    });
+
+    // Initialize points
+    await ctx.db.insert("providerPoints", {
+      providerId: providerId,
+      address: args.address,
+      totalPoints: 0,
+      vcuProviderPoints: 0,
+      promptServicePoints: 0,
+      developerApiPoints: 0,
+      agentApiPoints: 0,
+      totalPrompts: 0,
+      lastEarned: Date.now(),
+      isProviderActive: false,
+    });
+
+    return providerId;
+  },
+});
+
+// Internal mutation to create provider with VCU
+export const createProviderWithVCUMutation = internalMutation({
+  args: {
+    address: v.string(),
+    name: v.string(),
+    veniceApiKey: v.string(),
+    encryptionIv: v.string(),
+    authTag: v.string(),
+    apiKeyHash: v.string(),
+    vcuBalance: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const providerId = await ctx.db.insert("providers", {
+      address: args.address,
+      name: args.name,
+      description: "Venice.ai Provider",
+      veniceApiKey: args.veniceApiKey,
+      encryptionIv: args.encryptionIv,
+      authTag: args.authTag,
+      encryptionVersion: 2, // Mark as using AES-256-GCM
+      apiKeyHash: args.apiKeyHash,
+      vcuBalance: args.vcuBalance,
+      isActive: true,
+      totalPrompts: 0,
+      registrationDate: Date.now(),
+      avgResponseTime: 0,
+      status: "active",
+    });
+
+    // Initialize points
+    await ctx.db.insert("providerPoints", {
+      providerId: providerId,
+      address: args.address,
+      totalPoints: 0,
+      vcuProviderPoints: 0,
+      promptServicePoints: 0,
+      developerApiPoints: 0,
+      agentApiPoints: 0,
+      totalPrompts: 0,
+      lastEarned: Date.now(),
+      isProviderActive: true,
+    });
+
+    return providerId;
+  },
+});
+
 // Internal action to securely decrypt API keys for inference
 export const getDecryptedApiKey = internalAction({
   args: { providerId: v.id("providers") },
@@ -210,53 +326,6 @@ export const validateVeniceApiKey = action({
   },
 });
 
-// Helper mutation for provider registration
-export const createProviderMutation = internalMutation({
-  args: {
-    address: v.string(),
-    name: v.string(),
-    description: v.optional(v.string()),
-    encryptedKey: v.string(),
-    iv: v.string(),
-    authTag: v.string(),
-    apiKeyHash: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("providers", {
-      address: args.address,
-      name: args.name,
-      description: args.description,
-      veniceApiKey: args.encryptedKey,
-      encryptionIv: args.iv,
-      authTag: args.authTag,
-      encryptionVersion: 2,
-      apiKeyHash: args.apiKeyHash,
-      vcuBalance: 0,
-      isActive: false,
-      totalPrompts: 0,
-      registrationDate: Date.now(),
-      avgResponseTime: 0,
-    });
-  },
-});
-
-// Helper query to check existing providers
-export const checkExistingProvider = internalQuery({
-  args: { address: v.string(), apiKeyHash: v.string() },
-  handler: async (ctx, args) => {
-    const existingProvider = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("address"), args.address))
-      .first();
-
-    const duplicateKey = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("apiKeyHash"), args.apiKeyHash))
-      .first();
-
-    return { existingProvider, duplicateKey };
-  },
-});
 
 // SECURE: Register provider with wallet ownership verification and anti-Sybil checks
 export const registerProvider = action({
@@ -268,7 +337,7 @@ export const registerProvider = action({
     signature: v.string(), // Wallet signature proving ownership
     timestamp: v.number(), // Timestamp to prevent replay attacks
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     const walletAddress = args.address;
     
     // Verify timestamp is recent (within 10 minutes)
@@ -285,10 +354,9 @@ export const registerProvider = action({
     }
 
     // One provider per wallet
-    const existingProvider = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("address"), walletAddress))
-      .first();
+    const existingProvider = await ctx.runMutation(internal.providers.checkExistingProvider, {
+      address: walletAddress
+    });
 
     if (existingProvider) {
       throw new Error("One provider per wallet address");
@@ -303,50 +371,28 @@ export const registerProvider = action({
     }
     
     const apiKeyFingerprint = createApiKeyFingerprint(cleanApiKey);
-    const duplicateKey = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyFingerprint))
-      .first();
+    const duplicateKey = await ctx.runMutation(internal.providers.checkDuplicateApiKey, {
+      apiKeyHash: apiKeyFingerprint
+    });
 
     if (duplicateKey) {
       throw new Error("This API key is already registered");
     }
 
     // Encrypt API key with AES-256-GCM before storage
-    const encryptionResult = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
+    const encryptionResult: { encrypted: string; iv: string; authTag: string } = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
       apiKey: cleanApiKey
     });
 
     // Create provider with AES-encrypted API key
-    const providerId = await ctx.db.insert("providers", {
+    const providerId = await ctx.runMutation(internal.providers.createProviderMutation, {
       address: args.address,
       name: args.name,
       description: args.description,
       veniceApiKey: encryptionResult.encrypted,
       encryptionIv: encryptionResult.iv,
       authTag: encryptionResult.authTag,
-      encryptionVersion: 2, // Mark as using AES-256-GCM
       apiKeyHash: apiKeyFingerprint,
-      vcuBalance: 0,
-      isActive: false,
-      totalPrompts: 0,
-      registrationDate: Date.now(),
-      avgResponseTime: 0,
-      status: "pending",
-    });
-
-    // Initialize points
-    await ctx.db.insert("providerPoints", {
-      providerId: providerId,
-      address: args.address,
-      totalPoints: 0,
-      vcuProviderPoints: 0,
-      promptServicePoints: 0,
-      developerApiPoints: 0,
-      agentApiPoints: 0,
-      totalPrompts: 0,
-      lastEarned: Date.now(),
-      isProviderActive: false,
     });
 
     return providerId;
@@ -354,22 +400,21 @@ export const registerProvider = action({
 });
 
 // PROVIDER REGISTRATION WITH ACTUAL VCU BALANCE
-export const registerProviderWithVCU = mutation({
+export const registerProviderWithVCU = action({
   args: {
     address: v.string(),
     name: v.string(),
     veniceApiKey: v.string(),
     vcuBalance: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     // No auth check needed - using wallet signatures for verification
     const walletAddress = args.address;
 
     // One provider per wallet
-    const existingProvider = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("address"), walletAddress))
-      .first();
+    const existingProvider = await ctx.runMutation(internal.providers.checkExistingProvider, {
+      address: walletAddress
+    });
 
     if (existingProvider) {
       throw new Error("One provider per wallet address");
@@ -384,50 +429,28 @@ export const registerProviderWithVCU = mutation({
     }
     
     const apiKeyFingerprint = createApiKeyFingerprint(cleanApiKey);
-    const duplicateKey = await ctx.db
-      .query("providers")
-      .filter((q) => q.eq(q.field("apiKeyHash"), apiKeyFingerprint))
-      .first();
+    const duplicateKey = await ctx.runMutation(internal.providers.checkDuplicateApiKey, {
+      apiKeyHash: apiKeyFingerprint
+    });
 
     if (duplicateKey) {
       throw new Error("This API key is already registered");
     }
 
     // Encrypt API key with AES-256-GCM before storage
-    const encryptionResult = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
+    const encryptionResult: { encrypted: string; iv: string; authTag: string } = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
       apiKey: cleanApiKey
     });
 
     // Create provider with actual VCU balance and AES-encrypted API key
-    const providerId = await ctx.db.insert("providers", {
+    const providerId = await ctx.runMutation(internal.providers.createProviderWithVCUMutation, {
       address: walletAddress,
       name: args.name,
-      description: "Venice.ai Provider",
       veniceApiKey: encryptionResult.encrypted,
       encryptionIv: encryptionResult.iv,
       authTag: encryptionResult.authTag,
-      encryptionVersion: 2, // Mark as using AES-256-GCM
       apiKeyHash: apiKeyFingerprint,
-      vcuBalance: args.vcuBalance, // Use actual VCU from validation
-      isActive: true,
-      totalPrompts: 0,
-      registrationDate: Date.now(),
-      avgResponseTime: 0,
-      status: "active" as const,
-    });
-
-    // Initialize points
-    await ctx.db.insert("providerPoints", {
-      providerId: providerId,
-      address: walletAddress,
-      totalPoints: 0,
-      vcuProviderPoints: 0,
-      promptServicePoints: 0,
-      developerApiPoints: 0,
-      agentApiPoints: 0,
-      totalPrompts: 0,
-      lastEarned: Date.now(),
-      isProviderActive: true,
+      vcuBalance: args.vcuBalance,
     });
 
     return providerId;

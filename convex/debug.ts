@@ -102,7 +102,7 @@ export const findVCUEndpoint = action({
     adminAddress: v.string(),
     apiKeySuffix: v.optional(v.string()) // Last few chars of API key to identify provider
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
     }
@@ -119,7 +119,7 @@ export const findVCUEndpoint = action({
     }
     
     // Securely decrypt the API key for testing (admin only)
-    const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+    const apiKey: string = await ctx.runAction(internal.providers.getDecryptedApiKey, {
       providerId: targetProvider._id
     });
     const results = [];
@@ -142,7 +142,7 @@ export const findVCUEndpoint = action({
     
     for (const endpoint of endpointsToTest) {
       try {
-        const response = await fetch(endpoint, {
+        const response: Response = await fetch(endpoint, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${apiKey}`,

@@ -27,10 +27,18 @@ crons.interval(
   {}
 );
 
-// Refresh model cache every hour
+// Refresh model cache every 30 minutes to ensure it's always fresh
 crons.interval(
   "refresh-model-cache",
-  { hours: 1 },
+  { minutes: 30 },
+  internal.models.refreshModelCacheInternal,
+  {}
+);
+
+// Backup model cache refresh every 15 minutes as safety net
+crons.interval(
+  "backup-refresh-model-cache",
+  { minutes: 15 },
   internal.models.refreshModelCacheInternal,
   {}
 );

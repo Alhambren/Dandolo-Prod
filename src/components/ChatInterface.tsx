@@ -99,7 +99,7 @@ const DEFAULT_MODELS = [
 ];
 
 // Message Content Component
-const MessageContent: React.FC<{ msg: Message }> = ({ msg }) => {
+const MessageContent: React.FC<{ msg: Message; role: 'user' | 'assistant' }> = ({ msg, role }) => {
   if (msg.isLoading) {
     return (
       <div className="flex items-center gap-3">
@@ -135,7 +135,9 @@ const MessageContent: React.FC<{ msg: Message }> = ({ msg }) => {
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 rounded-xl"></div>
         </div>
         {msg.content && !msg.content.includes(msg.imageUrl || '') && (
-          <p className="text-gray-200 leading-relaxed">{msg.content}</p>
+          <p className={`leading-relaxed ${role === 'user' ? 'text-black font-semibold' : 'text-gray-200 font-medium'}`}>
+            {msg.content}
+          </p>
         )}
       </div>
     );
@@ -143,7 +145,7 @@ const MessageContent: React.FC<{ msg: Message }> = ({ msg }) => {
 
   return (
     <div className="prose max-w-none">
-      <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">
+      <p className={`leading-relaxed whitespace-pre-wrap ${role === 'user' ? 'text-black font-semibold' : 'text-gray-200 font-medium'}`}>
         {msg.content}
       </p>
     </div>
@@ -468,7 +470,7 @@ export const ChatInterface: React.FC = () => {
 
       // Parse response for special content
       if (taskType === 'image') {
-        const imageUrlMatch = response.response.match(/!\\[.*?\\]\\((.*?)\\)/);
+        const imageUrlMatch = response.response.match(/!\[.*?\]\((.*?)\)/);
         if (imageUrlMatch) {
           assistantMessage.imageUrl = imageUrlMatch[1];
         }
@@ -539,7 +541,7 @@ export const ChatInterface: React.FC = () => {
         <div className="p-3">
           <button
             onClick={createNewChat}
-            className="w-full flex items-center justify-center gap-2 p-3 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 transition-colors"
+            className="w-full flex items-center justify-center gap-2 p-3 bg-yellow-400 text-black font-semibold rounded-lg hover:bg-yellow-300 transition-colors"
           >
             <Plus className="w-5 h-5" />
             <span className={`${isSidebarExpanded ? 'inline' : 'hidden'}`}>New Chat</span>
@@ -763,7 +765,7 @@ export const ChatInterface: React.FC = () => {
                 key={type}
                 onClick={() => setTaskType(type)}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  taskType === type ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400'
+                  taskType === type ? 'bg-yellow-400 text-black font-semibold' : 'bg-gray-800 text-gray-400'
                 }`}
                 title={title}
               >
@@ -799,10 +801,10 @@ export const ChatInterface: React.FC = () => {
                   >
                     <div className={`max-w-3xl px-6 py-4 rounded-2xl ${
                       msg.role === 'user' 
-                        ? 'bg-yellow-500 text-black' 
+                        ? 'bg-yellow-400 text-black font-semibold' 
                         : 'bg-gray-800 text-white'
                     }`}>
-                      <MessageContent msg={msg} />
+                      <MessageContent msg={msg} role={msg.role} />
                       {msg.role === 'assistant' && msg.model && !msg.isLoading && (
                         <div className="mt-3 pt-3 border-t border-gray-700 text-xs text-gray-400 flex items-center gap-4">
                           <span>{msg.provider}</span>
@@ -865,7 +867,7 @@ export const ChatInterface: React.FC = () => {
               <button 
                 type="submit"
                 disabled={isLoading || !message.trim()}
-                className="absolute right-2 bottom-2 p-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-2 bottom-2 p-2 bg-yellow-400 text-black font-semibold rounded-lg hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <div className="animate-spin w-4 h-4 border-2 border-black border-t-transparent rounded-full"></div>

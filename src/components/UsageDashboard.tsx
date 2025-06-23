@@ -201,6 +201,10 @@ export const UsageDashboard: React.FC = () => {
   const { address } = useAccount();
   const userPoints = useQuery(api.wallets.getUserPoints, address ? { address } : 'skip');
   const apiKeys = useQuery(api.developers.getUserApiKeys, address ? { address } : 'skip');
+  const networkStats = useQuery(api.stats.getNetworkStats);
+  const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
+  const providers = useQuery(api.providers.list);
+  const userProvider = providers?.find(p => p.address === address);
   
   if (!address) {
     return (
@@ -217,6 +221,49 @@ export const UsageDashboard: React.FC = () => {
         <h2 className="text-2xl font-bold">Usage Dashboard</h2>
       </div>
       
+      {/* System Health Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+          <h4 className="text-sm font-medium text-gray-400 mb-2">Network Health</h4>
+          <div className={`text-2xl font-bold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {networkStats?.networkHealth?.toFixed(1) || '0.0'}%
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {networkStats?.activeProviders || 0} active providers
+          </div>
+        </div>
+        
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+          <h4 className="text-sm font-medium text-gray-400 mb-2">Avg Response Time</h4>
+          <div className={`text-2xl font-bold ${networkStats?.avgResponseTime <= 1000 ? 'text-green-400' : networkStats?.avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {networkStats?.avgResponseTime ? `${networkStats.avgResponseTime.toFixed(0)}ms` : 'N/A'}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Network average
+          </div>
+        </div>
+        
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+          <h4 className="text-sm font-medium text-gray-400 mb-2">Your Daily Usage</h4>
+          <div className="text-2xl font-bold text-blue-400">
+            {userStats?.promptsToday || 0}/50
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {userStats?.promptsRemaining || 50} remaining
+          </div>
+        </div>
+        
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+          <h4 className="text-sm font-medium text-gray-400 mb-2">Provider Status</h4>
+          <div className={`text-2xl font-bold ${userProvider?.isActive ? 'text-green-400' : 'text-gray-400'}`}>
+            {userProvider ? (userProvider.isActive ? 'Active' : 'Inactive') : 'None'}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {userProvider ? `${userProvider.totalPrompts || 0} served` : 'Not a provider'}
+          </div>
+        </div>
+      </div>
+
       {/* Real Data Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Points Card */}
@@ -228,6 +275,23 @@ export const UsageDashboard: React.FC = () => {
           <div className="text-sm text-gray-400">
             Earned from chat usage • 1 point per prompt
           </div>
+          {userProvider && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">Provider Performance</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-lg font-bold text-yellow-400">{userProvider.vcuBalance?.toFixed(2) || '0.00'}</div>
+                  <div className="text-xs text-gray-500">VCU Balance</div>
+                </div>
+                <div>
+                  <div className={`text-lg font-bold ${userProvider.avgResponseTime <= 1000 ? 'text-green-400' : userProvider.avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {userProvider.avgResponseTime ? `${userProvider.avgResponseTime.toFixed(0)}ms` : 'N/A'}
+                  </div>
+                  <div className="text-xs text-gray-500">Avg Response</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* API Keys Card */}

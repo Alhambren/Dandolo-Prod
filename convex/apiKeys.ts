@@ -1,8 +1,7 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, action, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { api } from "./_generated/api";
-import { randomBytes } from "crypto";
+import { api, internal } from "./_generated/api";
 
 // API Key types and limits according to specification
 const API_KEY_TYPES = {
@@ -12,14 +11,47 @@ const API_KEY_TYPES = {
 
 type ApiKeyType = keyof typeof API_KEY_TYPES;
 
-/**
- * Generate a new API key with proper prefix
- */
-function generateApiKey(type: ApiKeyType): string {
-  const prefix = API_KEY_TYPES[type].prefix;
-  const randomPart = randomBytes(16).toString('hex');
-  return `${prefix}${randomPart}`;
-}
+// Internal mutation to create API key record
+export const createApiKeyRecord = internalMutation({
+  args: {
+    address: v.string(),
+    keyType: v.union(v.literal("developer"), v.literal("agent")),
+    key: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check if user already has 5 or more keys
+    const existingKeys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .collect();
+    
+    if (existingKeys.length >= 5) {
+      throw new Error("Maximum of 5 API keys per wallet address");
+    }
+    
+    // Check if key already exists
+    const existingKey = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .first();
+    
+    if (existingKey) {
+      throw new Error("Key collision detected");
+    }
+    
+    return await ctx.db.insert("apiKeys", {
+      address: args.address,
+      name: `${args.keyType} key`,
+      key: args.key,
+      keyType: args.keyType,
+      isActive: true,
+      createdAt: Date.now(),
+      totalUsage: 0,
+      dailyUsage: 0,
+      lastReset: Date.now(),
+    });
+  },
+});
 
 /**
  * Determine API key type from the key string
@@ -33,7 +65,7 @@ function getApiKeyType(key: string): ApiKeyType | "user" {
 /**
  * Create a new API key for a wallet address
  */
-export const createApiKey = mutation({
+export const createApiKey = action({
   args: {
     address: v.string(),
     name: v.string(),
@@ -44,43 +76,30 @@ export const createApiKey = mutation({
     keyId: v.id("apiKeys"),
   }),
   handler: async (ctx, args): Promise<{ key: string; keyId: Id<"apiKeys"> }> => {
-    // Check if user already has 5 or more keys (reasonable limit)
-    const existingKeys = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_address", (q) => q.eq("address", args.address))
-      .collect();
-    
-    if (existingKeys.length >= 5) {
-      throw new Error("Maximum of 5 API keys per wallet address");
-    }
-    
-    // Generate new key
-    const newKey = generateApiKey(args.keyType);
-    
-    // Ensure key is unique (very unlikely collision but let's be safe)
-    const existingKey = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_key", (q) => q.eq("key", newKey))
-      .first();
-    
-    if (existingKey) {
-      // Try again with a new key (recursive call, very unlikely to happen)
-      return await ctx.runMutation(api.apiKeys.createApiKey, args);
-    }
-    
-    const keyId = await ctx.db.insert("apiKeys", {
-      address: args.address,
-      name: args.name,
-      key: newKey,
-      keyType: args.keyType,
-      isActive: true,
-      createdAt: Date.now(),
-      totalUsage: 0,
-      dailyUsage: 0,
-      lastReset: getUTCMidnight(),
+    // Generate new key using secure crypto
+    const newKey = await ctx.runAction(internal.cryptoSecure.generateSecureApiKey, {
+      keyType: args.keyType
     });
     
-    return { key: newKey, keyId };
+    // Use mutation to create the key record with all validations
+    try {
+      const keyId = await ctx.runMutation(internal.apiKeys.createApiKeyRecord, {
+        address: args.address,
+        keyType: args.keyType,
+        key: newKey,
+      });
+
+      return {
+        key: newKey,
+        keyId: keyId,
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message === "Key collision detected") {
+        // Very unlikely, but try again with a new key
+        return await ctx.runAction(api.apiKeys.createApiKey, args);
+      }
+      throw error;
+    }
   },
 });
 

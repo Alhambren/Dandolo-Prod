@@ -18,6 +18,7 @@ export function DeveloperPortal() {
   );
   const generateKey = useMutation(api.developers.generateApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
+  const networkStats = useQuery(api.stats.getNetworkStats);
   
   const handleGenerateKey = async () => {
     if (!address || !newKeyName) return;
@@ -45,7 +46,38 @@ export function DeveloperPortal() {
   
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Removed duplicate heading - now handled by DeveloperHub */}
+      {/* API Health Status */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <GlassCard className="p-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-2">API Health</h3>
+          <div className={`text-2xl font-bold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {networkStats?.networkHealth?.toFixed(1) || '0.0'}%
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Service availability
+          </div>
+        </GlassCard>
+        
+        <GlassCard className="p-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-2">Response Time</h3>
+          <div className={`text-2xl font-bold ${networkStats?.avgResponseTime <= 1000 ? 'text-green-400' : networkStats?.avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'}`}>
+            {networkStats?.avgResponseTime ? `${networkStats.avgResponseTime.toFixed(0)}ms` : 'N/A'}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Average latency
+          </div>
+        </GlassCard>
+        
+        <GlassCard className="p-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-2">Active Providers</h3>
+          <div className="text-2xl font-bold text-blue-400">
+            {networkStats?.activeProviders || 0}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {networkStats?.totalProviders || 0} total providers
+          </div>
+        </GlassCard>
+      </div>
       
       {/* API Keys Section */}
       <GlassCard className="p-6 mb-6">
@@ -185,6 +217,42 @@ export function DeveloperPortal() {
         </div>
       )}
       
+      {/* Service Status */}
+      <GlassCard className="p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">Service Status</h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${networkStats?.networkHealth >= 95 ? 'bg-green-500' : networkStats?.networkHealth >= 80 ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+              <span className="font-medium">API Endpoints</span>
+            </div>
+            <span className={`text-sm font-semibold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {networkStats?.networkHealth >= 95 ? 'Operational' : networkStats?.networkHealth >= 80 ? 'Degraded' : 'Issues'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${networkStats?.activeProviders > 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="font-medium">Model Providers</span>
+            </div>
+            <span className={`text-sm font-semibold ${networkStats?.activeProviders > 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {networkStats?.activeProviders > 0 ? 'Available' : 'Unavailable'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${networkStats?.avgResponseTime <= 2000 ? 'bg-green-500' : networkStats?.avgResponseTime <= 5000 ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+              <span className="font-medium">Response Performance</span>
+            </div>
+            <span className={`text-sm font-semibold ${networkStats?.avgResponseTime <= 2000 ? 'text-green-400' : networkStats?.avgResponseTime <= 5000 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {networkStats?.avgResponseTime <= 2000 ? 'Fast' : networkStats?.avgResponseTime <= 5000 ? 'Moderate' : 'Slow'}
+            </span>
+          </div>
+        </div>
+      </GlassCard>
+
       {/* Quick Start Guide */}
       <GlassCard className="p-6">
         <h2 className="text-xl font-semibold mb-4">Quick Start</h2>

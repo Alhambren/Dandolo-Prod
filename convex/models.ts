@@ -4,8 +4,8 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 
-// Cache TTL in milliseconds (30 minutes)
-const CACHE_TTL = 30 * 60 * 1000;
+// Cache TTL in milliseconds (2 hours - well beyond the 1-hour refresh interval)
+const CACHE_TTL = 2 * 60 * 60 * 1000;
 
 interface Model {
   id: string;
@@ -35,10 +35,20 @@ export const getAvailableModels = query({
   handler: async (ctx) => {
     const cached = await ctx.db.query("modelCache").first();
 
-    if (cached && Date.now() - cached.lastUpdated < CACHE_TTL) {
+    // If we have cached models, use them regardless of age
+    if (cached && cached.models) {
       const models = cached.models;
+      const cacheAge = Date.now() - cached.lastUpdated;
+      const isStale = cacheAge > CACHE_TTL;
+      
+      // Log if cache is getting stale (for monitoring)
+      if (isStale) {
+        console.warn(`Model cache is ${Math.round(cacheAge / (60 * 1000))} minutes old (TTL: ${Math.round(CACHE_TTL / (60 * 1000))} min)`);
+      }
+
       if (Array.isArray(models)) {
         // Old format: return array of models
+        console.log(`Returning ${models.length} models from legacy cache format`);
         return models.map((m: any) => ({
           id: m.id,
           name: m.name,
@@ -46,29 +56,25 @@ export const getAvailableModels = query({
         }));
       } else {
         // New format: flatten all categories into a single array
-        return [
+        const allModels = [
           ...models.text.map((m: any) => ({ ...m, type: "text" })),
           ...models.code.map((m: any) => ({ ...m, type: "code" })),
           ...models.image.map((m: any) => ({ ...m, type: "image" })),
           ...models.multimodal.map((m: any) => ({ ...m, type: "multimodal" })),
           ...models.audio.map((m: any) => ({ ...m, type: "audio" })),
         ];
+        console.log(`Returning ${allModels.length} models from cache (text: ${models.text.length}, image: ${models.image.length}, audio: ${models.audio.length})`);
+        return allModels;
       }
     }
 
-    // If cache is missing or expired, return fallback models
-    // This ensures the system doesn't fail even with cache issues
-    if (!cached || Date.now() - cached.lastUpdated >= CACHE_TTL) {
-      
-      // Return basic fallback models to keep the system functional
-      return [
-        { id: "llama-3.3-70b", name: "llama-3.3-70b", type: "text" },
-        { id: "qwen-2.5-coder-32b", name: "qwen-2.5-coder-32b", type: "code" },
-      ];
-    }
-
-    // Return empty array if no cache - will be populated by action
-    return [];
+    // Only fall back to hardcoded models if there's no cache at all
+    console.error("No model cache found! Falling back to hardcoded models. This should be rare.");
+    return [
+      { id: "llama-3.3-70b", name: "llama-3.3-70b", type: "text" },
+      { id: "qwen-2.5-coder-32b", name: "qwen-2.5-coder-32b", type: "code" },
+      { id: "flux-dev", name: "flux-dev", type: "image" },
+    ];
   },
 });
 
@@ -386,6 +392,51 @@ export const getModelCacheInternal = internalQuery({
   handler: async (ctx) => {
     const cached = await ctx.db.query("modelCache").first();
     return cached;
+  },
+});
+
+// Health check for model cache system
+export const getModelCacheHealth = query({
+  args: {},
+  handler: async (ctx) => {
+    const cached = await ctx.db.query("modelCache").first();
+    
+    if (!cached) {
+      return {
+        status: "CRITICAL",
+        message: "No model cache found",
+        totalModels: 0,
+        cacheAge: null,
+        lastUpdated: null,
+      };
+    }
+
+    const cacheAge = Date.now() - cached.lastUpdated;
+    const isStale = cacheAge > CACHE_TTL;
+    const models = cached.models;
+    
+    let totalModels = 0;
+    if (Array.isArray(models)) {
+      totalModels = models.length;
+    } else {
+      totalModels = models.text.length + models.code.length + models.image.length + 
+                   models.multimodal.length + models.audio.length;
+    }
+
+    return {
+      status: isStale ? "WARNING" : "HEALTHY",
+      message: isStale ? `Cache is ${Math.round(cacheAge / (60 * 1000))} minutes old` : "Cache is fresh",
+      totalModels: totalModels,
+      cacheAge: Math.round(cacheAge / (60 * 1000)), // in minutes
+      lastUpdated: new Date(cached.lastUpdated).toISOString(),
+      breakdown: Array.isArray(models) ? null : {
+        text: models.text.length,
+        code: models.code.length,
+        image: models.image.length,
+        multimodal: models.multimodal.length,
+        audio: models.audio.length,
+      }
+    };
   },
 });
 

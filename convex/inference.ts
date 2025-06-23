@@ -777,7 +777,7 @@ export const route = action({
         validProviders[Math.floor(Math.random() * validProviders.length)];
 
       // Get API key securely (decrypted from secure storage)
-      const apiKey = await ctx.runQuery(internal.providers.getDecryptedApiKey, {
+      const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
         providerId: randomProvider._id
       });
 

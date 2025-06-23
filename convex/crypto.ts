@@ -28,6 +28,24 @@ export function createSecureHash(input: string): string {
   return extendedHash.substring(0, 32); // Return 32 character hash (128-bit equivalent)
 }
 
+// Generate secure token using Web Crypto API (client-side safe)
+export function generateSecureToken(length: number = 16): string {
+  // Use crypto.getRandomValues if available (browser environment)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+  
+  // Fallback for environments without crypto.getRandomValues
+  const chars = 'abcdef0123456789';
+  let result = '';
+  for (let i = 0; i < length * 2; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 // Validate API key format (Venice.ai keys start with specific prefixes)
 export function validateApiKeyFormat(apiKey: string): boolean {
   // Venice.ai API keys typically start with 'vn_' and have specific length
