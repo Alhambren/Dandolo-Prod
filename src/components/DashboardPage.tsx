@@ -46,7 +46,7 @@ const DashboardPage: React.FC = () => {
 
   // Mutations and Actions
   const validateVeniceApiKey = useAction(api.providers.validateVeniceApiKey);
-  const registerProviderWithVCU = useMutation(api.providers.registerProviderWithVCU);
+  const registerProviderWithVCU = useAction(api.providers.registerProviderWithVCU);
   const removeProvider = useMutation(api.providers.remove);
 
   // Calculate daily VCU points (1:1 ratio, updates throughout the day)

@@ -640,7 +640,6 @@ export const routeSimple = action({
         responseTime: result.responseTime,
       };
     } catch (error) {
-      console.error("RouteSimple error:", error);
       // Return a user-friendly error instead of throwing
       return {
         response: "Sorry, I'm having trouble processing your request right now. Please try again in a moment.",
@@ -693,16 +692,8 @@ export const route = action({
   }),
   handler: async (ctx, args): Promise<RouteReturnType> => {
     try {
-      console.log("Route function called with args:", {
-        intent: args.intent,
-        isAnonymous: args.isAnonymous,
-        address: args.address,
-        model: args.model
-      });
-
       // Rate limiting and daily limit checks
       if (!args.isAnonymous && args.address) {
-        console.log("Checking rate limits for authenticated user");
         // Check rate limits for authenticated users
         const userType = args.apiKey?.startsWith("dk_") ? "developer" :
                         args.apiKey?.startsWith("ak_") ? "agent" : "user";
@@ -760,13 +751,7 @@ export const route = action({
         }
       }
       
-      console.log("Fetching active providers...");
       const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
-      console.log(`Found ${providers.length} total providers`);
-      
-      // Debug: Log each provider's details
-      providers.forEach((provider, index) => {
-      });
 
       if (providers.length === 0) {
         // Use hardcoded fallback provider ID since no providers exist
@@ -788,7 +773,6 @@ export const route = action({
         };
       }
 
-      console.log("Filtering valid providers...");
       const validProviders = providers.filter((p) => 
         p.veniceApiKey && 
         !p.veniceApiKey.startsWith('test_') && 
@@ -796,11 +780,6 @@ export const route = action({
         !p.name.toLowerCase().includes('test') &&
         !p.name.toLowerCase().includes('testing')
       );
-      console.log(`Found ${validProviders.length} valid providers`);
-      
-      // Debug: Log which providers passed the filter
-      validProviders.forEach((provider, index) => {
-      });
 
       if (validProviders.length === 0) {
         // Use first provider ID as fallback even if invalid API key
@@ -821,23 +800,18 @@ export const route = action({
         };
       }
 
-      console.log("Selecting random provider...");
       const randomProvider: Provider =
         validProviders[Math.floor(Math.random() * validProviders.length)];
-      console.log(`Selected provider: ${randomProvider.name} (${randomProvider._id})`);
 
       // Get API key securely (decrypted from secure storage)
-      console.log("Getting decrypted API key...");
       const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
         providerId: randomProvider._id
       });
-      console.log(`API key retrieved: ${apiKey ? 'yes' : 'no'}`);
 
       if (!apiKey) {
         throw new Error("Provider API key not available");
       }
 
-      console.log("Calling Venice AI...");
       const { response, model: usedModel, tokens, responseTime } =
         await callVeniceAI(
           ctx,
@@ -848,7 +822,6 @@ export const route = action({
           args.model,
           args.allowAdultContent
         );
-      console.log(`Venice AI call completed. Model: ${usedModel}, Tokens: ${tokens}`);
 
       const vcuCost = calculateVCUCost(tokens, usedModel);
 
@@ -907,18 +880,6 @@ export const route = action({
         vcuCost,
       };
     } catch (error) {
-      console.error("Route function error:", error);
-      console.error("Error details:", {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        args: {
-          intent: args.intent,
-          isAnonymous: args.isAnonymous,
-          address: args.address,
-          model: args.model
-        }
-      });
-      
       // Get any provider ID for error case (or use a dummy one if none exist)
       const providers = await ctx.runQuery(internal.providers.listActiveInternal);
       const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;

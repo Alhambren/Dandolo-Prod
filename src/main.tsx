@@ -7,10 +7,6 @@ import { config, queryClient } from './lib/wagmi'
 import "./index.css";
 import App from "./App.tsx";
 
-console.log("VITE_CONVEX_URL:", import.meta.env.VITE_CONVEX_URL);
-console.log("NODE_ENV:", import.meta.env.NODE_ENV);
-console.log("All env vars:", import.meta.env);
-
 if (!import.meta.env.VITE_CONVEX_URL) {
   alert(
     "VITE_CONVEX_URL is not set at build time. " +
