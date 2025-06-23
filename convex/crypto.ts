@@ -46,9 +46,8 @@ export function generateSecureToken(length: number = 16): string {
   return result;
 }
 
-// Validate API key format (Venice.ai keys start with specific prefixes)
+// Validate API key format (Venice.ai keys can have various formats)
 export function validateApiKeyFormat(apiKey: string): boolean {
-  // Venice.ai API keys typically start with 'vn_' and have specific length
   if (!apiKey || typeof apiKey !== 'string') {
     return false;
   }
@@ -56,14 +55,23 @@ export function validateApiKeyFormat(apiKey: string): boolean {
   // Remove whitespace and check format
   const cleanKey = apiKey.trim();
   
-  // Venice.ai keys should start with 'vn_' and be at least 32 characters
-  if (cleanKey.startsWith('vn_') && cleanKey.length >= 32) {
-    return true;
+  // Basic validation: must be at least 20 characters and contain alphanumeric characters
+  if (cleanKey.length < 20) {
+    return false;
   }
   
-  // Also accept keys that start with other common AI API prefixes for testing
-  const validPrefixes = ['sk-', 'pk-', 'ak-', 'api_'];
-  return validPrefixes.some(prefix => cleanKey.startsWith(prefix)) && cleanKey.length >= 32;
+  // Check if it contains only valid characters (letters, numbers, hyphens, underscores)
+  const validCharacters = /^[a-zA-Z0-9_-]+$/;
+  if (!validCharacters.test(cleanKey)) {
+    return false;
+  }
+  
+  // Accept various API key formats including Venice.ai and other providers
+  const validPrefixes = ['vn_', 'sk-', 'pk-', 'ak-', 'api_', 'key_'];
+  const hasValidPrefix = validPrefixes.some(prefix => cleanKey.startsWith(prefix));
+  
+  // Allow keys with valid prefixes OR keys that are long enough (32+ chars) even without known prefixes
+  return hasValidPrefix || cleanKey.length >= 32;
 }
 
 // Create secure fingerprint for duplicate detection
