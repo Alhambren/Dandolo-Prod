@@ -713,11 +713,15 @@ export const route = action({
         });
         
         if (!rateCheck.allowed) {
+          // Get fallback provider ID for error response
+          const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+          const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+          
           return {
             response: `Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfter || 0) / 1000)} seconds.`,
             model: "error",
             totalTokens: 0,
-            providerId: "error" as any,
+            providerId: fallbackProviderId,
             provider: "System",
             cost: 0,
             responseTime: 0,
@@ -735,12 +739,16 @@ export const route = action({
         });
         
         if (!dailyCheck.allowed) {
+          // Get fallback provider ID for error response
+          const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+          const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+          
           const resetTime = new Date(dailyCheck.resetTime).toISOString();
           return {
             response: `Daily limit of ${dailyCheck.limit} requests reached. Resets at ${resetTime}.`,
             model: "error",
             totalTokens: 0,
-            providerId: "error" as any,
+            providerId: fallbackProviderId,
             provider: "System",
             cost: 0,
             responseTime: 0,
@@ -761,12 +769,15 @@ export const route = action({
       });
 
       if (providers.length === 0) {
+        // Use hardcoded fallback provider ID since no providers exist
+        const fallbackProviderId = "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+        
         // Return a helpful error message instead of throwing
         return {
           response: "Sorry, no AI providers are currently available. Please try again later or contact support.",
           model: "error",
           totalTokens: 0,
-          providerId: "error" as any,
+          providerId: fallbackProviderId,
           provider: "System",
           cost: 0,
           responseTime: 0,
@@ -781,7 +792,9 @@ export const route = action({
       const validProviders = providers.filter((p) => 
         p.veniceApiKey && 
         !p.veniceApiKey.startsWith('test_') && 
-        p.veniceApiKey.length > 30
+        p.veniceApiKey.length > 30 &&
+        !p.name.toLowerCase().includes('test') &&
+        !p.name.toLowerCase().includes('testing')
       );
       console.log(`Found ${validProviders.length} valid providers`);
       
@@ -790,11 +803,14 @@ export const route = action({
       });
 
       if (validProviders.length === 0) {
+        // Use first provider ID as fallback even if invalid API key
+        const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+        
         return {
           response: "Sorry, no AI providers with valid API keys are currently available. Please try again later.",
           model: "error",
           totalTokens: 0,
-          providerId: "error" as any,
+          providerId: fallbackProviderId,
           provider: "System",
           cost: 0,
           responseTime: 0,
@@ -903,12 +919,16 @@ export const route = action({
         }
       });
       
+      // Get any provider ID for error case (or use a dummy one if none exist)
+      const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+      const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+      
       // Return error response instead of throwing
       return {
         response: `Error: ${error instanceof Error ? error.message : String(error)}`,
         model: "error",
         totalTokens: 0,
-        providerId: "error" as any,
+        providerId: fallbackProviderId,
         provider: "System",
         cost: 0,
         responseTime: 0,
