@@ -15,18 +15,23 @@ type ApiKeyType = keyof typeof API_KEY_TYPES;
 export const createApiKeyRecord = internalMutation({
   args: {
     address: v.string(),
+    name: v.string(),
     keyType: v.union(v.literal("developer"), v.literal("agent")),
     key: v.string(),
   },
   handler: async (ctx, args) => {
-    // Check if user already has 5 or more keys
-    const existingKeys = await ctx.db
+    // Check if user already has a key of this type
+    const existingKeyOfType = await ctx.db
       .query("apiKeys")
       .withIndex("by_address", (q) => q.eq("address", args.address))
-      .collect();
+      .filter((q) => q.and(
+        q.eq(q.field("keyType"), args.keyType),
+        q.eq(q.field("isActive"), true)
+      ))
+      .first();
     
-    if (existingKeys.length >= 5) {
-      throw new Error("Maximum of 5 API keys per wallet address");
+    if (existingKeyOfType) {
+      throw new Error(`You already have an active ${args.keyType} key. Each user can only have one developer key and one agent key.`);
     }
     
     // Check if key already exists
@@ -41,7 +46,7 @@ export const createApiKeyRecord = internalMutation({
     
     return await ctx.db.insert("apiKeys", {
       address: args.address,
-      name: `${args.keyType} key`,
+      name: args.name,
       key: args.key,
       keyType: args.keyType,
       isActive: true,
@@ -76,15 +81,30 @@ export const createApiKey = action({
     keyId: v.id("apiKeys"),
   }),
   handler: async (ctx, args): Promise<{ key: string; keyId: Id<"apiKeys"> }> => {
-    // Generate new key using secure crypto
-    const newKey = await ctx.runAction(internal.cryptoSecure.generateSecureApiKey, {
-      keyType: args.keyType
-    });
+    // Validate user is authenticated (must have wallet address)
+    if (!args.address || args.address.length !== 42 || !args.address.startsWith('0x')) {
+      throw new Error("Valid wallet address required to generate API keys");
+    }
+    
+    // Generate cryptographically secure API key using Web Crypto API
+    const prefix = args.keyType === 'agent' ? 'ak_' : 'dk_';
+    
+    // Generate 24 bytes of secure random data
+    const randomArray = new Uint8Array(24);
+    crypto.getRandomValues(randomArray);
+    
+    // Convert to hex string
+    const randomHex = Array.from(randomArray)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    const newKey = `${prefix}${randomHex}`;
     
     // Use mutation to create the key record with all validations
     try {
       const keyId = await ctx.runMutation(internal.apiKeys.createApiKeyRecord, {
         address: args.address,
+        name: args.name,
         keyType: args.keyType,
         key: newKey,
       });

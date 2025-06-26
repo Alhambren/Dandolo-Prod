@@ -2,7 +2,8 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { api } from "./_generated/api";
 
-// Generate API key
+// DEPRECATED: Use api.apiKeys.createApiKey instead
+// This function is kept for backward compatibility but should not be used
 export const generateApiKey = mutation({
   args: {
     address: v.string(),
@@ -11,47 +12,7 @@ export const generateApiKey = mutation({
   },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
-    // Check existing keys (limit 5 per user for MVP)
-    const existingKeys = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_address", q => q.eq("address", args.address))
-      .filter(q => q.eq(q.field("isActive"), true))
-      .collect();
-    
-    if (existingKeys.length >= 5) {
-      throw new Error("Maximum 5 active keys allowed");
-    }
-    
-    // Generate key
-    const prefix = args.keyType === "agent" ? "ak_" : "dk_";
-    const randomPart = Math.random().toString(36).substring(2) + 
-                      Math.random().toString(36).substring(2);
-    const key = prefix + randomPart;
-    
-    // Check for collisions (very unlikely but let's be safe)
-    const existingKey = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_key", q => q.eq("key", key))
-      .first();
-    
-    if (existingKey) {
-      // Collision detected - use a different approach to avoid recursion
-      throw new Error("Key generation collision - please try again");
-    }
-    
-    await ctx.db.insert("apiKeys", {
-      address: args.address,
-      name: args.name,
-      key,
-      keyType: args.keyType,
-      isActive: true,
-      createdAt: Date.now(),
-      totalUsage: 0,
-      dailyUsage: 0,
-      lastReset: Date.now(),
-    });
-    
-    return key;
+    throw new Error("This function is deprecated. Use api.apiKeys.createApiKey instead.");
   },
 });
 
@@ -80,7 +41,7 @@ export const getUserApiKeys = query({
       _id: k._id,
       name: k.name,
       keyType: k.keyType || "developer",
-      maskedKey: k.key.substring(0, 7) + "..." + k.key.substring(k.key.length - 4),
+      maskedKey: k.key.substring(0, 3) + "..." + k.key.substring(k.key.length - 4),
       isActive: k.isActive,
       createdAt: k.createdAt,
       lastUsed: k.lastUsed,

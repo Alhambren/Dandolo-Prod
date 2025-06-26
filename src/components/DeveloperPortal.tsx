@@ -1,49 +1,115 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import GlassCard from './GlassCard';
 import { toast } from 'sonner';
 
 export function DeveloperPortal() {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const [showGenerator, setShowGenerator] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [keyType, setKeyType] = useState<'developer' | 'agent'>('developer');
   const [generatedKey, setGeneratedKey] = useState('');
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
   
   const apiKeys = useQuery(api.developers.getUserApiKeys, 
     address ? { address } : 'skip'
   );
-  const generateKey = useMutation(api.developers.generateApiKey);
+  const generateKey = useAction(api.apiKeys.createApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
   const networkStats = useQuery(api.stats.getNetworkStats);
   
+  // Get availability for new key creation
+  const activeKeys = apiKeys?.filter(k => k.isActive) || [];
+  const hasDeveloperKey = activeKeys.some(k => k.keyType === 'developer');
+  const hasAgentKey = activeKeys.some(k => k.keyType === 'agent');
+  const canCreateDeveloper = !hasDeveloperKey;
+  const canCreateAgent = !hasAgentKey;
+  const canCreateAnyKey = canCreateDeveloper || canCreateAgent;
+  
+  // Auto-switch to available key type if current selection is unavailable
+  React.useEffect(() => {
+    if (keyType === 'developer' && !canCreateDeveloper && canCreateAgent) {
+      setKeyType('agent');
+    } else if (keyType === 'agent' && !canCreateAgent && canCreateDeveloper) {
+      setKeyType('developer');
+    }
+  }, [keyType, canCreateDeveloper, canCreateAgent]);
+  
   const handleGenerateKey = async () => {
-    if (!address || !newKeyName) return;
+    // CRITICAL: Require wallet authentication
+    if (!isConnected || !address) {
+      toast.error('Please connect your wallet to generate API keys');
+      return;
+    }
+    
+    // Validate address format
+    if (!address.startsWith('0x') || address.length !== 42) {
+      toast.error('Invalid wallet address format');
+      return;
+    }
+    
+    if (!newKeyName.trim()) {
+      toast.error('Please enter a name for your API key');
+      return;
+    }
+    
+    // Check if user can create this key type
+    if (keyType === 'developer' && !canCreateDeveloper) {
+      toast.error('You already have a developer key. Each user can only have one developer key.');
+      return;
+    }
+    if (keyType === 'agent' && !canCreateAgent) {
+      toast.error('You already have an agent key. Each user can only have one agent key.');
+      return;
+    }
     
     try {
-      const key = await generateKey({
+      console.log('Generating key with params:', { address, name: newKeyName, keyType });
+      const result = await generateKey({
         address,
-        name: newKeyName,
+        name: newKeyName.trim(),
         keyType,
       });
       
-      setGeneratedKey(key);
+      console.log('Key generation successful:', { keyId: result.keyId, hasKey: !!result.key });
+      setGeneratedKey(result.key);
       setShowKeyModal(true);
+      setKeyCopied(false);
       setNewKeyName('');
       setShowGenerator(false);
-    } catch (error) {
-      toast.error('Failed to generate key');
+      toast.success('API key generated successfully!');
+    } catch (error: any) {
+      console.error('Key generation failed:', error);
+      toast.error(error?.message || 'Failed to generate key');
     }
   };
   
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard!');
+    setKeyCopied(true);
   };
   
+  // Show wallet connection required message if not authenticated
+  if (!isConnected || !address) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <GlassCard className="p-8 text-center">
+          <h2 className="text-2xl font-bold mb-4">🔐 Wallet Required</h2>
+          <p className="text-gray-400 mb-6">
+            Please connect your wallet to access the Developer Portal and generate API keys.
+          </p>
+          <p className="text-sm text-gray-500">
+            API keys are tied to your wallet address for security and individual access control.
+          </p>
+        </GlassCard>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* API Health Status */}
@@ -82,12 +148,18 @@ export function DeveloperPortal() {
       {/* API Keys Section */}
       <GlassCard className="p-6 mb-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold">API Keys</h2>
+          <div>
+            <h2 className="text-xl font-semibold">API Keys</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              You can have one developer key (500/day) and one agent key (5,000/day)
+            </p>
+          </div>
           <button
             onClick={() => setShowGenerator(!showGenerator)}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+            disabled={!canCreateAnyKey || !isConnected || !address}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
           >
-            + New Key
+            {!isConnected ? 'Connect Wallet' : canCreateAnyKey ? '+ New Key' : 'All Keys Created'}
           </button>
         </div>
         
@@ -108,27 +180,33 @@ export function DeveloperPortal() {
                   type="radio"
                   checked={keyType === 'developer'}
                   onChange={() => setKeyType('developer')}
+                  disabled={!canCreateDeveloper}
                   className="mr-2"
                 />
-                Developer (500/day)
+                <span className={!canCreateDeveloper ? 'text-gray-500' : ''}>
+                  Developer (500/day) {!canCreateDeveloper && '- Already Created'}
+                </span>
               </label>
               <label className="flex items-center">
                 <input
                   type="radio"
                   checked={keyType === 'agent'}
                   onChange={() => setKeyType('agent')}
+                  disabled={!canCreateAgent}
                   className="mr-2"
                 />
-                Agent (5,000/day)
+                <span className={!canCreateAgent ? 'text-gray-500' : ''}>
+                  Agent (5,000/day) {!canCreateAgent && '- Already Created'}
+                </span>
               </label>
             </div>
             
             <button
               onClick={handleGenerateKey}
-              disabled={!newKeyName}
+              disabled={!newKeyName || !isConnected || !address || (keyType === 'developer' && !canCreateDeveloper) || (keyType === 'agent' && !canCreateAgent)}
               className="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg disabled:opacity-50 transition-colors"
             >
-              Generate Key
+              Generate {keyType === 'developer' ? 'Developer' : 'Agent'} Key
             </button>
           </div>
         )}
@@ -136,47 +214,99 @@ export function DeveloperPortal() {
         {/* Keys List */}
         <div className="space-y-3">
           {apiKeys?.map((key) => (
-            <div key={key._id} className="p-4 bg-white/5 rounded-lg">
+            <div key={key._id} className="p-4 bg-white/5 rounded-lg border border-white/10">
               <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold">{key.name}</h3>
-                  <p className="text-sm text-gray-400 font-mono">{key.maskedKey}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold">{key.name}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      key.keyType === 'agent' 
+                        ? 'bg-purple-500/20 text-purple-400' 
+                        : 'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {key.keyType === 'agent' ? 'Agent' : 'Developer'}
+                    </span>
+                    {key.isActive ? (
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 text-xs rounded-full bg-red-500/20 text-red-400">
+                        Revoked
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm text-gray-400 font-mono bg-black/50 px-2 py-1 rounded">
+                      {key.maskedKey}
+                    </p>
+                    <span className="text-xs text-gray-500">🔒 Secured</span>
+                  </div>
+                  
+                  <p className="text-xs text-gray-500">
                     Created: {new Date(key.createdAt).toLocaleDateString()}
                     {key.lastUsed && ` • Last used: ${new Date(key.lastUsed).toLocaleString()}`}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm mb-2">
-                    {key.dailyUsage}/{key.dailyLimit} today
+                
+                <div className="text-right ml-4">
+                  <p className="text-sm mb-2 font-semibold">
+                    <span className={key.dailyUsage / key.dailyLimit > 0.8 ? 'text-yellow-400' : 'text-green-400'}>
+                      {key.dailyUsage}
+                    </span>
+                    <span className="text-gray-400">/{key.dailyLimit}</span>
+                    <span className="text-xs text-gray-500 block">today</span>
                   </p>
-                  <button
-                    onClick={() => {
-                      if (confirm('Revoke this key? This cannot be undone.')) {
-                        revokeKey({ keyId: key._id, address: address! });
-                      }
-                    }}
-                    className="text-red-400 hover:text-red-300 text-sm transition-colors"
-                  >
-                    Revoke
-                  </button>
+                  
+                  {key.isActive && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Revoke "${key.name}"? This cannot be undone and you won't be able to create another ${key.keyType} key.`)) {
+                          revokeKey({ keyId: key._id, address: address! });
+                        }
+                      }}
+                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                    >
+                      Revoke
+                    </button>
+                  )}
                 </div>
               </div>
               
               {/* Usage bar */}
               <div className="mt-3 bg-gray-700 rounded-full h-2">
                 <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all"
-                  style={{ width: `${(key.dailyUsage / key.dailyLimit) * 100}%` }}
+                  className={`h-2 rounded-full transition-all ${
+                    key.dailyUsage / key.dailyLimit > 0.9 
+                      ? 'bg-red-500' 
+                      : key.dailyUsage / key.dailyLimit > 0.7 
+                        ? 'bg-yellow-500' 
+                        : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${Math.min((key.dailyUsage / key.dailyLimit) * 100, 100)}%` }}
                 />
               </div>
             </div>
           ))}
           
           {!apiKeys?.length && (
-            <p className="text-gray-400 text-center py-8">
-              No API keys yet. Create one to get started!
-            </p>
+            <div className="text-center py-8">
+              <p className="text-gray-400 mb-2">No API keys yet.</p>
+              <p className="text-sm text-gray-500">
+                Create a developer key (500 requests/day) or agent key (5,000 requests/day) to get started.
+              </p>
+            </div>
+          )}
+          
+          {apiKeys && apiKeys.length > 0 && (
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-sm text-blue-300 mb-1">🔐 Security Notice</p>
+              <p className="text-xs text-gray-400">
+                Your API keys are securely stored and can never be viewed in full again after creation. 
+                Keep your keys safe and never share them publicly.
+              </p>
+            </div>
           )}
         </div>
       </GlassCard>
@@ -187,32 +317,43 @@ export function DeveloperPortal() {
           <GlassCard className="p-8 max-w-lg w-full">
             <h2 className="text-2xl font-bold mb-4">🎉 API Key Generated!</h2>
             
-            <div className="bg-yellow-500/20 border border-yellow-500 p-4 rounded-lg mb-6">
-              <p className="font-semibold mb-1">⚠️ Save this key now!</p>
-              <p className="text-sm">This is the only time you'll see the full key.</p>
+            <div className="bg-red-500/20 border border-red-500 p-4 rounded-lg mb-6">
+              <p className="font-semibold mb-1">🔒 SECURITY WARNING</p>
+              <p className="text-sm">This is the ONLY time you'll see the full key. Copy it now and store it securely.</p>
+              <p className="text-sm mt-2">Once you close this dialog, the key will be permanently obscured.</p>
             </div>
             
-            <div className="bg-black/50 p-4 rounded-lg font-mono text-sm mb-6 break-all">
+            <div className="bg-black/50 p-4 rounded-lg font-mono text-sm mb-6 break-all border-2 border-red-400/50">
               {generatedKey}
             </div>
             
             <div className="flex gap-3">
               <button
                 onClick={() => copyToClipboard(generatedKey)}
-                className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                className={`flex-1 px-4 py-2 ${keyCopied ? 'bg-green-500' : 'bg-blue-500 hover:bg-blue-600'} rounded-lg transition-colors`}
               >
-                Copy Key
+                {keyCopied ? '✓ Copied!' : 'Copy Key'}
               </button>
               <button
                 onClick={() => {
+                  if (!keyCopied && !confirm('Are you sure you\'ve saved the key? You won\'t be able to see it again!')) {
+                    return;
+                  }
                   setShowKeyModal(false);
                   setGeneratedKey('');
+                  setKeyCopied(false);
                 }}
                 className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors"
               >
                 I've Saved It
               </button>
             </div>
+            
+            {!keyCopied && (
+              <p className="text-center text-yellow-400 text-xs mt-4">
+                💡 Tip: Click "Copy Key" to copy to clipboard first!
+              </p>
+            )}
           </GlassCard>
         </div>
       )}
