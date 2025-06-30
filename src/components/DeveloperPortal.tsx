@@ -16,6 +16,17 @@ export function DeveloperPortal() {
     requireAuth 
   } = useWalletAuth();
   
+  // Debug logging
+  useEffect(() => {
+    console.log('DeveloperPortal state:', {
+      isConnected,
+      address,
+      sessionToken: sessionToken ? `${sessionToken.substring(0, 20)}...` : null,
+      isAuthenticated,
+      isAuthenticating
+    });
+  }, [isConnected, address, sessionToken, isAuthenticated, isAuthenticating]);
+  
   const [showGenerator, setShowGenerator] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [keyType, setKeyType] = useState<'developer' | 'agent'>('developer');

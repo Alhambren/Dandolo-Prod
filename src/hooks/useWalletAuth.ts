@@ -45,8 +45,13 @@ export function useWalletAuth() {
       const expiryTime = parseInt(storedExpiry);
       const now = Date.now();
       
-      if (now < expiryTime && address === storedAddress) {
+      // Normalize addresses for comparison (lowercase)
+      const normalizedAddress = address?.toLowerCase();
+      const normalizedStoredAddress = storedAddress?.toLowerCase();
+      
+      if (now < expiryTime && normalizedAddress === normalizedStoredAddress) {
         // Session is still valid and wallet matches
+        console.log('Loading stored session for address:', normalizedAddress);
         setAuthState(prev => ({
           ...prev,
           sessionToken: storedToken,
@@ -55,6 +60,12 @@ export function useWalletAuth() {
         }));
       } else {
         // Session expired or wallet changed - clear storage
+        console.log('Clearing stored session - expired or wallet changed:', {
+          expired: now >= expiryTime,
+          walletChanged: normalizedAddress !== normalizedStoredAddress,
+          currentAddress: normalizedAddress,
+          storedAddress: normalizedStoredAddress
+        });
         clearStoredSession();
       }
     }
@@ -64,6 +75,7 @@ export function useWalletAuth() {
   useEffect(() => {
     if (sessionValidation) {
       if (sessionValidation.authenticated) {
+        console.log('Session validation successful for address:', sessionValidation.address);
         setAuthState(prev => ({
           ...prev,
           isAuthenticated: true,
@@ -85,6 +97,7 @@ export function useWalletAuth() {
         }
       } else {
         // Session is invalid - clear it
+        console.log('Session validation failed:', sessionValidation);
         clearStoredSession();
         setAuthState(prev => ({
           ...prev,
@@ -139,10 +152,10 @@ export function useWalletAuth() {
         signature
       });
 
-      // Store session securely
+      // Store session securely with normalized address
       localStorage.setItem(SESSION_STORAGE_KEY, sessionResult.sessionToken);
       localStorage.setItem(SESSION_EXPIRY_KEY, sessionResult.expires.toString());
-      localStorage.setItem('dandolo_wallet_address', address);
+      localStorage.setItem('dandolo_wallet_address', address.toLowerCase());
 
       setAuthState({
         sessionToken: sessionResult.sessionToken,
