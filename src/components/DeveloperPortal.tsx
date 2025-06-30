@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { useAccount, useSignMessage } from 'wagmi';
-import { useMutation, useQuery, useAction } from 'convex/react';
+import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import GlassCard from './GlassCard';
 import { toast } from 'sonner';
+import { useWalletAuth } from '../hooks/useWalletAuth';
 
 export function DeveloperPortal() {
-  const { address, isConnected } = useAccount();
-  const { signMessageAsync } = useSignMessage();
+  const { 
+    sessionToken, 
+    isAuthenticated, 
+    isAuthenticating, 
+    address,
+    isConnected,
+    authenticate,
+    requireAuth 
+  } = useWalletAuth();
+  
   const [showGenerator, setShowGenerator] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [keyType, setKeyType] = useState<'developer' | 'agent'>('developer');
@@ -15,62 +23,12 @@ export function DeveloperPortal() {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
   
-  // Authentication state
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  
-  // Auth mutations
-  const generateChallenge = useMutation(api.auth.generateAuthChallenge);
-  const verifySignature = useMutation(api.auth.verifyWalletSignature);
-  
   const apiKeys = useQuery(api.developers.getUserApiKeys, 
     sessionToken ? { sessionToken } : 'skip'
   );
   const generateKey = useAction(api.apiKeys.createApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
   const networkStats = useQuery(api.stats.getNetworkStats);
-  
-  // Authentication function
-  const authenticate = async () => {
-    if (!address || !isConnected) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-    
-    try {
-      setIsAuthenticating(true);
-      
-      // Generate challenge
-      const challengeResult = await generateChallenge({ address });
-      
-      // Sign challenge
-      const signature = await signMessageAsync({
-        message: challengeResult.challenge
-      });
-      
-      // Verify signature and get session token
-      const sessionResult = await verifySignature({
-        address,
-        challenge: challengeResult.challenge,
-        signature
-      });
-      
-      setSessionToken(sessionResult.sessionToken);
-      toast.success('Authentication successful!');
-    } catch (error: any) {
-      console.error('Authentication failed:', error);
-      toast.error(error?.message || 'Authentication failed');
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-  
-  // Auto-authenticate when wallet connects
-  useEffect(() => {
-    if (address && isConnected && !sessionToken && !isAuthenticating) {
-      authenticate();
-    }
-  }, [address, isConnected]);
   
   // Get availability for new key creation
   const activeKeys = apiKeys?.filter(k => k.isActive) || [];
@@ -93,6 +51,13 @@ export function DeveloperPortal() {
     // CRITICAL: Require wallet authentication
     if (!isConnected || !address) {
       toast.error('Please connect your wallet to generate API keys');
+      return;
+    }
+    
+    // Ensure user is authenticated before proceeding
+    const authToken = await requireAuth();
+    if (!authToken) {
+      toast.error('Authentication required to generate API keys');
       return;
     }
     
@@ -162,7 +127,7 @@ export function DeveloperPortal() {
   }
 
   // Show authentication loading or prompt
-  if (!sessionToken) {
+  if (!isAuthenticated) {
     return (
       <div className="max-w-4xl mx-auto">
         <GlassCard className="p-8 text-center">

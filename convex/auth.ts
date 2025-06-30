@@ -74,7 +74,7 @@ export const verifyWalletSignature = mutation({
 
     // Create session token
     const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-    const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+    const expires = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
 
     await ctx.db.insert("authSessions", {
       address: args.address,
@@ -94,6 +94,7 @@ export const getAuthenticatedUser = query({
     v.object({
       address: v.string(),
       authenticated: v.literal(true),
+      shouldRenew: v.boolean(),
     }),
     v.object({
       authenticated: v.literal(false),
@@ -117,6 +118,69 @@ export const getAuthenticatedUser = query({
     return {
       address: session.address,
       authenticated: true as const,
+      shouldRenew: (session.expires - Date.now()) < (24 * 60 * 60 * 1000), // Needs renewal if < 24 hours
+    };
+  },
+});
+
+// Renew session expiry time
+export const renewSession = mutation({
+  args: { sessionToken: v.string() },
+  returns: v.object({
+    success: v.boolean(),
+    newExpires: v.optional(v.number()),
+  }),
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query("authSessions")
+      .filter((q: any) => q.eq(q.field("sessionToken"), args.sessionToken))
+      .first();
+
+    if (!session || session.expires < Date.now()) {
+      return { success: false };
+    }
+
+    // Extend session by 7 days
+    const newExpires = Date.now() + (7 * 24 * 60 * 60 * 1000);
+    await ctx.db.patch(session._id, { expires: newExpires });
+
+    return { success: true, newExpires };
+  },
+});
+
+// Clean up expired sessions and challenges (called periodically)
+export const cleanupExpiredSessions = mutation({
+  args: {},
+  returns: v.object({
+    sessionsRemoved: v.number(),
+    challengesRemoved: v.number(),
+  }),
+  handler: async (ctx) => {
+    const now = Date.now();
+    
+    // Remove expired sessions
+    const expiredSessions = await ctx.db
+      .query("authSessions")
+      .filter((q: any) => q.lt(q.field("expires"), now))
+      .collect();
+      
+    for (const session of expiredSessions) {
+      await ctx.db.delete(session._id);
+    }
+    
+    // Remove expired challenges
+    const expiredChallenges = await ctx.db
+      .query("authChallenges")
+      .filter((q: any) => q.lt(q.field("expires"), now))
+      .collect();
+      
+    for (const challenge of expiredChallenges) {
+      await ctx.db.delete(challenge._id);
+    }
+    
+    return {
+      sessionsRemoved: expiredSessions.length,
+      challengesRemoved: expiredChallenges.length,
     };
   },
 });
