@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useAccount } from 'wagmi';
+import React, { useState, useEffect } from 'react';
+import { useAccount, useSignMessage } from 'wagmi';
 import { useMutation, useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import GlassCard from './GlassCard';
@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 export function DeveloperPortal() {
   const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const [showGenerator, setShowGenerator] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [keyType, setKeyType] = useState<'developer' | 'agent'>('developer');
@@ -14,12 +15,62 @@ export function DeveloperPortal() {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
   
+  // Authentication state
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  
+  // Auth mutations
+  const generateChallenge = useMutation(api.auth.generateAuthChallenge);
+  const verifySignature = useMutation(api.auth.verifyWalletSignature);
+  
   const apiKeys = useQuery(api.developers.getUserApiKeys, 
-    address ? { address } : 'skip'
+    sessionToken ? { sessionToken } : 'skip'
   );
   const generateKey = useAction(api.apiKeys.createApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
   const networkStats = useQuery(api.stats.getNetworkStats);
+  
+  // Authentication function
+  const authenticate = async () => {
+    if (!address || !isConnected) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+    
+    try {
+      setIsAuthenticating(true);
+      
+      // Generate challenge
+      const challengeResult = await generateChallenge({ address });
+      
+      // Sign challenge
+      const signature = await signMessageAsync({
+        message: challengeResult.challenge
+      });
+      
+      // Verify signature and get session token
+      const sessionResult = await verifySignature({
+        address,
+        challenge: challengeResult.challenge,
+        signature
+      });
+      
+      setSessionToken(sessionResult.sessionToken);
+      toast.success('Authentication successful!');
+    } catch (error: any) {
+      console.error('Authentication failed:', error);
+      toast.error(error?.message || 'Authentication failed');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+  
+  // Auto-authenticate when wallet connects
+  useEffect(() => {
+    if (address && isConnected && !sessionToken && !isAuthenticating) {
+      authenticate();
+    }
+  }, [address, isConnected]);
   
   // Get availability for new key creation
   const activeKeys = apiKeys?.filter(k => k.isActive) || [];
@@ -93,7 +144,7 @@ export function DeveloperPortal() {
     setKeyCopied(true);
   };
   
-  // Show wallet connection required message if not authenticated
+  // Show wallet connection or authentication required message
   if (!isConnected || !address) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -104,6 +155,36 @@ export function DeveloperPortal() {
           </p>
           <p className="text-sm text-gray-500">
             API keys are tied to your wallet address for security and individual access control.
+          </p>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  // Show authentication loading or prompt
+  if (!sessionToken) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <GlassCard className="p-8 text-center">
+          <h2 className="text-2xl font-bold mb-4">
+            {isAuthenticating ? '🔐 Authenticating...' : '🔐 Authentication Required'}
+          </h2>
+          <p className="text-gray-400 mb-6">
+            {isAuthenticating 
+              ? 'Please sign the authentication message in your wallet.'
+              : 'We need to verify your wallet ownership for secure access.'
+            }
+          </p>
+          {!isAuthenticating && (
+            <button
+              onClick={authenticate}
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+            >
+              Authenticate Wallet
+            </button>
+          )}
+          <p className="text-sm text-gray-500 mt-4">
+            This creates a secure session for managing your API keys.
           </p>
         </GlassCard>
       </div>
@@ -263,7 +344,11 @@ export function DeveloperPortal() {
                     <button
                       onClick={() => {
                         if (confirm(`Revoke "${key.name}"? This cannot be undone and you won't be able to create another ${key.keyType} key.`)) {
-                          revokeKey({ keyId: key._id, address: address! });
+                          if (sessionToken) {
+                            revokeKey({ keyId: key._id, sessionToken });
+                          } else {
+                            toast.error('Please authenticate first');
+                          }
                         }
                       }}
                       className="text-red-400 hover:text-red-300 text-sm transition-colors"

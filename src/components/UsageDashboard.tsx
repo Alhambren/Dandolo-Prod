@@ -135,72 +135,12 @@ const PointsDisplay: React.FC<PointsDisplayProps> = ({
   );
 };
 
-interface ApiKeyStatsProps {
-  address: string;
-}
-
-// API Key Management Component
-const ApiKeyStats: React.FC<ApiKeyStatsProps> = ({ address }) => {
-  const apiStats = useQuery(api.apiKeys.getApiKeyStats, { address });
-  
-  if (!apiStats) {
-    return (
-      <div className="card p-6 bg-dark-3 rounded-3xl">
-        <div className="animate-pulse">
-          <div className="h-4 bg-white/20 rounded w-1/2 mb-4" />
-          <div className="space-y-2">
-            <div className="h-3 bg-white/10 rounded" />
-            <div className="h-3 bg-white/10 rounded w-3/4" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="card p-6 bg-dark-3 rounded-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">API Keys</h3>
-        <span className="text-sm text-white/60">{apiStats.activeKeys}/{apiStats.totalKeys} active</span>
-      </div>
-      
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xl font-bold">{apiStats.totalUsage.toLocaleString()}</div>
-            <div className="text-xs text-white/60">Total Requests</div>
-          </div>
-          <div>
-            <div className="text-xl font-bold">{apiStats.dailyUsage.toLocaleString()}</div>
-            <div className="text-xs text-white/60">Today's Usage</div>
-          </div>
-        </div>
-        
-        {apiStats.keys.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-sm font-medium text-white/80">Recent Keys:</div>
-            {apiStats.keys.slice(0, 3).map((key) => (
-              <div key={key.id} className="flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${key.isActive ? 'bg-system-green' : 'bg-neutral-500'}`} />
-                  <span className="font-mono">{key.keyPreview}</span>
-                  <span className="text-white/40">({key.keyType})</span>
-                </div>
-                <span className="text-white/60">{key.dailyUsage}/{key.dailyLimit}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // Main Usage Dashboard Component
 export const UsageDashboard: React.FC = () => {
   const { address } = useAccount();
   const userPoints = useQuery(api.wallets.getUserPoints, address ? { address } : 'skip');
-  const apiKeys = useQuery(api.developers.getUserApiKeys, address ? { address } : 'skip');
+  const apiKeyStats = useQuery(api.apiKeys.getApiKeyStats, address ? { address } : 'skip');
   const networkStats = useQuery(api.stats.getNetworkStats);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
   const providers = useQuery(api.providers.list);
@@ -298,15 +238,15 @@ export const UsageDashboard: React.FC = () => {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <h3 className="text-lg font-semibold mb-4">API Keys</h3>
           <div className="text-3xl font-bold text-green-400 mb-2">
-            {apiKeys?.length || 0}
+            {apiKeyStats?.activeKeys || 0}
           </div>
           <div className="text-sm text-gray-400">
             Active developer/agent keys
           </div>
-          {apiKeys && apiKeys.length > 0 && (
+          {apiKeyStats && apiKeyStats.keys.length > 0 && (
             <div className="mt-4 space-y-2">
-              {apiKeys.slice(0, 3).map((key) => (
-                <div key={key._id} className="flex justify-between text-sm">
+              {apiKeyStats.keys.slice(0, 3).map((key) => (
+                <div key={key.id} className="flex justify-between text-sm">
                   <span className="text-gray-400">{key.name}</span>
                   <span className="text-gray-300">{key.dailyUsage}/{key.dailyLimit}</span>
                 </div>
