@@ -213,7 +213,7 @@ class DandoloLLM extends LLM {
     return fetch("https://dandolo.ai/api/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${DANDOLO_CONFIG.apiKey}`,
+        "Authorization": "Bearer " + DANDOLO_CONFIG.apiKey,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
