@@ -4,7 +4,7 @@
 
 [![Deploy Status](https://img.shields.io/badge/status-live-brightgreen)](https://dandolo.ai)
 [![API Status](https://img.shields.io/badge/API-operational-blue)](https://dandolo.ai/api/v1/balance)
-[![OpenAI Compatible](https://img.shields.io/badge/OpenAI-compatible-orange)](https://platform.openai.com/docs/api-reference)
+[![Venice.ai Network](https://img.shields.io/badge/Venice.ai-network-orange)](https://venice.ai)
 
 Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai's decentralized compute network. Built for autonomous systems that demand reliability, anonymity, and censorship resistance.
 
@@ -12,7 +12,7 @@ Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai
 
 - **🔒 Zero-Knowledge Architecture** - No conversation storage, no user tracking, complete anonymity
 - **🌐 Decentralized Uptime** - Multi-provider network eliminates single points of failure  
-- **⚡ OpenAI Drop-in Compatible** - Seamless integration with existing agent frameworks
+- **⚡ OpenAI-Format Compatible** - Seamless integration with existing agent frameworks
 - **🚫 Censorship Resistant** - Distributed infrastructure prevents access control
 - **💰 Transparent Pricing** - Pay-per-use, no subscriptions, no hidden costs
 - **🔄 Intelligent Routing** - Automatic model selection and failover for maximum reliability
@@ -26,12 +26,12 @@ Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai
 # https://dandolo.ai/developers
 ```
 
-### 2. Drop-in OpenAI Replacement
+### 2. OpenAI-Format API (Powered by Venice.ai)
 
 ```python
 import openai
 
-# Standard OpenAI client - just change the base URL
+# Use OpenAI client format to access Venice.ai models
 client = openai.OpenAI(
     api_key="ak_your_agent_key_here",
     base_url="https://dandolo.ai"
@@ -74,9 +74,9 @@ image_response = requests.post(
 from crewai import Agent, Task, Crew
 from langchain_openai import ChatOpenAI
 
-# Configure Dandolo as your LLM provider
+# Configure Dandolo as your LLM provider (Venice.ai models)
 llm = ChatOpenAI(
-    model="gpt-4",
+    model="claude-3.5-sonnet",
     api_key="ak_your_agent_key",
     base_url="https://dandolo.ai"
 )
@@ -94,7 +94,7 @@ agent = Agent(
 from autogen import ConversableAgent
 
 config_list = [{
-    "model": "gpt-4",
+    "model": "llama-3.3-70b-instruct",
     "api_key": "ak_your_agent_key",
     "base_url": "https://dandolo.ai"
 }]
@@ -125,7 +125,7 @@ response = llm([HumanMessage(content="Process this data autonomously")])
 
 | Endpoint | Purpose | Rate Limit | Auth |
 |----------|---------|------------|------|
-| `POST /v1/chat/completions` | OpenAI-compatible chat | 1000/day | API Key |
+| `POST /v1/chat/completions` | OpenAI-format chat (Venice.ai models) | 1000/day | API Key |
 | `POST /chat` | Anonymous chat | 50/day | Session |
 | `GET /api/v1/balance` | Usage tracking | 100/day | API Key |
 | `/api/*` | Venice.ai proxy | 1000/day | API Key |
@@ -147,12 +147,12 @@ Retry-After: 3600
 
 ## Intelligent Model Routing
 
-Dandolo automatically selects optimal models based on your request:
+Dandolo automatically selects optimal Venice.ai models based on your request:
 
-- **Code Tasks** → `deepseek-coder-v2`, `claude-3.5-sonnet`
-- **Analysis** → `gpt-4o`, `claude-3-opus` 
-- **General Chat** → `llama-3.3-70b`, `mixtral-8x7b`
-- **Image Generation** → `flux-1.1-pro`, `midjourney-v6`
+- **Code Tasks** → `deepseek-coder`, `claude-3.5-sonnet`
+- **Analysis** → `claude-3-opus`, `gpt-4-turbo` 
+- **General Chat** → `llama-3.3-70b-instruct`, `mixtral-8x7b-instruct`
+- **Image Generation** → `flux-1.1-pro`, `dall-e-3`
 
 Override with explicit `model` parameter or let Dandolo optimize for you.
 
@@ -212,8 +212,8 @@ Perfect for autonomous systems - no server-side conversation memory means:
 - ✅ **CrewAI** - Multi-agent collaboration
 - ✅ **AutoGen** - Microsoft's agent framework  
 - ✅ **LangChain** - LLM application framework
-- ✅ **OpenAI SDK** - Direct compatibility
-- ✅ **Custom Agents** - Any OpenAI-compatible system
+- ✅ **OpenAI SDK** - Format compatibility for Venice.ai models
+- ✅ **Custom Agents** - Any OpenAI-format compatible system
 
 ## Community & Support
 
