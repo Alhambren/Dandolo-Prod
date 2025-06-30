@@ -18,13 +18,16 @@ export function DeveloperPortal() {
   
   // Debug logging
   useEffect(() => {
-    console.log('DeveloperPortal state:', {
-      isConnected,
-      address,
-      sessionToken: sessionToken ? `${sessionToken.substring(0, 20)}...` : null,
-      isAuthenticated,
-      isAuthenticating
-    });
+    console.log('=== DeveloperPortal Debug State ===');
+    console.log('isConnected:', isConnected);
+    console.log('address:', address);
+    console.log('sessionToken:', sessionToken ? `${sessionToken.substring(0, 20)}...` : null);
+    console.log('isAuthenticated:', isAuthenticated);
+    console.log('isAuthenticating:', isAuthenticating);
+    console.log('localStorage sessionToken:', localStorage.getItem('dandolo_wallet_session') ? 'EXISTS' : 'NOT_FOUND');
+    console.log('localStorage address:', localStorage.getItem('dandolo_wallet_address'));
+    console.log('localStorage expiry:', localStorage.getItem('dandolo_session_expiry'));
+    console.log('=== End Debug State ===');
   }, [isConnected, address, sessionToken, isAuthenticated, isAuthenticating]);
   
   const [showGenerator, setShowGenerator] = useState(false);

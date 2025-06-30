@@ -37,21 +37,37 @@ export function useWalletAuth() {
 
   // Load stored session on mount
   useEffect(() => {
+    console.log('=== useWalletAuth: Loading stored session ===');
+    
     const storedToken = localStorage.getItem(SESSION_STORAGE_KEY);
     const storedExpiry = localStorage.getItem(SESSION_EXPIRY_KEY);
     const storedAddress = localStorage.getItem('dandolo_wallet_address');
+    
+    console.log('Stored data:', { 
+      hasToken: !!storedToken, 
+      hasExpiry: !!storedExpiry, 
+      storedAddress,
+      currentAddress: address 
+    });
     
     if (storedToken && storedExpiry && storedAddress) {
       const expiryTime = parseInt(storedExpiry);
       const now = Date.now();
       
-      // Normalize addresses for comparison (lowercase)
-      const normalizedAddress = address?.toLowerCase();
-      const normalizedStoredAddress = storedAddress?.toLowerCase();
+      // Normalize addresses for comparison (lowercase) and clean any prefixes
+      const cleanCurrentAddress = address?.replace(/^eip155:\d+:/, '').toLowerCase();
+      const cleanStoredAddress = storedAddress?.replace(/^eip155:\d+:/, '').toLowerCase();
       
-      if (now < expiryTime && normalizedAddress === normalizedStoredAddress) {
+      console.log('Address comparison:', {
+        cleanCurrentAddress,
+        cleanStoredAddress,
+        match: cleanCurrentAddress === cleanStoredAddress,
+        expired: now >= expiryTime
+      });
+      
+      if (now < expiryTime && cleanCurrentAddress === cleanStoredAddress) {
         // Session is still valid and wallet matches
-        console.log('Loading stored session for address:', normalizedAddress);
+        console.log('✅ Loading stored session for address:', cleanCurrentAddress);
         setAuthState(prev => ({
           ...prev,
           sessionToken: storedToken,
@@ -60,15 +76,18 @@ export function useWalletAuth() {
         }));
       } else {
         // Session expired or wallet changed - clear storage
-        console.log('Clearing stored session - expired or wallet changed:', {
+        console.log('❌ Clearing stored session - expired or wallet changed:', {
           expired: now >= expiryTime,
-          walletChanged: normalizedAddress !== normalizedStoredAddress,
-          currentAddress: normalizedAddress,
-          storedAddress: normalizedStoredAddress
+          walletChanged: cleanCurrentAddress !== cleanStoredAddress,
+          currentAddress: cleanCurrentAddress,
+          storedAddress: cleanStoredAddress
         });
         clearStoredSession();
       }
+    } else {
+      console.log('❌ No complete stored session found');
     }
+    console.log('=== End useWalletAuth session loading ===');
   }, [address]);
 
   // Validate session when token changes
@@ -152,10 +171,11 @@ export function useWalletAuth() {
         signature
       });
 
-      // Store session securely with normalized address
+      // Store session securely with cleaned and normalized address
+      const cleanAddress = address.replace(/^eip155:\d+:/, '').toLowerCase();
       localStorage.setItem(SESSION_STORAGE_KEY, sessionResult.sessionToken);
       localStorage.setItem(SESSION_EXPIRY_KEY, sessionResult.expires.toString());
-      localStorage.setItem('dandolo_wallet_address', address.toLowerCase());
+      localStorage.setItem('dandolo_wallet_address', cleanAddress);
 
       setAuthState({
         sessionToken: sessionResult.sessionToken,
