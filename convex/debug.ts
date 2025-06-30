@@ -360,7 +360,7 @@ export const testChatApiCall = action({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b",
+          model: "auto-select",
           messages: [
             {
               role: "user",
@@ -482,7 +482,7 @@ export const testChatCompletion = action({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.2-3b",
+          model: "auto-select",
           messages: [
             { role: "user", content: "Hello! Please respond with 'API test successful'." }
           ],

@@ -74,7 +74,7 @@ export function DeveloperDocs() {
   -H "Authorization: Bearer YOUR_DANDOLO_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "llama-3.3-70b-instruct",
+    "model": "auto-select",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`}
               </pre>
@@ -110,7 +110,7 @@ export function DeveloperDocs() {
             </div>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
 {`{
-  "model": "llama-3.3-70b-instruct",
+  "model": "auto-select",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant"},
     {"role": "user", "content": "Explain quantum computing"}
@@ -173,7 +173,7 @@ response = requests.post(
     "https://dandolo.ai/api/chat/completions",
     headers={"Authorization": "Bearer dk_your_dandolo_key"},
     json={
-        "model": "llama-3.3-70b-instruct",
+        "model": "auto-select",
         "messages": [{"role": "user", "content": "Hello!"}]
     }
 )
@@ -186,7 +186,7 @@ print(data['choices'][0]['message']['content'])
 import litellm
 
 response = litellm.completion(
-    model="dandolo/llama-3.3-70b-instruct",
+    model="dandolo/auto-select",
     messages=[{"role": "user", "content": "Hello!"}],
     api_key="dk_your_dandolo_key",
     api_base="https://dandolo.ai/api",
@@ -224,7 +224,7 @@ class DandoloLLM extends LLM {
 }
 
 // Works with any agent framework:
-// - AutoGPT, BabyAGI, LangGraph
+// - Custom agents, BabyAGI, LangGraph
 // - LiteLLM, LangSmith, CrewAI
 // - Just configure base URL to: https://dandolo.ai/api`}
             </pre>
@@ -237,7 +237,7 @@ class DandoloLLM extends LLM {
   -H "Authorization: Bearer dk_your_key" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "llama-3.3-70b-instruct",
+    "model": "auto-select",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`}
             </pre>

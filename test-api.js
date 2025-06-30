@@ -53,7 +53,7 @@ async function runTests() {
   await testEndpoint('/api/chat/completions', {
     method: 'POST',
     body: {
-      model: 'llama-3.3-70b-instruct',
+      model: 'auto-select',
       messages: [{ role: 'user', content: 'Hello' }]
     }
   });
@@ -63,7 +63,7 @@ async function runTests() {
     method: 'POST',
     headers: { Authorization: 'Bearer dk_invalid123' },
     body: {
-      model: 'llama-3.3-70b-instruct',
+      model: 'auto-select',
       messages: [{ role: 'user', content: 'Hello' }]
     }
   });
@@ -86,7 +86,7 @@ async function runTests() {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_API_KEY}` },
       body: {
-        model: 'llama-3.3-70b-instruct',
+        model: 'auto-select',
         messages: [{ role: 'user', content: 'Say hello in one word' }],
         max_tokens: 10
       }

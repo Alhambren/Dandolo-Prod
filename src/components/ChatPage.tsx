@@ -694,10 +694,10 @@ const ChatPage: React.FC = () => {
     if (availableModels.text) {
       availableModels.text.forEach((m: any) => {
         const capabilities = ['chat'];
-        if (m.id?.toLowerCase().includes('coder') || m.id?.toLowerCase().includes('deepseek')) {
+        if (m.id?.toLowerCase().includes('code') || m.capabilities?.optimizedForCode) {
           capabilities.push('code');
         }
-        if (m.contextLength > 100000 || m.id?.toLowerCase().includes('70b')) {
+        if (m.contextLength > 100000 || m.capabilities?.optimizedForAnalysis) {
           capabilities.push('analysis');
         }
         if (m.id?.toLowerCase().includes('vision') || m.id?.toLowerCase().includes('vl')) {

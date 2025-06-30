@@ -491,7 +491,7 @@ const response = await fetch("https://dandolo.ai/api/chat/completions", {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "llama-3.3-70b-instruct",
+    model: "auto-select",
     messages: [{ role: "user", content: "Hello!" }]
   })
 });

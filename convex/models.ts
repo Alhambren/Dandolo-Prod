@@ -71,9 +71,9 @@ export const getAvailableModels = query({
     // Only fall back to hardcoded models if there's no cache at all
     console.error("No model cache found! Falling back to hardcoded models. This should be rare.");
     return [
-      { id: "llama-3.3-70b", name: "llama-3.3-70b", type: "text" },
-      { id: "qwen-2.5-coder-32b", name: "qwen-2.5-coder-32b", type: "code" },
-      { id: "flux-dev", name: "flux-dev", type: "image" },
+      { id: "venice-text-model", name: "venice-text-model", type: "text" },
+      { id: "venice-code-model", name: "venice-code-model", type: "code" },
+      { id: "venice-image-model", name: "venice-image-model", type: "image" },
     ];
   },
 });
@@ -203,12 +203,12 @@ export const getBestModelForIntent = query({
   },
   handler: async (ctx, args) => {
     const modelDefaults: Record<string, string> = {
-      chat: "llama-3.3-70b",
-      code: "qwen-2.5-coder-32b",
-      image: "flux-1.1-pro",
-      vision: "llama-3.2-vision-11b",
-      audio: "whisper-large-v3",
-      analysis: "llama-3.3-70b",
+      chat: "auto-select",
+      code: "auto-select",
+      image: "auto-select",
+      vision: "auto-select",
+      audio: "auto-select",
+      analysis: "auto-select",
     };
     return modelDefaults[args.intentType] || modelDefaults.chat;
   },

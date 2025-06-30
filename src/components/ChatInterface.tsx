@@ -92,10 +92,10 @@ const TASK_TYPES = [
 ];
 
 const DEFAULT_MODELS = [
-  'llama-3.3-70b',
-  'llama-3.2-3b',
-  'qwen-2.5-coder-32b',
-  'venice-sd35'
+  'auto-select',
+  'venice-text-model',
+  'venice-code-model',
+  'venice-image-model'
 ];
 
 // Message Content Component

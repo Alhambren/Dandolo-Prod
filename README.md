@@ -39,7 +39,7 @@ response = requests.post(
         "messages": [
             {"role": "user", "content": "Analyze this dataset and provide insights"}
         ],
-        "model": "llama-3.3-70b-instruct"  # Optional - auto-selected if omitted
+        # "model": "venice-model-name"  # Optional - auto-selected if omitted
     }
 )
 
@@ -77,7 +77,7 @@ from crewai import Agent, Task, Crew
 import requests
 
 class DandoloLLM:
-    def __init__(self, api_key, model="claude-3.5-sonnet"):
+    def __init__(self, api_key, model="auto-select"):
         self.api_key = api_key
         self.model = model
         self.base_url = "https://dandolo.ai"
@@ -108,7 +108,7 @@ agent = Agent(
 from autogen import ConversableAgent
 import requests
 
-def dandolo_llm_config(api_key, model="llama-3.3-70b-instruct"):
+def dandolo_llm_config(api_key, model="auto-select"):
     def llm_call(messages, **kwargs):
         response = requests.post(
             "https://dandolo.ai/v1/chat/completions",
@@ -132,7 +132,7 @@ import requests
 
 class DandoloLLM(LLM):
     api_key: str
-    model: str = "claude-3-sonnet"
+    model: str = "auto-select"
     
     def _call(self, prompt: str, stop=None, **kwargs):
         response = requests.post(
@@ -183,10 +183,10 @@ Retry-After: 3600
 
 Dandolo automatically selects optimal Venice.ai models based on your request:
 
-- **Code Tasks** → `deepseek-coder`, `claude-3.5-sonnet`
-- **Analysis** → `claude-3-opus`, `gpt-4-turbo` 
-- **General Chat** → `llama-3.3-70b-instruct`, `mixtral-8x7b-instruct`
-- **Image Generation** → `flux-1.1-pro`, `dall-e-3`
+- **Code Tasks** → Venice.ai coding-optimized models
+- **Analysis** → Venice.ai analysis-optimized models 
+- **General Chat** → Venice.ai conversational models
+- **Image Generation** → Venice.ai image generation models
 
 Override with explicit `model` parameter or let Dandolo optimize for you.
 

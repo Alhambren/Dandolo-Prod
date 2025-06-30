@@ -285,7 +285,7 @@ export const validateVeniceApiKey = action({
           const modelsData = await modelsResponse.json();
           
           // Verify response contains Venice.ai-specific model patterns
-          const veniceModelPrefixes = ['llama-', 'mixtral-', 'nous-', 'dolphin-', 'qwen-', 'deepseek-', 'venice-'];
+          const veniceModelPrefixes = ['venice-', 'v-', 'model-'];
           const hasVeniceModel = modelsData.data?.some((model: any) => 
             veniceModelPrefixes.some(prefix => model.id?.toLowerCase().includes(prefix.toLowerCase()))
           );

@@ -168,17 +168,20 @@ function selectModel(models: any[], intentType?: string, preferredModel?: string
   const codeModels = textModels.filter(
     (m) =>
       m.id.toLowerCase().includes("code") ||
-      m.id.toLowerCase().includes("deepseek") ||
-      m.id.toLowerCase().includes("starcoder")
+      m.capabilities?.optimizedForCode ||
+      m.type === "code"
   );
   const analysisModels = textModels.filter(
     (m) =>
       (m.model_spec?.availableContextTokens || 0) > 100000 ||
-      m.id.toLowerCase().includes("mixtral") ||
-      m.id.toLowerCase().includes("dolphin")
+      m.capabilities?.optimizedForAnalysis ||
+      (m.contextLength && m.contextLength > 100000)
   );
   const visionModels = textModels.filter(
-    (m) => m.id.toLowerCase().includes("qwen-2.5-vl")
+    (m) => 
+      m.id.toLowerCase().includes("vision") ||
+      m.capabilities?.supportsVision ||
+      m.type === "multimodal"
   );
 
   // Populate rankedModels based on intent
@@ -191,16 +194,15 @@ function selectModel(models: any[], intentType?: string, preferredModel?: string
   } else if (intentType === "vision" && visionModels.length > 0) {
     rankedModels.push(...visionModels.map((m) => m.id));
   } else if (intentType === "chat" && textModels.length > 0) {
-    const preferredChatModel = textModels.find(m => m.id === "llama-3.2-3b");
-    if (preferredChatModel) {
-      rankedModels.push(preferredChatModel.id);
-    }
-    const otherTextModels = textModels.filter(m => m.id !== "venice-uncensored" && m.id !== (preferredChatModel?.id));
-    rankedModels.push(...otherTextModels.map((m: any) => m.id));
-    const veniceUncensored = textModels.find(m => m.id === "venice-uncensored");
-    if (veniceUncensored) {
-      rankedModels.push(veniceUncensored.id);
-    }
+    // Use all available text models for chat, prioritizing balanced models
+    const balancedModels = textModels.filter(m => 
+      !m.id.toLowerCase().includes("uncensored") && 
+      !m.capabilities?.optimizedForCode
+    );
+    const uncensoredModels = textModels.filter(m => m.id.toLowerCase().includes("uncensored"));
+    
+    rankedModels.push(...balancedModels.map((m: any) => m.id));
+    rankedModels.push(...uncensoredModels.map((m: any) => m.id));
   }
 
   // Add any remaining models of the appropriate type if not already added
@@ -244,9 +246,9 @@ async function selectModelForIntent(
   }
 
   const preferences = {
-    chat: ["llama-3.3-70b", "llama-3.2-3b", "llama"],
-    code: ["qwen-2.5-coder", "qwen", "llama-3.3-70b"],
-    analysis: ["llama-3.3-70b", "nous-hermes", "llama"],
+    chat: ["venice", "balanced", "general"],
+    code: ["code", "coder", "programming"],
+    analysis: ["analysis", "large", "context"],
   } as const;
 
   const intendedModels = preferences[intent];
@@ -269,12 +271,11 @@ async function selectModelForIntent(
  */
 function calculateVCUCost(tokens: number, model: string): number {
   const rates: Record<string, number> = {
-    "llama-3.2-3b": 0.06,
-    "llama-3.3-70b": 0.88,
-    "qwen-2.5-coder-32b": 0.5,
-    "nous-hermes-3-8b": 0.15,
-    "flux-1.1-pro": 0.04,
-    "flux-realism": 0.03,
+    "small": 0.06,
+    "medium": 0.15,
+    "large": 0.5,
+    "xlarge": 0.88,
+    "image": 0.04,
   };
 
   let rate = 0.1;
@@ -338,13 +339,13 @@ async function callVeniceAI(
           m.type === "text" && 
           (m.id.toLowerCase().includes("uncensored") || 
            m.id.toLowerCase().includes("nsfw") ||
-           m.id.toLowerCase().includes("dolphin"))
+           m.capabilities?.uncensored)
         );
         
         // Prioritize specific uncensored models
         const preferredUncensored = uncensoredModels.find(m => 
           m.id === "venice-uncensored" || 
-          m.id.includes("dolphin")
+          m.capabilities?.uncensored
         );
         
         if (preferredUncensored) {
@@ -383,7 +384,7 @@ async function callVeniceAI(
         selectedModel = textModels[0].id;
       } else {
         // Hardcoded fallback for text generation  
-        selectedModel = "llama-3.2-3b";
+        selectedModel = "auto-select";
       }
     }
   }
