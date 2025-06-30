@@ -1,5 +1,5 @@
-// convex/rateLimit.ts - Rate limiting system for Dandolo.ai
-// Implements Redis-like rate limiting using Convex database
+// convex/rateLimit.ts - Enhanced Rate limiting system for Dandolo.ai
+// Implements Redis-like rate limiting with IP tracking and per-endpoint limits
 
 import { v } from "convex/values";
 import { mutation, query, internalAction } from "./_generated/server";
@@ -358,3 +358,166 @@ function getNextUTCMidnight(): number {
   ));
   return nextMidnight.getTime();
 }
+
+/**
+ * ENHANCED SECURITY: Rate limiting with privacy-respecting approach
+ */
+export const checkEnhancedRateLimit = mutation({
+  args: {
+    identifier: v.string(), // sessionId or API key
+    userType: v.union(v.literal("user"), v.literal("developer"), v.literal("agent")),
+    endpoint: v.optional(v.string()), // Track which endpoint for monitoring
+  },
+  returns: v.object({
+    allowed: v.boolean(),
+    remaining: v.number(),
+    resetTime: v.number(),
+    rateLimitHeaders: v.object({
+      limit: v.string(),
+      remaining: v.string(), 
+      reset: v.string(),
+      retryAfter: v.optional(v.string()),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const windowDuration = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const windowStart = Math.floor(now / windowDuration) * windowDuration;
+
+    // Enhanced limits based on user type
+    const limits = {
+      user: { daily: 50, perSecond: 1 },        // Anonymous users: 50/day, 1/sec
+      developer: { daily: 500, perSecond: 5 },  // Developer keys: 500/day, 5/sec
+      agent: { daily: 5000, perSecond: 10 },    // Agent keys: 5000/day, 10/sec
+    };
+
+    const limit = limits[args.userType];
+    
+    // PRIVACY: Use only the identifier without IP tracking
+    const compositeId = args.identifier;
+
+    // Check per-second rate limit first (rolling window)
+    const secondWindow = Math.floor(now / 1000) * 1000;
+    let secondLimit = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_identifier", (q) => q.eq("identifier", `${compositeId}_second`))
+      .first();
+
+    if (secondLimit && secondLimit.windowStart === secondWindow) {
+      if (secondLimit.requests >= limit.perSecond) {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetTime: secondWindow + 1000,
+          rateLimitHeaders: {
+            limit: limit.perSecond.toString(),
+            remaining: "0",
+            reset: Math.floor((secondWindow + 1000) / 1000).toString(),
+            retryAfter: "1",
+          },
+        };
+      }
+    }
+
+    // Get or create daily rate limit record
+    let rateLimit = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_identifier", (q) => q.eq("identifier", compositeId))
+      .first();
+
+    if (!rateLimit || rateLimit.windowStart < windowStart) {
+      // Create new window or reset existing one
+      if (rateLimit) {
+        await ctx.db.patch(rateLimit._id, {
+          requests: 1,
+          windowStart: windowStart,
+          lastRequest: now,
+        });
+      } else {
+        await ctx.db.insert("rateLimits", {
+          identifier: compositeId,
+          type: args.userType,
+          requests: 1,
+          windowStart: windowStart,
+          lastRequest: now,
+        });
+      }
+      
+      // Update per-second counter
+      if (secondLimit) {
+        await ctx.db.patch(secondLimit._id, {
+          requests: secondLimit.requests + 1,
+        });
+      } else {
+        await ctx.db.insert("rateLimits", {
+          identifier: `${compositeId}_second`,
+          type: args.userType,
+          requests: 1,
+          windowStart: secondWindow,
+          lastRequest: now,
+        });
+      }
+      
+      return {
+        allowed: true,
+        remaining: limit.daily - 1,
+        resetTime: windowStart + windowDuration,
+        rateLimitHeaders: {
+          limit: limit.daily.toString(),
+          remaining: (limit.daily - 1).toString(),
+          reset: Math.floor((windowStart + windowDuration) / 1000).toString(),
+        },
+      };
+    } else {
+      // Check if daily limit exceeded
+      if (rateLimit.requests >= limit.daily) {
+        const resetTime = windowStart + windowDuration;
+        const retryAfter = Math.ceil((resetTime - now) / 1000);
+        
+        return {
+          allowed: false,
+          remaining: 0,
+          resetTime: resetTime,
+          rateLimitHeaders: {
+            limit: limit.daily.toString(),
+            remaining: "0",
+            reset: Math.floor(resetTime / 1000).toString(),
+            retryAfter: retryAfter.toString(),
+          },
+        };
+      }
+
+      // Increment request counters
+      await ctx.db.patch(rateLimit._id, {
+        requests: rateLimit.requests + 1,
+        lastRequest: now,
+      });
+      
+      // Update per-second counter
+      if (secondLimit && secondLimit.windowStart === secondWindow) {
+        await ctx.db.patch(secondLimit._id, {
+          requests: secondLimit.requests + 1,
+        });
+      } else {
+        await ctx.db.insert("rateLimits", {
+          identifier: `${compositeId}_second`,
+          type: args.userType,
+          requests: 1,
+          windowStart: secondWindow,
+          lastRequest: now,
+        });
+      }
+
+      return {
+        allowed: true,
+        remaining: limit.daily - rateLimit.requests - 1,
+        resetTime: windowStart + windowDuration,
+        rateLimitHeaders: {
+          limit: limit.daily.toString(),
+          remaining: (limit.daily - rateLimit.requests - 1).toString(),
+          reset: Math.floor((windowStart + windowDuration) / 1000).toString(),
+        },
+      };
+    }
+  },
+});

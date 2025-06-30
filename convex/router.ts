@@ -25,6 +25,41 @@ function getSecureCorsHeaders(request?: Request): Record<string, string> {
   };
 }
 
+// SECURITY: Apply privacy-respecting rate limiting to all endpoints
+async function applyRateLimit(ctx: any, identifier: string, userType: "user" | "developer" | "agent", endpoint?: string) {
+  const rateLimit = await ctx.runMutation(api.rateLimit.checkEnhancedRateLimit, {
+    identifier,
+    userType,
+    endpoint
+  });
+  
+  if (!rateLimit.allowed) {
+    // Map rate limit data to standard HTTP headers
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-RateLimit-Limit": rateLimit.rateLimitHeaders.limit,
+      "X-RateLimit-Remaining": rateLimit.rateLimitHeaders.remaining,
+      "X-RateLimit-Reset": rateLimit.rateLimitHeaders.reset,
+    };
+    
+    if (rateLimit.rateLimitHeaders.retryAfter) {
+      headers["Retry-After"] = rateLimit.rateLimitHeaders.retryAfter;
+    }
+    
+    return new Response(JSON.stringify({ 
+      error: "Rate limit exceeded",
+      remaining: rateLimit.remaining,
+      resetTime: rateLimit.resetTime,
+      type: "rate_limit_exceeded"
+    }), {
+      status: 429,
+      headers,
+    });
+  }
+  
+  return null; // Rate limit passed
+}
+
 const http = httpRouter();
 
 // Anonymous chat endpoint
@@ -41,6 +76,12 @@ http.route({
           JSON.stringify({ error: "Message and sessionId required" }),
           { status: 400, headers: { "Content-Type": "application/json" } }
         );
+      }
+
+      // SECURITY: Apply privacy-respecting rate limiting
+      const rateLimitResult = await applyRateLimit(ctx, sessionId, "user", "/chat");
+      if (rateLimitResult) {
+        return rateLimitResult;
       }
 
       // Route through the inference system
@@ -108,6 +149,13 @@ http.route({
           JSON.stringify({ error: "Invalid API key" }),
           { status: 401, headers: { "Content-Type": "application/json" } }
         );
+      }
+
+      // SECURITY: Apply privacy-respecting rate limiting based on key type
+      const userType = apiKey.startsWith("ak_") ? "agent" : "developer";
+      const rateLimitResult = await applyRateLimit(ctx, apiKey, userType, "/v1/chat/completions");
+      if (rateLimitResult) {
+        return rateLimitResult;
       }
 
       const body = await request.json();
@@ -295,6 +343,13 @@ http.route({
         );
       }
 
+      // SECURITY: Apply privacy-respecting rate limiting
+      const userType = apiKey.startsWith("ak_") ? "agent" : "developer";
+      const rateLimitResult = await applyRateLimit(ctx, apiKey, userType, "/api/v1/balance");
+      if (rateLimitResult) {
+        return rateLimitResult;
+      }
+
       // Get usage limits
       const usageLimit = await ctx.runQuery(api.apiKeys.checkDailyUsageLimit, { key: apiKey });
       
@@ -376,6 +431,13 @@ http.route({
           status: 401,
           headers: { "Content-Type": "application/json" },
         });
+      }
+      
+      // SECURITY: Apply privacy-respecting rate limiting
+      const userType = apiKey.startsWith("ak_") ? "agent" : "developer";
+      const rateLimitResult = await applyRateLimit(ctx, apiKey, userType, "/api/*");
+      if (rateLimitResult) {
+        return rateLimitResult;
       }
       
       // 3. Get active provider
@@ -460,15 +522,11 @@ http.route({
         });
       }
       
-      // Check daily usage limit
-      const usageLimit = await ctx.runQuery(api.apiKeys.checkDailyUsageLimit, { key: apiKey });
-      if (!usageLimit.allowed) {
-        return new Response(JSON.stringify({ 
-          error: `Daily limit exceeded (${usageLimit.limit} requests). Resets at midnight UTC.`
-        }), {
-          status: 429,
-          headers: { "Content-Type": "application/json" },
-        });
+      // SECURITY: Apply privacy-respecting rate limiting
+      const userType = apiKey.startsWith("ak_") ? "agent" : "developer";
+      const rateLimitResult = await applyRateLimit(ctx, apiKey, userType, "/api/*");
+      if (rateLimitResult) {
+        return rateLimitResult;
       }
       
       // 3. Get active provider (using internal query to access sensitive data)

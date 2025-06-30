@@ -16,6 +16,7 @@ import type {
 import type * as admin from "../admin.js";
 import type * as analytics from "../analytics.js";
 import type * as apiKeys from "../apiKeys.js";
+import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as crypto from "../crypto.js";
 import type * as cryptoActions from "../cryptoActions.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   analytics: typeof analytics;
   apiKeys: typeof apiKeys;
+  auth: typeof auth;
   crons: typeof crons;
   crypto: typeof crypto;
   cryptoActions: typeof cryptoActions;

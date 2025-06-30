@@ -202,5 +202,25 @@ export default defineSchema({
     ts: v.optional(v.number()),
     amount: v.optional(v.number()),
   }).index("by_address", ["address"]),
+
+  // AUTHENTICATION: Wallet-based auth challenges
+  authChallenges: defineTable({
+    address: v.string(),
+    challenge: v.string(),
+    expires: v.number(),
+    used: v.boolean(),
+  })
+    .index("by_address", ["address"])
+    .index("by_challenge", ["challenge"]),
+
+  // AUTHENTICATION: Active user sessions  
+  authSessions: defineTable({
+    address: v.string(),
+    sessionToken: v.string(),
+    expires: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_address", ["address"])
+    .index("by_token", ["sessionToken"]),
 });
 

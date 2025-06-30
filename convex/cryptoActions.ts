@@ -48,8 +48,16 @@ export function createSecureHash(input: string): string {
 
 // AES-256-GCM encryption for API keys - secure and authenticated
 export function encryptApiKey(apiKey: string, masterKey?: string): { encrypted: string; iv: string; authTag: string } {
-  // Use environment variable for master key or generate one (should be set in production)
-  const encryptionKey = masterKey || process.env.MASTER_ENCRYPTION_KEY || 'default-key-change-in-production-32bytes';
+  // SECURITY: Require master key - no insecure fallbacks
+  const encryptionKey = masterKey || process.env.MASTER_ENCRYPTION_KEY;
+  
+  if (!encryptionKey) {
+    throw new Error("MASTER_ENCRYPTION_KEY environment variable is required and not set. Cannot proceed with encryption operations.");
+  }
+  
+  if (encryptionKey.length < 32) {
+    throw new Error("MASTER_ENCRYPTION_KEY must be at least 32 characters long for secure AES-256 encryption.");
+  }
   
   // Ensure key is exactly 32 bytes for AES-256
   const key = crypto.createHash('sha256').update(encryptionKey).digest();
@@ -77,8 +85,17 @@ export function encryptApiKey(apiKey: string, masterKey?: string): { encrypted: 
 // Decrypt API key using AES-256-GCM
 export function decryptApiKey(encrypted: string, iv: string, authTag: string, masterKey?: string): string {
   try {
-    // Use same key derivation as encryption
-    const encryptionKey = masterKey || process.env.MASTER_ENCRYPTION_KEY || 'default-key-change-in-production-32bytes';
+    // SECURITY: Require master key - no insecure fallbacks
+    const encryptionKey = masterKey || process.env.MASTER_ENCRYPTION_KEY;
+    
+    if (!encryptionKey) {
+      throw new Error("MASTER_ENCRYPTION_KEY environment variable is required and not set. Cannot proceed with decryption operations.");
+    }
+    
+    if (encryptionKey.length < 32) {
+      throw new Error("MASTER_ENCRYPTION_KEY must be at least 32 characters long for secure AES-256 decryption.");
+    }
+    
     const key = crypto.createHash('sha256').update(encryptionKey).digest();
     
     // Convert base64 inputs back to buffers

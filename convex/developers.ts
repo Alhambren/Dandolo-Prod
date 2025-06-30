@@ -17,9 +17,11 @@ export const generateApiKey = mutation({
 });
 
 
-// Get user's API keys (masked)
+// Get user's API keys (masked) - SECURE VERSION with authentication
 export const getUserApiKeys = query({
-  args: { address: v.string() },
+  args: { 
+    sessionToken: v.string() // SECURITY: Require authenticated session
+  },
   returns: v.array(v.object({
     _id: v.id("apiKeys"),
     name: v.string(),
@@ -32,9 +34,24 @@ export const getUserApiKeys = query({
     dailyLimit: v.number(),
   })),
   handler: async (ctx, args) => {
+    // SECURITY: Verify session and get authenticated address
+    const session = await ctx.db
+      .query("authSessions")
+      .filter(q => q.eq(q.field("sessionToken"), args.sessionToken))
+      .first();
+
+    if (!session) {
+      throw new Error("Authentication required: Invalid session token");
+    }
+
+    if (session.expires < Date.now()) {
+      throw new Error("Authentication required: Session expired");
+    }
+
+    // SECURITY: Only return keys for the authenticated user
     const keys = await ctx.db
       .query("apiKeys")
-      .withIndex("by_address", q => q.eq("address", args.address))
+      .withIndex("by_address", q => q.eq("address", session.address))
       .collect();
     
     return keys.map(k => ({
@@ -51,17 +68,32 @@ export const getUserApiKeys = query({
   },
 });
 
-// Revoke API key
+// Revoke API key - SECURE VERSION with authentication
 export const revokeApiKey = mutation({
   args: { 
     keyId: v.id("apiKeys"),
-    address: v.string(), // For ownership verification
+    sessionToken: v.string(), // SECURITY: Require authenticated session
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    // SECURITY: Verify session and get authenticated address
+    const session = await ctx.db
+      .query("authSessions")
+      .filter(q => q.eq(q.field("sessionToken"), args.sessionToken))
+      .first();
+
+    if (!session) {
+      throw new Error("Authentication required: Invalid session token");
+    }
+
+    if (session.expires < Date.now()) {
+      throw new Error("Authentication required: Session expired");
+    }
+
+    // SECURITY: Verify key ownership
     const key = await ctx.db.get(args.keyId);
-    if (!key || key.address !== args.address) {
-      throw new Error("Key not found or unauthorized");
+    if (!key || key.address !== session.address) {
+      throw new Error("Key not found or unauthorized access denied");
     }
     
     await ctx.db.patch(args.keyId, { isActive: false });
