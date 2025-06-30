@@ -52,7 +52,7 @@ export const getNetworkStats = query({
     totalPrompts: v.number(),
     promptsToday: v.number(),
     avgResponseTime: v.number(),
-    networkUptime: v.number(),
+    networkHealth: v.number(),
     activeUsers: v.number(),
   }),
   handler: async (ctx) => {
@@ -92,7 +92,7 @@ export const getNetworkStats = query({
       totalPrompts: inferences.length,
       promptsToday: todayInferences.length,
       avgResponseTime: Math.round(avgResponseTime),
-      networkUptime: Math.min(networkUptime, 100),
+      networkHealth: Math.min(networkUptime, 100),
       activeUsers: todayUsers,
     };
   },
