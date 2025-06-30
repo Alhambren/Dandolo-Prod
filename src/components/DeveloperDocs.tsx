@@ -181,18 +181,15 @@ response = requests.post(
 data = response.json()
 print(data['choices'][0]['message']['content'])
 
-# Alternative: Using OpenAI-compatible client
-# Install: pip install openai
-from openai import OpenAI
+# Alternative: Using LiteLLM for framework compatibility
+# Install: pip install litellm
+import litellm
 
-client = OpenAI(
+response = litellm.completion(
+    model="dandolo/llama-3.3-70b-instruct",
+    messages=[{"role": "user", "content": "Hello!"}],
     api_key="dk_your_dandolo_key",
-    base_url="https://dandolo.ai/api"
-)
-
-response = client.chat.completions.create(
-    model="llama-3.3-70b-instruct",
-    messages=[{"role": "user", "content": "Hello!"}]
+    api_base="https://dandolo.ai/api",
 )
 
 print(response.choices[0].message.content)`}
@@ -208,17 +205,25 @@ const DANDOLO_CONFIG = {
   baseURL: 'https://dandolo.ai/api'
 };
 
-// Works with LangChain
-import { ChatOpenAI } from "@langchain/openai";
+// Works with LangChain via custom LLM
+import { LLM } from "@langchain/core/language_models/llms";
 
-const llm = new ChatOpenAI({
-  openAIApiKey: DANDOLO_CONFIG.apiKey,
-  configuration: {
-    baseURL: DANDOLO_CONFIG.baseURL
+class DandoloLLM extends LLM {
+  _call(prompt) {
+    return fetch("https://dandolo.ai/api/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${DANDOLO_CONFIG.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: prompt }]
+      })
+    }).then(r => r.json()).then(d => d.choices[0].message.content);
   }
-});
+}
 
-// Works with any framework that supports OpenAI API format:
+// Works with any agent framework:
 // - AutoGPT, BabyAGI, LangGraph
 // - LiteLLM, LangSmith, CrewAI
 // - Just configure base URL to: https://dandolo.ai/api`}

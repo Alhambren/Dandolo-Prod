@@ -483,18 +483,21 @@ export function DeveloperPortal() {
       <GlassCard className="p-6">
         <h2 className="text-xl font-semibold mb-4">Quick Start</h2>
         <pre className="bg-black/50 p-4 rounded-lg overflow-x-auto text-sm">
-{`// Use any compatible client with Dandolo
-import { OpenAI } from 'openai';
-
-const client = new OpenAI({
-  apiKey: "YOUR_DANDOLO_KEY",
-  baseURL: "https://dandolo.ai/api"
+{`// Use direct HTTP requests with Dandolo
+const response = await fetch("https://dandolo.ai/api/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_DANDOLO_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "llama-3.3-70b-instruct",
+    messages: [{ role: "user", content: "Hello!" }]
+  })
 });
 
-const response = await client.chat.completions.create({
-  model: "llama-3.3-70b-instruct",
-  messages: [{ role: "user", content: "Hello!" }]
-});`}
+const data = await response.json();
+console.log(data.choices[0].message.content);`}
         </pre>
       </GlassCard>
     </div>

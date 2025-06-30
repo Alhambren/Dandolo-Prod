@@ -213,7 +213,7 @@ export const validateVeniceApiKey = action({
     
     // 1. Check against blocked patterns from other providers
     const BLOCKED_PREFIXES = [
-      'sk-',     // OpenAI
+      'sk-',     // Another provider
       'claude-', // Anthropic legacy
       'sk-ant-', // Anthropic current
       'key-',    // Generic/Perplexity
@@ -227,7 +227,7 @@ export const validateVeniceApiKey = action({
     // Check if key starts with known non-Venice prefixes
     for (const prefix of BLOCKED_PREFIXES) {
       if (key.startsWith(prefix)) {
-        const providerName = prefix === 'sk-' ? 'OpenAI' :
+        const providerName = prefix === 'sk-' ? 'another provider' :
                             prefix === 'claude-' || prefix === 'sk-ant-' ? 'Anthropic' :
                             prefix === 'hf_' ? 'HuggingFace' :
                             prefix === 'gsk_' ? 'Groq' :
@@ -318,7 +318,7 @@ export const validateVeniceApiKey = action({
       
       // 5. Check for provider-specific error patterns
       if (errorMessage.includes("Invalid API key provided")) {
-        return { isValid: false, error: "This appears to be an OpenAI-style error. Please use your Venice.ai API key." };
+        return { isValid: false, error: "This appears to be a different provider's error. Please use your Venice.ai API key." };
       }
       
       return { isValid: false, error: "Failed to connect to Venice.ai. Please check your internet connection and API key." };

@@ -12,7 +12,7 @@ Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai
 
 - **🔒 Zero-Knowledge Architecture** - No conversation storage, no user tracking, complete anonymity
 - **🌐 Decentralized Uptime** - Multi-provider network eliminates single points of failure  
-- **⚡ OpenAI-Format Compatible** - Seamless integration with existing agent frameworks
+- **⚡ Standard API Format** - Seamless integration with existing agent frameworks
 - **🚫 Censorship Resistant** - Distributed infrastructure prevents access control
 - **💰 Transparent Pricing** - Pay-per-use, no subscriptions, no hidden costs
 - **🔄 Intelligent Routing** - Automatic model selection and failover for maximum reliability
@@ -26,23 +26,25 @@ Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai
 # https://dandolo.ai/developers
 ```
 
-### 2. OpenAI-Format API (Powered by Venice.ai)
+### 2. Standard Chat Completions API
 
 ```python
-import openai
+import requests
 
-# Use OpenAI client format to access Venice.ai models
-client = openai.OpenAI(
-    api_key="ak_your_agent_key_here",
-    base_url="https://dandolo.ai"
+# Standard chat completions endpoint
+response = requests.post(
+    "https://dandolo.ai/v1/chat/completions",
+    headers={"Authorization": "Bearer ak_your_agent_key"},
+    json={
+        "messages": [
+            {"role": "user", "content": "Analyze this dataset and provide insights"}
+        ],
+        "model": "llama-3.3-70b-instruct"  # Optional - auto-selected if omitted
+    }
 )
 
-response = client.chat.completions.create(
-    model="llama-3.3-70b-instruct",  # Optional - auto-selected if omitted
-    messages=[
-        {"role": "user", "content": "Analyze this dataset and provide insights"}
-    ]
-)
+data = response.json()
+print(data["choices"][0]["message"]["content"])
 ```
 
 ### 3. Direct Venice.ai Access
@@ -72,14 +74,26 @@ image_response = requests.post(
 ### CrewAI
 ```python
 from crewai import Agent, Task, Crew
-from langchain_openai import ChatOpenAI
+import requests
 
-# Configure Dandolo as your LLM provider (Venice.ai models)
-llm = ChatOpenAI(
-    model="claude-3.5-sonnet",
-    api_key="ak_your_agent_key",
-    base_url="https://dandolo.ai"
-)
+class DandoloLLM:
+    def __init__(self, api_key, model="claude-3.5-sonnet"):
+        self.api_key = api_key
+        self.model = model
+        self.base_url = "https://dandolo.ai"
+    
+    def __call__(self, prompt):
+        response = requests.post(
+            f"{self.base_url}/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "messages": [{"role": "user", "content": prompt}],
+                "model": self.model
+            }
+        )
+        return response.json()["choices"][0]["message"]["content"]
+
+llm = DandoloLLM(api_key="ak_your_agent_key")
 
 agent = Agent(
     role="Data Analyst",
@@ -92,31 +106,51 @@ agent = Agent(
 ### AutoGen
 ```python
 from autogen import ConversableAgent
+import requests
 
-config_list = [{
-    "model": "llama-3.3-70b-instruct",
-    "api_key": "ak_your_agent_key",
-    "base_url": "https://dandolo.ai"
-}]
+def dandolo_llm_config(api_key, model="llama-3.3-70b-instruct"):
+    def llm_call(messages, **kwargs):
+        response = requests.post(
+            "https://dandolo.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"messages": messages, "model": model}
+        )
+        return response.json()["choices"][0]["message"]["content"]
+    return llm_call
 
 agent = ConversableAgent(
     name="analyst",
-    llm_config={"config_list": config_list}
+    llm_config={"config_list": [dandolo_llm_config("ak_your_agent_key")]}
 )
 ```
 
 ### LangChain
 ```python
-from langchain_openai import ChatOpenAI
+from langchain.llms.base import LLM
 from langchain.schema import HumanMessage
+import requests
 
-llm = ChatOpenAI(
-    model="claude-3-sonnet",
-    api_key="ak_your_agent_key", 
-    base_url="https://dandolo.ai"
-)
+class DandoloLLM(LLM):
+    api_key: str
+    model: str = "claude-3-sonnet"
+    
+    def _call(self, prompt: str, stop=None, **kwargs):
+        response = requests.post(
+            "https://dandolo.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "messages": [{"role": "user", "content": prompt}],
+                "model": self.model
+            }
+        )
+        return response.json()["choices"][0]["message"]["content"]
+    
+    @property
+    def _llm_type(self):
+        return "dandolo"
 
-response = llm([HumanMessage(content="Process this data autonomously")])
+llm = DandoloLLM(api_key="ak_your_agent_key")
+response = llm("Process this data autonomously")
 ```
 
 ## API Reference
@@ -125,7 +159,7 @@ response = llm([HumanMessage(content="Process this data autonomously")])
 
 | Endpoint | Purpose | Rate Limit | Auth |
 |----------|---------|------------|------|
-| `POST /v1/chat/completions` | OpenAI-format chat (Venice.ai models) | 1000/day | API Key |
+| `POST /v1/chat/completions` | Chat completions (Venice.ai models) | 1000/day | API Key |
 | `POST /chat` | Anonymous chat | 50/day | Session |
 | `GET /api/v1/balance` | Usage tracking | 100/day | API Key |
 | `/api/*` | Venice.ai proxy | 1000/day | API Key |
@@ -212,8 +246,8 @@ Perfect for autonomous systems - no server-side conversation memory means:
 - ✅ **CrewAI** - Multi-agent collaboration
 - ✅ **AutoGen** - Microsoft's agent framework  
 - ✅ **LangChain** - LLM application framework
-- ✅ **OpenAI SDK** - Format compatibility for Venice.ai models
-- ✅ **Custom Agents** - Any OpenAI-format compatible system
+- ✅ **Custom HTTP Clients** - Standard REST API integration
+- ✅ **Any Agent Framework** - Venice.ai via standard chat completions
 
 ## Community & Support
 

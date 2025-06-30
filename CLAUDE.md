@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Dandolo.ai is a decentralized AI inference platform that connects AI providers with users through a marketplace interface. The application serves as a middleware layer for Venice.ai providers, offering:
 
 - Anonymous chat interface for public users
-- Developer API (OpenAI-compatible) for integration
+- Developer API (chat completions format) for integration
 - Provider marketplace for compute registration
 - Points-based reward system (1 point per 100 tokens)
 - Web3 wallet integration for provider verification
@@ -103,7 +103,7 @@ export const myFunction = query({
 
 ### Public Endpoints
 - `POST /chat` - Anonymous chat (50 requests/day)
-- `POST /v1/chat/completions` - OpenAI-compatible developer API
+- `POST /v1/chat/completions` - Chat completions developer API
 
 ### Rate Limits
 - Anonymous: 50 requests/day
