@@ -184,7 +184,7 @@ export function DeveloperPortal() {
             </button>
           )}
           <p className="text-sm text-gray-500 mt-4">
-            This creates a secure session for managing your API keys.
+            This creates a secure session for managing your API keys securely.
           </p>
         </GlassCard>
       </div>
