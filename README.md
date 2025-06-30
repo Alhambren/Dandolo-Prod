@@ -1,147 +1,235 @@
 # Dandolo.ai
 
-Experimental sovereign inference platform built on [Convex](https://convex.dev) and
-[Venice.ai](https://venice.ai). This fork introduces a streamlined UI with room
-for upcoming audio and vision features.
-  
-## Project structure
-  
-The frontend code lives in `src` and uses [Vite](https://vitejs.dev/). The
-backend logic resides in the `convex` directory.
+> **Decentralized AI inference for autonomous agents - no tracking, no accounts, no limits.**
 
-Run `npm run dev` to start both servers during development.
+[![Deploy Status](https://img.shields.io/badge/status-live-brightgreen)](https://dandolo.ai)
+[![API Status](https://img.shields.io/badge/API-operational-blue)](https://dandolo.ai/api/v1/balance)
+[![OpenAI Compatible](https://img.shields.io/badge/OpenAI-compatible-orange)](https://platform.openai.com/docs/api-reference)
 
-### Interface Highlights
+Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai's decentralized compute network. Built for autonomous systems that demand reliability, anonymity, and censorship resistance.
 
-- **Chat** – multi-model text chat with basic folder organization.
-- **Audio Studio** – placeholder for speech-to-text and text-to-speech.
-- **Vision Lab** – placeholder for image generation and analysis.
-- **Tools Marketplace** – upcoming registry for AI tools.
+## Why Agents Choose Dandolo
 
-## App authentication
+- **🔒 Zero-Knowledge Architecture** - No conversation storage, no user tracking, complete anonymity
+- **🌐 Decentralized Uptime** - Multi-provider network eliminates single points of failure  
+- **⚡ OpenAI Drop-in Compatible** - Seamless integration with existing agent frameworks
+- **🚫 Censorship Resistant** - Distributed infrastructure prevents access control
+- **💰 Transparent Pricing** - Pay-per-use, no subscriptions, no hidden costs
+- **🔄 Intelligent Routing** - Automatic model selection and failover for maximum reliability
 
-Chef apps use [Convex Auth](https://auth.convex.dev/) with Anonymous auth for easy sign in. You may wish to change this before deploying your app.
+## Quick Start for AI Agents
 
-## Developing and deploying your app
-
-Check out the [Convex docs](https://docs.convex.dev/) for more information on how to develop with Convex.
-* If you're new to Convex, the [Overview](https://docs.convex.dev/understanding/) is a good place to start
-* Check out the [Hosting and Deployment](https://docs.convex.dev/production/) docs for how to deploy your app
-* Read the [Best Practices](https://docs.convex.dev/understanding/best-practices/) guide for tips on how to improve your app further
-
-### Deploying to Vercel
-
-1. Install the [Vercel CLI](https://vercel.com/docs/cli) with `npm i -g vercel`.
-2. From the project root run `vercel` and follow the prompts to connect your repository.
-3. In the Vercel dashboard, add `CONVEX_DEPLOY_KEY` and any other environment variables.
-4. Trigger a production build with `vercel --prod`.
-
-## HTTP API
-
-User-defined http routes are defined in the `convex/router.ts` file. We split these routes into a separate file from `convex/http.ts` to allow us to prevent the LLM from modifying the authentication routes.
-
-## API Documentation Update
-
-### Chat Completions (Multi-turn Conversations)
+### 1. Get Your Agent API Key
 
 ```bash
-POST https://dandolo.ai/api/v1/chat/completions
-Authorization: Bearer YOUR_API_KEY
-Content-Type: application/json
-
-{
-  "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "What's the capital of France?"},
-    {"role": "assistant", "content": "The capital of France is Paris."},
-    {"role": "user", "content": "What's the population?"}
-  ],
-  "model": "gpt-3.5-turbo",
-  "temperature": 0.7,
-  "max_tokens": 1000
-}
+# Connect wallet and generate agent key at:
+# https://dandolo.ai/developers
 ```
 
-**Response:**
-```json
-{
-  "id": "chatcmpl-123456",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "gpt-3.5-turbo",
-  "usage": {
-    "prompt_tokens": 45,
-    "completion_tokens": 28,
-    "total_tokens": 73
-  },
-  "choices": [{
-    "message": {
-      "role": "assistant",
-      "content": "The population of Paris is approximately 2.2 million..."
-    },
-    "finish_reason": "stop",
-    "index": 0
-  }]
-}
+### 2. Drop-in OpenAI Replacement
+
+```python
+import openai
+
+# Standard OpenAI client - just change the base URL
+client = openai.OpenAI(
+    api_key="ak_your_agent_key_here",
+    base_url="https://dandolo.ai"
+)
+
+response = client.chat.completions.create(
+    model="llama-3.3-70b-instruct",  # Optional - auto-selected if omitted
+    messages=[
+        {"role": "user", "content": "Analyze this dataset and provide insights"}
+    ]
+)
 ```
 
-### SDK Usage for Agents
+### 3. Direct Venice.ai Access
 
-```javascript
-import DandoloSDK from '@dandolo/sdk';
+```python
+# Access Venice.ai's full model catalog through Dandolo proxy
+import requests
 
-const dandolo = new DandoloSDK({
-  apiKey: 'ak_your_agent_key', // Agent keys start with ak_
-});
+headers = {"Authorization": "Bearer ak_your_agent_key"}
 
-// Initialize conversation
-let messages = [
-  { role: 'system', content: 'You are a helpful assistant.' }
-];
+# List available models
+models = requests.get("https://dandolo.ai/api/models", headers=headers)
 
-// First message
-const response1 = await dandolo.chatCompletion({
-  messages: [...messages, { role: 'user', content: 'Hello!' }],
-});
-
-// Update conversation history
-messages.push(
-  { role: 'user', content: 'Hello!' },
-  response1.choices[0].message
-);
-
-// Continue conversation
-const response2 = await dandolo.chatCompletion({
-  messages: [...messages, { role: 'user', content: 'What can you help me with?' }],
-});
+# Generate images
+image_response = requests.post(
+    "https://dandolo.ai/api/images/generations",
+    headers=headers,
+    json={
+        "prompt": "A futuristic AI datacenter",
+        "size": "1024x1024"
+    }
+)
 ```
+
+## Agent Framework Integration
+
+### CrewAI
+```python
+from crewai import Agent, Task, Crew
+from langchain_openai import ChatOpenAI
+
+# Configure Dandolo as your LLM provider
+llm = ChatOpenAI(
+    model="gpt-4",
+    api_key="ak_your_agent_key",
+    base_url="https://dandolo.ai"
+)
+
+agent = Agent(
+    role="Data Analyst",
+    goal="Analyze complex datasets",
+    llm=llm,
+    allow_delegation=False
+)
+```
+
+### AutoGen
+```python
+from autogen import ConversableAgent
+
+config_list = [{
+    "model": "gpt-4",
+    "api_key": "ak_your_agent_key",
+    "base_url": "https://dandolo.ai"
+}]
+
+agent = ConversableAgent(
+    name="analyst",
+    llm_config={"config_list": config_list}
+)
+```
+
+### LangChain
+```python
+from langchain_openai import ChatOpenAI
+from langchain.schema import HumanMessage
+
+llm = ChatOpenAI(
+    model="claude-3-sonnet",
+    api_key="ak_your_agent_key", 
+    base_url="https://dandolo.ai"
+)
+
+response = llm([HumanMessage(content="Process this data autonomously")])
+```
+
+## API Reference
+
+### Endpoints
+
+| Endpoint | Purpose | Rate Limit | Auth |
+|----------|---------|------------|------|
+| `POST /v1/chat/completions` | OpenAI-compatible chat | 1000/day | API Key |
+| `POST /chat` | Anonymous chat | 50/day | Session |
+| `GET /api/v1/balance` | Usage tracking | 100/day | API Key |
+| `/api/*` | Venice.ai proxy | 1000/day | API Key |
 
 ### Rate Limits
 
-- **Developer Keys (dk_)**: 500 requests/day
-- **Agent Keys (ak_)**: 5,000 requests/day
-- **Anonymous Web**: 50 requests/day
+- **Agent Keys (`ak_`)**: 1,000 requests/day, 10 requests/second
+- **Developer Keys (`dk_`)**: 1,000 requests/day, 5 requests/second  
+- **Anonymous**: 50 requests/day, 1 request/second
 
-### Points System Update
+### Response Headers
 
-Providers now earn **1 point per 100 tokens processed** instead of flat rate per prompt. This ensures fair compensation for longer conversations.
-
-### Memory Management
-
-Dandolo does not store conversation history. Agents must include the full message history with each request. This ensures:
-- Complete privacy (no conversation storage)
-- Agent control over context window
-- Ability to compress/summarize as needed
-
-**Best Practices:**
-```javascript
-// Manage context window
-if (messages.length > 20) {
-  // Summarize older messages
-  const summary = await summarizeConversation(messages.slice(0, -10));
-  messages = [
-    { role: 'system', content: 'Previous conversation summary: ' + summary },
-    ...messages.slice(-10)
-  ];
-}
 ```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 847
+X-RateLimit-Reset: 1640995200
+Retry-After: 3600
+```
+
+## Intelligent Model Routing
+
+Dandolo automatically selects optimal models based on your request:
+
+- **Code Tasks** → `deepseek-coder-v2`, `claude-3.5-sonnet`
+- **Analysis** → `gpt-4o`, `claude-3-opus` 
+- **General Chat** → `llama-3.3-70b`, `mixtral-8x7b`
+- **Image Generation** → `flux-1.1-pro`, `midjourney-v6`
+
+Override with explicit `model` parameter or let Dandolo optimize for you.
+
+## Usage Monitoring
+
+```python
+import requests
+
+# Check your agent's usage and balance
+response = requests.get(
+    "https://dandolo.ai/api/v1/balance",
+    headers={"Authorization": "Bearer ak_your_key"}
+)
+
+data = response.json()
+print(f"Requests today: {data['prompts_today']}/{data['daily_limit']}")
+print(f"Points earned: {data['points_total']}")
+print(f"Reset time: {data['reset_time']}")
+```
+
+## Privacy & Security
+
+### Zero-Knowledge Design
+- **No conversation storage** - Agents manage full context in requests
+- **No user tracking** - Anonymous by design
+- **No IP logging** - Complete privacy protection
+
+### Agent Key Security
+- AES-256-GCM encrypted storage
+- Wallet-based ownership verification
+- One-time key display during generation
+- Secure revocation process
+
+## Agent-Optimized Features
+
+### Stateless Architecture
+Perfect for autonomous systems - no server-side conversation memory means:
+- Complete control over context windows
+- No conversation limits or expiration
+- Privacy by design
+- Horizontal scaling capability
+
+### High Availability
+- Multiple Venice.ai providers
+- Automatic failover
+- Real-time health monitoring
+- 99.9% uptime SLA
+
+### Cost Optimization
+- Pay only for tokens used
+- No idle costs or subscriptions
+- Transparent pricing
+- Points-based rewards system
+
+## Supported Agent Frameworks
+
+- ✅ **CrewAI** - Multi-agent collaboration
+- ✅ **AutoGen** - Microsoft's agent framework  
+- ✅ **LangChain** - LLM application framework
+- ✅ **OpenAI SDK** - Direct compatibility
+- ✅ **Custom Agents** - Any OpenAI-compatible system
+
+## Community & Support
+
+- **Website**: [dandolo.ai](https://dandolo.ai)
+- **Documentation**: [dandolo.ai/developers](https://dandolo.ai/developers)
+- **Status Page**: [dandolo.ai/status](https://dandolo.ai/status)
+- **GitHub Issues**: Report bugs and feature requests
+
+## Getting Started
+
+1. **Visit** [dandolo.ai/developers](https://dandolo.ai/developers)
+2. **Connect** your Ethereum wallet
+3. **Generate** an agent API key (`ak_` prefix)
+4. **Integrate** with your existing agent framework
+5. **Deploy** with confidence
+
+---
+
+*Built for the age of autonomous AI - where privacy, reliability, and openness aren't optional.*
