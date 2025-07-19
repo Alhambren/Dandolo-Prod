@@ -96,8 +96,8 @@ export const cleanupTestProviders = mutation({
   },
 });
 
-// ADMIN-ONLY: Find the correct Venice.ai API endpoint that returns VCU balance
-export const findVCUEndpoint = action({
+// ADMIN-ONLY: Find the correct Venice.ai API endpoint that returns Diem balance
+export const findDiemEndpoint = action({
   args: { 
     adminAddress: v.string(),
     apiKeySuffix: v.optional(v.string()) // Last few chars of API key to identify provider
@@ -163,7 +163,7 @@ export const findVCUEndpoint = action({
           endpoint,
           status: response.status,
           ok: response.ok,
-          hasVCU: responseText.toLowerCase().includes('vcu') || 
+          hasDiem: responseText.toLowerCase().includes('vcu') || 
                   responseText.toLowerCase().includes('2445') ||
                   (parsedData && JSON.stringify(parsedData).toLowerCase().includes('vcu')),
           responseLength: responseText.length,
@@ -191,8 +191,8 @@ export const findVCUEndpoint = action({
   },
 });
 
-// Check current VCU balance from Venice.ai API
-export const checkVCUBalance = action({
+// Check current Diem balance from Venice.ai API
+export const checkDiemBalance = action({
   handler: async (ctx) => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
@@ -218,17 +218,17 @@ export const checkVCUBalance = action({
             return sum + (model.model_spec?.availableContextTokens || 0);
           }, 0) || 0;
 
-          // 1 VCU equals 270.54 context tokens (as per validation function)
-          const currentVCU = Math.round(totalContextTokens / 270.54);
-          const storedVCU = provider.vcuBalance;
+          // 1 Diem equals 270.54 context tokens (as per validation function)
+          const currentDiem = Math.round(totalContextTokens / 270.54);
+          const storedDiem = provider.vcuBalance;
           
           results.push({
             providerName: provider.name,
             address: provider.address,
-            storedVCU: storedVCU,
-            currentVCU: currentVCU,
-            difference: currentVCU - storedVCU,
-            isAccurate: Math.abs(currentVCU - storedVCU) < 10, // Allow 10 VCU tolerance
+            storedDiem: storedDiem,
+            currentDiem: currentDiem,
+            difference: currentDiem - storedDiem,
+            isAccurate: Math.abs(currentDiem - storedDiem) < 10, // Allow 10 Diem tolerance
             totalModels: data.data?.length || 0,
             totalContextTokens: totalContextTokens
           });
@@ -238,7 +238,7 @@ export const checkVCUBalance = action({
             providerName: provider.name,
             address: provider.address,
             error: `API Error: ${response.status} - ${errorText}`,
-            storedVCU: provider.vcuBalance
+            storedDiem: provider.vcuBalance
           });
         }
       } catch (error: any) {
@@ -246,7 +246,7 @@ export const checkVCUBalance = action({
           providerName: provider.name,
           address: provider.address,
           error: error.message,
-          storedVCU: provider.vcuBalance
+          storedDiem: provider.vcuBalance
         });
       }
     }
@@ -255,8 +255,8 @@ export const checkVCUBalance = action({
   },
 });
 
-// Update VCU balance for all providers
-export const updateAllVCUBalances = action({
+// Update Diem balance for all providers
+export const updateAllDiemBalances = action({
   handler: async (ctx): Promise<{ updatedCount: number; results: any[] }> => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     let updatedCount = 0;
@@ -332,7 +332,7 @@ export const testAccountEndpoint = action({
         status: response.status,
         ok: response.ok,
         data: data,
-        hasVCU: responseText.includes('vcu') || responseText.includes('VCU') || responseText.includes('2445')
+        hasDiem: responseText.includes('vcu') || responseText.includes('VCU') || responseText.includes('2445')
       };
       
     } catch (error: any) {
@@ -384,7 +384,7 @@ export const testChatApiCall = action({
         provider: {
           name: providers[0].name,
           address: providers[0].address,
-          vcuBalance: providers[0].vcuBalance
+          diemBalance: providers[0].vcuBalance
         }
       };
       
@@ -395,7 +395,7 @@ export const testChatApiCall = action({
         provider: {
           name: providers[0].name,
           address: providers[0].address,
-          vcuBalance: providers[0].vcuBalance
+          diemBalance: providers[0].vcuBalance
         }
       };
     }
@@ -413,8 +413,8 @@ export const testVeniceEndpoints = action({
     const apiKey: string = providers[0].veniceApiKey;
     const results: any[] = [];
     
-    // Test the most likely VCU balance endpoints based on common API patterns
-    const vcuEndpoints = [
+    // Test the most likely Diem balance endpoints based on common API patterns
+    const diemEndpoints = [
       "https://api.venice.ai/api/v1/account/balance",
       "https://api.venice.ai/api/v1/account", 
       "https://api.venice.ai/api/v1/balance",
@@ -425,7 +425,7 @@ export const testVeniceEndpoints = action({
       "https://api.venice.ai/api/v1/me"
     ];
     
-    for (const endpoint of vcuEndpoints) {
+    for (const endpoint of diemEndpoints) {
       try {
         const response: Response = await fetch(endpoint, {
           headers: { 
@@ -446,7 +446,7 @@ export const testVeniceEndpoints = action({
           endpoint,
           status: response.status,
           ok: response.ok,
-          hasVCU: responseText.toLowerCase().includes('vcu') || 
+          hasDiem: responseText.toLowerCase().includes('vcu') || 
                   responseText.toLowerCase().includes('2445') ||
                   responseText.toLowerCase().includes('balance'),
           data: parsedData,

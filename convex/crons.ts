@@ -11,19 +11,19 @@ crons.interval(
   {}
 );
 
-// Update VCU balances every hour using Venice.ai rate limits endpoint
+// Update Diem balances every hour using Venice.ai rate limits endpoint
 crons.interval(
-  "update-vcu-balances",
+  "update-diem-balances",
   { hours: 1 },
   internal.providers.refreshAllVCUBalances,
   {}
 );
 
-// Daily VCU rewards at midnight UTC (after VCU balance refresh)
+// Daily Diem rewards at midnight UTC (after Diem balance refresh)
 crons.interval(
-  "daily-vcu-distribution",
+  "daily-diem-distribution",
   { hours: 24 },
-  internal.points.distributeDailyVCURewards,
+  internal.points.distributeDailyDiemRewards,
   {}
 );
 

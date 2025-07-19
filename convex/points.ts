@@ -144,14 +144,14 @@ export const updateProviderPointsInternal = internalMutation({
   },
 });
 
-// Daily VCU rewards for providers (runs at UTC midnight as per specification)
-export const distributeDailyVCURewards = internalAction({
+// Daily Diem rewards for providers (runs at UTC midnight as per specification)
+export const distributeDailyDiemRewards = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Refresh VCU balances first to ensure accuracy for daily rewards
+    // Refresh Diem balances first to ensure accuracy for daily rewards
     await ctx.runAction(internal.providers.refreshAllVCUBalances);
     
-    // Get all active providers for daily rewards (after VCU refresh)
+    // Get all active providers for daily rewards (after Diem refresh)
     const activeProviders = await ctx.runQuery(internal.providers.listActiveInternal);
     
     const utcMidnight = getUTCMidnightForCron();
@@ -160,7 +160,7 @@ export const distributeDailyVCURewards = internalAction({
     
     for (const provider of activeProviders) {
       try {
-        // Daily reward = VCU balance (1:1 ratio as per specification)
+        // Daily reward = Diem balance (1:1 ratio as per specification)
         const dailyReward = provider.vcuBalance || 0;
         
         if (dailyReward <= 0) {
@@ -180,7 +180,7 @@ export const distributeDailyVCURewards = internalAction({
         const currentPoints = pointsRecord?.totalPoints ?? 0;
         const newTotalPoints = currentPoints + dailyReward;
         
-        // Award daily VCU points
+        // Award daily Diem points
         await ctx.runMutation(internal.points.updateProviderPointsInternal, {
           providerId: provider._id,
           totalPoints: newTotalPoints,

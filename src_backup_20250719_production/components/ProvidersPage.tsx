@@ -43,13 +43,13 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
               </div>
               <div className="flex justify-between items-center">
                 <div>
-                  <span className="text-gray-400">Total Diem</span>
+                  <span className="text-gray-400">Total VCU</span>
                   <div className="text-xs text-gray-500">Updates hourly</div>
                 </div>
                 {isLoading ? (
                   <div className="w-12 h-6 bg-gray-700 rounded animate-pulse"></div>
                 ) : (
-                  <span className="text-2xl font-bold text-blue-400">{networkStats?.totalDiem?.toFixed(2) || '0.00'}</span>
+                  <span className="text-2xl font-bold text-blue-400">{networkStats?.totalVCU?.toFixed(2) || '0.00'}</span>
                 )}
               </div>
               <div className="flex justify-between items-center">
@@ -157,7 +157,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                         
                         <div className="flex gap-6 text-right">
                           <div>
-                            <p className="text-xs text-gray-400">Diem Balance</p>
+                            <p className="text-xs text-gray-400">VCU Balance</p>
                             <p className="font-semibold text-blue-400">{provider.vcuBalance.toFixed(2)}</p>
                           </div>
                           <div>
@@ -213,8 +213,8 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                   <span className="text-blue-400 font-bold text-sm">1</span>
                 </div>
                 <div>
-                  <p className="font-medium text-white">Obtain Venice Diem Allowance</p>
-                  <p className="text-sm text-gray-400 mt-1">Stake VVV tokens to get Venice Diem allowance for AI model access</p>
+                  <p className="font-medium text-white">Obtain Venice VCU Allowance</p>
+                  <p className="text-sm text-gray-400 mt-1">Stake VVV tokens to get Venice VCU allowance for AI model access</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">

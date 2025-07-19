@@ -16,7 +16,7 @@ const DashboardPage: React.FC = () => {
   // and is immediately cleared. It's never persisted or logged.
   const [isRegistering, setIsRegistering] = useState(false);
   const [displayPoints, setDisplayPoints] = useState(0);
-  const [dailyDiemPoints, setDailyDiemPoints] = useState(0);
+  const [dailyVCUPoints, setDailyVCUPoints] = useState(0);
   const animationFrameRef = useRef<number>();
 
   // Queries
@@ -46,16 +46,16 @@ const DashboardPage: React.FC = () => {
 
   // Mutations and Actions
   const validateVeniceApiKey = useAction(api.providers.validateVeniceApiKey);
-  const registerProviderWithDiem = useAction(api.providers.registerProviderWithVCU);
+  const registerProviderWithVCU = useAction(api.providers.registerProviderWithVCU);
   const removeProvider = useMutation(api.providers.remove);
 
-  // Calculate daily Diem points (1:1 ratio, updates throughout the day)
+  // Calculate daily VCU points (1:1 ratio, updates throughout the day)
   useEffect(() => {
     if (currentProvider?.vcuBalance) {
       const hoursElapsed = new Date().getHours() + (new Date().getMinutes() / 60);
       const dailyProgress = hoursElapsed / 24;
       const pointsEarnedToday = Math.floor(currentProvider.vcuBalance * dailyProgress);
-      setDailyDiemPoints(pointsEarnedToday);
+      setDailyVCUPoints(pointsEarnedToday);
     }
   }, [currentProvider]);
 
@@ -141,24 +141,24 @@ const DashboardPage: React.FC = () => {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      // Use automatically detected Diem balance
-      const detectedDiemBalance = validation.balance || 0;
+      // Use automatically detected VCU balance
+      const detectedVcuBalance = validation.balance || 0;
       
       if (validation.warning) {
         toast.warning(validation.warning);
       }
       
-      if (detectedDiemBalance > 0) {
-        toast.success(`✅ Validated! Detected ${detectedDiemBalance.toFixed(2)} Diem available (${validation.models || 0} models)`);
+      if (detectedVcuBalance > 0) {
+        toast.success(`✅ Validated! Detected ${detectedVcuBalance.toFixed(2)} VCU available (${validation.models || 0} models)`);
       } else {
-        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Diem balance will be updated automatically.`);
+        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). VCU balance will be updated automatically.`);
       }
 
-      const providerId = await registerProviderWithDiem({
+      const providerId = await registerProviderWithVCU({
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
-        vcuBalance: detectedDiemBalance,
+        vcuBalance: detectedVcuBalance,
       });
 
       setProviderName("");
@@ -200,7 +200,7 @@ const DashboardPage: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
               <div className="text-center p-4 bg-white/5 rounded-lg">
                 <div className="text-2xl font-bold text-gold">{currentProvider.vcuBalance?.toFixed(2) || '0.00'}</div>
-                <div className="text-sm text-gray-400">Diem Available</div>
+                <div className="text-sm text-gray-400">VCU Available</div>
                 <div className="text-xs text-gray-500 mt-1">
                   Updates hourly
                 </div>
@@ -232,8 +232,8 @@ const DashboardPage: React.FC = () => {
                 <div className="text-sm text-gray-400">Total Points</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg border-2 border-gold/30">
-                <div className="text-2xl font-bold text-gold animate-pulse">{dailyDiemPoints}</div>
-                <div className="text-sm text-gray-400">Diem Points Today</div>
+                <div className="text-2xl font-bold text-gold animate-pulse">{dailyVCUPoints}</div>
+                <div className="text-sm text-gray-400">VCU Points Today</div>
                 <div className="text-xs text-gray-500 mt-1">
                   Updates hourly
                 </div>
@@ -251,7 +251,7 @@ const DashboardPage: React.FC = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div className="text-center">
                       <div className="text-xl font-bold text-yellow-400">{addressPoints.breakdown.vcuProviding.toLocaleString()}</div>
-                      <div className="text-xs text-gray-400">Diem Providing</div>
+                      <div className="text-xs text-gray-400">VCU Providing</div>
                     </div>
                     <div className="text-center">
                       <div className="text-xl font-bold text-blue-400">{addressPoints.breakdown.promptService.toLocaleString()}</div>
@@ -428,7 +428,7 @@ const DashboardPage: React.FC = () => {
         <GlassCard className="p-6">
           <h2 className="text-2xl font-bold mb-4">Become a Provider</h2>
           <p className="text-gray-300 mb-6">
-            Add your Venice.ai API key to contribute Diem to the network and earn rewards.
+            Add your Venice.ai API key to contribute VCU to the network and earn rewards.
           </p>
           <div className="space-y-4">
             <div>
@@ -482,7 +482,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-4 p-4 bg-gold/10 border border-gold/30 rounded-lg">
             <p className="text-sm text-gold">
-              Your Venice.ai Diem will be automatically detected and added to the shared network pool. You'll earn 1 point per Diem per day, plus additional points for serving requests. Diem balances update automatically every hour.
+              Your Venice.ai VCU will be automatically detected and added to the shared network pool. You'll earn 1 point per VCU per day, plus additional points for serving requests. VCU balances update automatically every hour.
             </p>
           </div>
         </GlassCard>

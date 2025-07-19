@@ -267,7 +267,7 @@ export const validateVeniceApiKey = action({
         return {
           isValid: true,
           balance: vcuBalance,
-          currency: "VCU",
+          currency: "Diem",
           models: 0, // Not available from this endpoint
           rateLimitsData: rateLimitsData, // For debugging
         };
@@ -300,15 +300,15 @@ export const validateVeniceApiKey = action({
           return {
             isValid: true,
             balance: 0, // Could not get balance from rate limits endpoint
-            currency: "VCU",
+            currency: "Diem",
             models: modelsData.data?.length || 0,
-            warning: "VCU balance could not be retrieved. Please enter manually during registration."
+            warning: "Diem balance could not be retrieved. Please enter manually during registration."
           };
         } else if (modelsResponse.status === 401) {
           return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
         } else if (modelsResponse.status === 429) {
           // Rate limited but key is valid
-          return { isValid: true, balance: 0, currency: "VCU", warning: "Rate limited during validation" };
+          return { isValid: true, balance: 0, currency: "Diem", warning: "Rate limited during validation" };
         } else {
           return { isValid: false, error: `Venice.ai API error: ${modelsResponse.status}` };
         }
@@ -1394,7 +1394,7 @@ export const refreshSingleProviderVCU = internalAction({
         // Use the detected balance if available, or 0 if not detected
         const newBalance = validation.balance || 0;
         
-        // Always update if current balance is 0, otherwise only update if balance has changed significantly (>5 VCU difference)
+        // Always update if current balance is 0, otherwise only update if balance has changed significantly (>5 Diem difference)
         const shouldUpdate = (provider.vcuBalance || 0) === 0 || Math.abs(newBalance - (provider.vcuBalance || 0)) > 5;
         
         if (shouldUpdate) {
@@ -1409,7 +1409,7 @@ export const refreshSingleProviderVCU = internalAction({
             newBalance: newBalance
           };
         }
-        return { success: true, updated: false, message: "VCU balance unchanged" };
+        return { success: true, updated: false, message: "Diem balance unchanged" };
       } else {
         // Mark provider as inactive if API key is invalid
         if (provider.isActive) {

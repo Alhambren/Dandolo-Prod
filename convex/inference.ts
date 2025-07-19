@@ -2,7 +2,7 @@
 // -------------------------------------------------
 // This module handles routing prompts to Venice.ai models. It dynamically
 // selects a model based on the intent (chat, code, image, analysis), calculates
-// the VCU cost of each request and records usage stats. All external calls are
+// the Diem cost of each request and records usage stats. All external calls are
 // wrapped with appropriate error handling.
 // Updated: 2025-01-23 - Fixed legacy schema compatibility
 
@@ -266,10 +266,10 @@ async function selectModelForIntent(
 }
 
 /**
- * Calculate the approximate VCU cost for a request based on tokens used and
+ * Calculate the approximate Diem cost for a request based on tokens used and
  * the model name. Image models count images instead of tokens.
  */
-function calculateVCUCost(tokens: number, model: string): number {
+function calculateDiemCost(tokens: number, model: string): number {
   const rates: Record<string, number> = {
     "small": 0.06,
     "medium": 0.15,
@@ -474,7 +474,7 @@ async function callVeniceAI(
         // Convert base64 image to data URL
         const base64Image = imageData.images[0];
         const imageDataUrl = `data:image/webp;base64,${base64Image}`;
-        const vcuCost = calculateVCUCost(100, imageModel || "venice-sd35");
+        const vcuCost = calculateDiemCost(100, imageModel || "venice-sd35");
         
         return {
           response: `![Generated Image](${imageDataUrl})\n\n*\"${promptText}\"*`,
@@ -824,7 +824,7 @@ export const route = action({
           args.allowAdultContent
         );
 
-      const vcuCost = calculateVCUCost(tokens, usedModel);
+      const vcuCost = calculateDiemCost(tokens, usedModel);
 
       await ctx.runMutation(api.inference.recordInference, {
         address: args.address || 'anonymous',
@@ -935,7 +935,7 @@ export const getStats = query({
   returns: v.object({
     totalInferences: v.number(),
     totalTokens: v.number(),
-    totalVCU: v.number(),
+    totalDiem: v.number(),
     byIntent: v.record(v.string(), v.number()),
     byModel: v.record(v.string(), v.number()),
   }),
@@ -947,7 +947,7 @@ export const getStats = query({
       (sum, inf) => sum + inf.totalTokens,
       0
     );
-    const totalVCU = inferences.reduce((sum, inf) => sum + inf.vcuCost, 0);
+    const totalDiem = inferences.reduce((sum, inf) => sum + inf.vcuCost, 0);
 
     const byIntent = inferences.reduce((acc, inf) => {
       acc[inf.intent] = (acc[inf.intent] || 0) + 1;
@@ -962,7 +962,7 @@ export const getStats = query({
     return {
       totalInferences,
       totalTokens,
-      totalVCU,
+      totalDiem,
       byIntent,
       byModel,
     };

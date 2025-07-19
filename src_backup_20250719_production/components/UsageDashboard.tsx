@@ -221,7 +221,7 @@ export const UsageDashboard: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <div className="text-lg font-bold text-yellow-400">{userProvider.vcuBalance?.toFixed(2) || '0.00'}</div>
-                  <div className="text-xs text-gray-500">Diem Balance</div>
+                  <div className="text-xs text-gray-500">VCU Balance</div>
                 </div>
                 <div>
                   <div className={`text-lg font-bold ${userProvider.avgResponseTime <= 1000 ? 'text-green-400' : userProvider.avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'}`}>

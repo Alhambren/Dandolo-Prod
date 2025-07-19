@@ -62,7 +62,7 @@ export default defineSchema({
     address: v.optional(v.string()),        // Wallet address (persists even if provider removed)
     totalPoints: v.optional(v.number()),    // All-time total points (legacy: stored as 'points')
     points: v.optional(v.number()),         // Legacy field name for totalPoints
-    vcuProviderPoints: v.optional(v.number()), // Points from providing VCU (daily rewards)
+    vcuProviderPoints: v.optional(v.number()), // Points from providing Diem (daily rewards)
     promptServicePoints: v.optional(v.number()), // Points from serving prompts (per request)
     developerApiPoints: v.optional(v.number()), // Points from developer API usage
     agentApiPoints: v.optional(v.number()), // Points from agent API usage
@@ -157,7 +157,7 @@ export default defineSchema({
     providerId: v.optional(v.id("providers")), // Provider ID if applicable
     pointsEarned: v.number(),              // Points awarded in this transaction
     transactionType: v.union(
-      v.literal("vcu_daily_reward"),       // Daily VCU holding reward
+      v.literal("vcu_daily_reward"),       // Daily Diem holding reward
       v.literal("prompt_served"),          // Serving a user prompt
       v.literal("developer_api"),          // Developer API usage
       v.literal("agent_api"),              // Agent API usage

@@ -35,7 +35,7 @@ interface SystemMetrics {
     perDay: number;
   };
   systemHealth: number;
-  diemBalance: number;
+  vcuBalance: number;
   totalPoints: number;
 }
 
@@ -318,9 +318,9 @@ const SystemOverview: React.FC = () => {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
             <DollarSign className="w-6 h-6 text-purple-500" />
-            <h3 className="text-sm font-medium text-gray-400">DIEM BALANCE</h3>
+            <h3 className="text-sm font-medium text-gray-400">VCU BALANCE</h3>
           </div>
-          <p className="text-3xl font-bold text-white">{systemMetrics.diemBalance}</p>
+          <p className="text-3xl font-bold text-white">{systemMetrics.vcuBalance}</p>
           <p className="text-sm text-gray-400">Venice.ai credits</p>
         </div>
       </div>
@@ -423,7 +423,7 @@ const NetworkTopology: React.FC = () => {
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Provider</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Address</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Diem Balance</th>
+                <th className="text-left py-3 px-4 text-gray-400 font-medium">VCU Balance</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Prompts Served</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Health Score</th>
                 <th className="text-left py-3 px-4 text-gray-400 font-medium">Last Activity</th>
@@ -512,14 +512,14 @@ const FinancialDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Diem Overview */}
+      {/* VCU Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
             <DollarSign className="w-6 h-6 text-purple-500" />
-            <h3 className="text-sm font-medium text-gray-400">DIEM BALANCE</h3>
+            <h3 className="text-sm font-medium text-gray-400">VCU BALANCE</h3>
           </div>
-          <p className="text-3xl font-bold text-white">{financialData.diemBalance}</p>
+          <p className="text-3xl font-bold text-white">{financialData.vcuBalance}</p>
           <p className="text-sm text-gray-400">Venice.ai credits</p>
         </div>
         
@@ -529,7 +529,7 @@ const FinancialDashboard: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-400">DAILY BURN</h3>
           </div>
           <p className="text-3xl font-bold text-white">{financialData.burnRate.daily}</p>
-          <p className="text-sm text-gray-400">Diem/day</p>
+          <p className="text-sm text-gray-400">VCU/day</p>
         </div>
         
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -547,26 +547,26 @@ const FinancialDashboard: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-400">COST/REQUEST</h3>
           </div>
           <p className="text-3xl font-bold text-white">{financialData.costPerInference.toFixed(4)}</p>
-          <p className="text-sm text-gray-400">Diem per inference</p>
+          <p className="text-sm text-gray-400">VCU per inference</p>
         </div>
       </div>
 
       {/* Burn Rate Details */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h3 className="text-xl font-bold text-white mb-4">Diem Burn Rate</h3>
+          <h3 className="text-xl font-bold text-white mb-4">VCU Burn Rate</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-gray-400">Daily</span>
-              <span className="text-white font-semibold">{financialData.burnRate.daily} Diem</span>
+              <span className="text-white font-semibold">{financialData.burnRate.daily} VCU</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-400">Weekly</span>
-              <span className="text-white font-semibold">{financialData.burnRate.weekly} Diem</span>
+              <span className="text-white font-semibold">{financialData.burnRate.weekly} VCU</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-400">Monthly</span>
-              <span className="text-white font-semibold">{financialData.burnRate.monthly} Diem</span>
+              <span className="text-white font-semibold">{financialData.burnRate.monthly} VCU</span>
             </div>
           </div>
           
@@ -577,7 +577,7 @@ const FinancialDashboard: React.FC = () => {
                 <span className="text-yellow-500 font-medium">Budget Alert</span>
               </div>
               <p className="text-sm text-yellow-400">
-                Recommended top-up: {financialData.budgetProjection.recommendedTopup} Diem
+                Recommended top-up: {financialData.budgetProjection.recommendedTopup} VCU
               </p>
             </div>
           )}
@@ -623,17 +623,17 @@ const FinancialDashboard: React.FC = () => {
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-green-500 mb-2">
-              {financialData.diemBalance > 1000 ? '✓' : '⚠️'}
+              {financialData.vcuBalance > 1000 ? '✓' : '⚠️'}
             </div>
             <div className="text-gray-400 text-sm">Balance Status</div>
             <div className="text-white font-medium">
-              {financialData.diemBalance > 1000 ? 'Sufficient' : 'Low'}
+              {financialData.vcuBalance > 1000 ? 'Sufficient' : 'Low'}
             </div>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-blue-500 mb-2">{financialData.burnRate.daily}</div>
             <div className="text-gray-400 text-sm">Current Usage</div>
-            <div className="text-white font-medium">Diem/day</div>
+            <div className="text-white font-medium">VCU/day</div>
           </div>
         </div>
       </div>

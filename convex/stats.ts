@@ -48,7 +48,7 @@ export const getNetworkStats = query({
   returns: v.object({
     totalProviders: v.number(),
     activeProviders: v.number(),
-    totalVCU: v.number(),
+    totalDiem: v.number(),
     totalPrompts: v.number(),
     promptsToday: v.number(),
     avgResponseTime: v.number(),
@@ -88,7 +88,7 @@ export const getNetworkStats = query({
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
-      totalVCU: providers.reduce((sum, p) => sum + p.vcuBalance, 0),
+      totalDiem: providers.reduce((sum, p) => sum + p.vcuBalance, 0),
       totalPrompts: inferences.length,
       promptsToday: todayInferences.length,
       avgResponseTime: Math.round(avgResponseTime),
