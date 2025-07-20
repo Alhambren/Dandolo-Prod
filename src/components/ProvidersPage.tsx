@@ -250,16 +250,16 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                 </div>
                 <div>
                   <p className="font-medium text-white">Connect Wallet & Register</p>
-                  <p className="text-sm text-gray-400 mt-1">Link your Ethereum wallet and register with your Venice.ai "inference only" API key</p>
-                  <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-sm text-gray-400 mt-1">Link your Ethereum wallet and register with your Venice.ai "inference only" API key - your balance will be detected automatically!</p>
+                  <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
-                      <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.898-.833-2.598 0L3.732 8.5c-.77.833-.192 2.5 1.306 2.5z" />
+                      <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-red-400 font-medium text-sm">CRITICAL WARNING</span>
+                      <span className="text-green-400 font-medium text-sm">SECURITY BEST PRACTICE</span>
                     </div>
-                    <p className="text-red-300 text-xs leading-tight">
-                      <strong>Never use an admin key!</strong> Only use "inference only" API keys. Admin keys could give attackers access to your VVV tokens.
+                    <p className="text-green-300 text-xs leading-tight">
+                      <strong>Use "inference only" API keys</strong> - they're secure and now support automatic balance detection! Never use admin keys as they could expose your VVV tokens.
                     </p>
                   </div>
                 </div>

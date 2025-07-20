@@ -274,16 +274,61 @@ export const validateVeniceApiKey = action({
           };
         }
 
-        // CONFIRMED: Venice.ai balance API requires ADMIN keys, but we use INFERENCE keys for security
-        // /api/v1/api_keys/rate_limits exists but returns "Admin API key required" with inference keys
-        // This is correct - we should NOT use admin keys as they could expose VVV tokens to attackers
+        // UPDATED: Venice.ai has fixed their API - inference keys can now query balances!
+        // Try to fetch balance from the rate_limits endpoint
+        let balanceUSD = 0;
+        let balanceWarning = null;
+        
+        try {
+          console.log('Fetching balance from Venice.ai rate_limits endpoint...');
+          const balanceResponse = await fetch("https://api.venice.ai/api/v1/api_keys/rate_limits", {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${args.apiKey}`,
+              "Content-Type": "application/json",
+            },
+          });
+          
+          if (balanceResponse.ok) {
+            const balanceData = await balanceResponse.json();
+            console.log('Venice balance response:', balanceData);
+            
+            // Extract balance from different possible response formats
+            if (balanceData.balance !== undefined) {
+              balanceUSD = parseFloat(balanceData.balance) || 0;
+            } else if (balanceData.vcu_balance !== undefined) {
+              balanceUSD = parseFloat(balanceData.vcu_balance) || 0;
+            } else if (balanceData.credits !== undefined) {
+              balanceUSD = parseFloat(balanceData.credits) || 0;
+            } else if (balanceData.remaining_credits !== undefined) {
+              balanceUSD = parseFloat(balanceData.remaining_credits) || 0;
+            } else {
+              console.log('No balance field found in response, checking for nested data...');
+              // Check if balance is nested in data or account object
+              const dataObj = balanceData.data || balanceData.account || balanceData;
+              if (dataObj.balance !== undefined) {
+                balanceUSD = parseFloat(dataObj.balance) || 0;
+              } else if (dataObj.vcu_balance !== undefined) {
+                balanceUSD = parseFloat(dataObj.vcu_balance) || 0;
+              }
+            }
+            
+            console.log('Extracted balance:', balanceUSD);
+          } else {
+            console.log('Balance fetch failed:', balanceResponse.status, await balanceResponse.text());
+            balanceWarning = "Balance detection failed - you can enter it manually";
+          }
+        } catch (balanceError) {
+          console.log('Balance fetch error:', balanceError);
+          balanceWarning = "Balance detection unavailable - you can enter it manually";
+        }
         
         return {
           isValid: true,
-          balance: 0, // Cannot get balance with inference-only keys (security best practice)
+          balance: balanceUSD,
           currency: "USD", 
           models: modelsData.data?.length || 0,
-          warning: "Balance unavailable - Venice.ai requires admin API keys for balance access, but we use inference-only keys for security."
+          warning: balanceWarning
         };
       } else if (modelsResponse.status === 401) {
         return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };

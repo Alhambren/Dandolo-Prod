@@ -141,15 +141,16 @@ const DashboardPage: React.FC = () => {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      // Venice.ai does NOT expose balance via API - always 0
+      // Venice.ai now exposes balance via API for inference keys!
       const detectedUSDBalance = validation.balance || 0;
       
       if (validation.warning) {
         toast.warning(validation.warning);
+      } else if (detectedUSDBalance > 0) {
+        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Balance detected: $${detectedUSDBalance.toFixed(2)}`);
+      } else {
+        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). No balance detected - you can add VCU to your Venice account.`);
       }
-      
-      // Always show that balance must be entered manually (security limitation)
-      toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Use inference-only keys for security - balance must be entered manually.`);
 
       const providerId = await registerProviderWithBalance({
         address: address,
@@ -479,7 +480,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-4 p-4 bg-gold/10 border border-gold/30 rounded-lg">
             <p className="text-sm text-gold">
-              Your Venice.ai balance will be automatically detected and added to the shared network pool. You'll earn 10 points per dollar per day, plus additional points for serving requests. Balances update automatically every hour.
+              🎉 Your Venice.ai balance will be automatically detected from your inference API key and added to the shared network pool. You'll earn 10 points per dollar per day, plus additional points for serving requests. Balances update automatically every hour.
             </p>
           </div>
         </GlassCard>

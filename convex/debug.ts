@@ -204,36 +204,30 @@ export const checkUSDBalance = action({
     
     for (const provider of providers) {
       try {
-        const response = await fetch("https://api.venice.ai/api/v1/models", {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${provider.veniceApiKey}`,
-            "Content-Type": "application/json",
-          },
+        // Use the improved validation function that now fetches real balances
+        const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
+          apiKey: provider.veniceApiKey
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Venice.ai does NOT expose balance via API - this calculation was fake
+        if (validation.isValid) {
           const storedUSD = (provider.vcuBalance || 0) * 0.10;
+          const currentUSD = validation.balance || 0;
           
           results.push({
             providerName: provider.name,
             address: provider.address,
             storedUSD: storedUSD,
-            currentUSD: 0, // Venice.ai does not expose balance via API
-            difference: 0 - storedUSD,
-            isAccurate: false, // Cannot verify - no API access to balance
-            totalModels: data.data?.length || 0,
-            note: "Venice.ai does not expose balance via API"
+            currentUSD: currentUSD,
+            difference: currentUSD - storedUSD,
+            isAccurate: !validation.warning, // Accurate if no warning about balance detection
+            totalModels: validation.models || 0,
+            note: validation.warning || "Balance successfully detected from Venice.ai API"
           });
         } else {
-          const errorText = await response.text();
           results.push({
             providerName: provider.name,
             address: provider.address,
-            error: `API Error: ${response.status} - ${errorText}`,
+            error: validation.error || "API validation failed",
             storedUSD: (provider.vcuBalance || 0) * 0.10
           });
         }
