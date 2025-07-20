@@ -274,16 +274,16 @@ export const validateVeniceApiKey = action({
           };
         }
 
-        // CONFIRMED: Venice.ai does NOT expose balance information via their API
-        // All balance endpoints (/api/v1/balance, /api/v1/credits, etc.) return 404
-        // Models endpoint works but only contains pricing per token, not account balance
+        // CONFIRMED: Venice.ai balance API requires ADMIN keys, but we use INFERENCE keys for security
+        // /api/v1/api_keys/rate_limits exists but returns "Admin API key required" with inference keys
+        // This is correct - we should NOT use admin keys as they could expose VVV tokens to attackers
         
         return {
           isValid: true,
-          balance: 0, // Venice.ai does not expose balance via API - must be entered manually
+          balance: 0, // Cannot get balance with inference-only keys (security best practice)
           currency: "USD", 
           models: modelsData.data?.length || 0,
-          warning: "Venice.ai does not expose balance via API. Balance must be entered manually."
+          warning: "Balance unavailable - Venice.ai requires admin API keys for balance access, but we use inference-only keys for security."
         };
       } else if (modelsResponse.status === 401) {
         return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };

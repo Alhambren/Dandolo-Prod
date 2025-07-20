@@ -37,14 +37,16 @@ export const getUserApiKeys = query({
     // SECURITY: Verify session and get authenticated address
     const session = await ctx.db
       .query("authSessions")
-      .filter(q => q.eq(q.field("sessionToken"), args.sessionToken))
+      .withIndex("by_token", q => q.eq("sessionToken", args.sessionToken))
       .first();
 
     if (!session) {
+      console.error('Session not found for token:', args.sessionToken);
       throw new Error("Authentication required: Invalid session token");
     }
 
     if (session.expires < Date.now()) {
+      console.error('Session expired:', session.expires, '<', Date.now());
       throw new Error("Authentication required: Session expired");
     }
 
@@ -79,7 +81,7 @@ export const revokeApiKey = mutation({
     // SECURITY: Verify session and get authenticated address
     const session = await ctx.db
       .query("authSessions")
-      .filter(q => q.eq(q.field("sessionToken"), args.sessionToken))
+      .withIndex("by_token", q => q.eq("sessionToken", args.sessionToken))
       .first();
 
     if (!session) {

@@ -148,8 +148,8 @@ const DashboardPage: React.FC = () => {
         toast.warning(validation.warning);
       }
       
-      // Always show that balance must be entered manually
-      toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Balance must be entered manually.`);
+      // Always show that balance must be entered manually (security limitation)
+      toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Use inference-only keys for security - balance must be entered manually.`);
 
       const providerId = await registerProviderWithBalance({
         address: address,

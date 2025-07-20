@@ -35,98 +35,78 @@ export function useWalletAuth() {
     authState.sessionToken ? { sessionToken: authState.sessionToken } : 'skip'
   );
 
-  // Load stored session on mount
+  // Load and validate stored session on mount and when wallet connects
   useEffect(() => {
-    console.log('=== useWalletAuth: Loading stored session ===');
-    
+    if (!isConnected || !address) {
+      return;
+    }
+
     const storedToken = localStorage.getItem(SESSION_STORAGE_KEY);
     const storedExpiry = localStorage.getItem(SESSION_EXPIRY_KEY);
     const storedAddress = localStorage.getItem('dandolo_wallet_address');
     
-    console.log('Stored data:', { 
-      hasToken: !!storedToken, 
-      hasExpiry: !!storedExpiry, 
-      storedAddress,
-      currentAddress: address 
-    });
-    
     if (storedToken && storedExpiry && storedAddress) {
-      const expiryTime = parseInt(storedExpiry);
-      const now = Date.now();
+      const expiry = parseInt(storedExpiry, 10);
+      const normalizedStoredAddress = storedAddress.toLowerCase();
+      const normalizedCurrentAddress = address.toLowerCase();
       
-      // Normalize addresses for comparison (lowercase) and clean any prefixes
-      const cleanCurrentAddress = address?.replace(/^eip155:\d+:/, '').toLowerCase();
-      const cleanStoredAddress = storedAddress?.replace(/^eip155:\d+:/, '').toLowerCase();
-      
-      console.log('Address comparison:', {
-        cleanCurrentAddress,
-        cleanStoredAddress,
-        match: cleanCurrentAddress === cleanStoredAddress,
-        expired: now >= expiryTime
-      });
-      
-      if (now < expiryTime && cleanCurrentAddress === cleanStoredAddress) {
-        // Session is still valid and wallet matches
-        console.log('✅ Loading stored session for address:', cleanCurrentAddress);
-        setAuthState(prev => ({
-          ...prev,
+      // Check if session is valid for current wallet
+      if (normalizedStoredAddress === normalizedCurrentAddress && expiry > Date.now()) {
+        console.log('Restoring valid session for', address);
+        setAuthState({
           sessionToken: storedToken,
-          address: storedAddress,
-          isAuthenticated: true
-        }));
-      } else {
-        // Session expired or wallet changed - clear storage
-        console.log('❌ Clearing stored session - expired or wallet changed:', {
-          expired: now >= expiryTime,
-          walletChanged: cleanCurrentAddress !== cleanStoredAddress,
-          currentAddress: cleanCurrentAddress,
-          storedAddress: cleanStoredAddress
+          isAuthenticated: true,
+          isAuthenticating: false,
+          address: address
         });
+      } else {
+        // Clear invalid session
+        console.log('Clearing invalid or expired session');
         clearStoredSession();
       }
-    } else {
-      console.log('❌ No complete stored session found');
     }
-    console.log('=== End useWalletAuth session loading ===');
-  }, [address]);
+  }, [isConnected, address]);
 
-  // Validate session when token changes
+  // Validate session token with backend
   useEffect(() => {
-    if (sessionValidation) {
+    if (sessionValidation !== undefined) {
       if (sessionValidation.authenticated) {
-        console.log('Session validation successful for address:', sessionValidation.address);
+        console.log('Session validated successfully');
         setAuthState(prev => ({
           ...prev,
           isAuthenticated: true,
           address: sessionValidation.address
         }));
         
-        // Auto-renew session if needed
+        // Auto-renew if needed
         if (sessionValidation.shouldRenew && authState.sessionToken) {
           renewSession({ sessionToken: authState.sessionToken })
             .then((result) => {
               if (result.success && result.newExpires) {
                 localStorage.setItem(SESSION_EXPIRY_KEY, result.newExpires.toString());
-                console.log('Session auto-renewed successfully');
+                console.log('Session auto-renewed');
               }
             })
-            .catch((error) => {
-              console.warn('Failed to auto-renew session:', error);
-            });
+            .catch(console.error);
         }
       } else {
-        // Session is invalid - clear it
-        console.log('Session validation failed:', sessionValidation);
+        console.log('Session validation failed, clearing session');
         clearStoredSession();
-        setAuthState(prev => ({
-          ...prev,
+        setAuthState({
           sessionToken: null,
           isAuthenticated: false,
+          isAuthenticating: false,
           address: null
-        }));
+        });
       }
     }
   }, [sessionValidation, authState.sessionToken, renewSession]);
+
+  const clearStoredSession = useCallback(() => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(SESSION_EXPIRY_KEY);
+    localStorage.removeItem('dandolo_wallet_address');
+  }, []);
 
   // Clear session when wallet disconnects
   useEffect(() => {
@@ -139,13 +119,7 @@ export function useWalletAuth() {
         address: null
       });
     }
-  }, [isConnected, address]);
-
-  const clearStoredSession = useCallback(() => {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    localStorage.removeItem(SESSION_EXPIRY_KEY);
-    localStorage.removeItem('dandolo_wallet_address');
-  }, []);
+  }, [isConnected, address, clearStoredSession]);
 
   const authenticate = useCallback(async () => {
     if (!address || !isConnected) {
@@ -171,11 +145,10 @@ export function useWalletAuth() {
         signature
       });
 
-      // Store session securely with cleaned and normalized address
-      const cleanAddress = address.replace(/^eip155:\d+:/, '').toLowerCase();
+      // Store session
       localStorage.setItem(SESSION_STORAGE_KEY, sessionResult.sessionToken);
       localStorage.setItem(SESSION_EXPIRY_KEY, sessionResult.expires.toString());
-      localStorage.setItem('dandolo_wallet_address', cleanAddress);
+      localStorage.setItem('dandolo_wallet_address', address.toLowerCase());
 
       setAuthState({
         sessionToken: sessionResult.sessionToken,
@@ -217,7 +190,16 @@ export function useWalletAuth() {
     }
     
     const success = await authenticate();
-    return success ? authState.sessionToken : null;
+    if (success) {
+      // Wait for state to update
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const token = localStorage.getItem(SESSION_STORAGE_KEY);
+          resolve(token);
+        }, 100);
+      });
+    }
+    return null;
   }, [authState.isAuthenticated, authState.sessionToken, authenticate]);
 
   return {

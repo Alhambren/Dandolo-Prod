@@ -126,6 +126,7 @@ export const findUSDEndpoint = action({
     
     // Test different Venice.ai API endpoints that might return VCU balance
     const endpointsToTest = [
+      "https://api.venice.ai/api/v1/api_keys/rate_limits", // CORRECT endpoint per Venice docs
       "https://api.venice.ai/api/v1/account",
       "https://api.venice.ai/api/v1/balance", 
       "https://api.venice.ai/api/v1/billing",
@@ -296,8 +297,8 @@ export const updateAllBalances = action({
   },
 });
 
-// Quick test of Venice.ai account endpoint
-export const testAccountEndpoint = action({
+// Test Venice.ai rate limits endpoint (correct endpoint per docs)
+export const testRateLimitsEndpoint = action({
   handler: async (ctx) => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
@@ -307,7 +308,7 @@ export const testAccountEndpoint = action({
     const apiKey: string = providers[0].veniceApiKey;
     
     try {
-      const response = await fetch("https://api.venice.ai/api/v1/account", {
+      const response = await fetch("https://api.venice.ai/api/v1/api_keys/rate_limits", {
         headers: { 
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
