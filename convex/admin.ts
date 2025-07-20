@@ -28,7 +28,7 @@ export const getSystemMetrics = query({
       perDay: v.number(),
     }),
     systemHealth: v.number(),
-    diemBalance: v.number(),
+    usdBalance: v.number(),
     totalPoints: v.number(),
     recentAnomalies: v.number(),
     protocolIntegrity: v.boolean(),
@@ -47,8 +47,9 @@ export const getSystemMetrics = query({
     
     const activeProviders = providers.length;
 
-    // Calculate Diem balance (sum of all active providers)
-    const diemBalance = providers.reduce((sum, provider) => sum + (provider.vcuBalance || 0), 0);
+    // Calculate USD balance (sum of all active providers converted to USD)
+    const vcuBalance = providers.reduce((sum, provider) => sum + (provider.vcuBalance || 0), 0);
+    const usdBalance = vcuBalance * 0.10; // Convert VCU to USD
 
     // Get inference statistics
     const now = Date.now();
@@ -72,20 +73,20 @@ export const getSystemMetrics = query({
     const healthFactors = {
       providersOnline: Math.min(activeProviders / 10, 1), // Ideal: 10+ providers
       inferenceSuccess: inferenceVolume.perHour > 0 ? 1 : 0.5, // Has recent activity
-      diemSufficiency: diemBalance > 1000 ? 1 : diemBalance / 1000, // Ideal: 1000+ Diem
+      usdSufficiency: usdBalance > 100 ? 1 : usdBalance / 100, // Ideal: $100+ USD
     };
     
     const systemHealth = Math.round(
       (healthFactors.providersOnline * 0.4 + 
        healthFactors.inferenceSuccess * 0.3 + 
-       healthFactors.diemSufficiency * 0.3) * 100
+       healthFactors.usdSufficiency * 0.3) * 100
     );
 
     return {
       activeProviders,
       inferenceVolume,
       systemHealth,
-      diemBalance: Math.round(diemBalance * 100) / 100,
+      usdBalance: Math.round(usdBalance * 100) / 100,
       totalPoints,
       recentAnomalies: 0, // TODO: Implement anomaly detection
       protocolIntegrity: true, // TODO: Implement integrity checks
@@ -187,7 +188,7 @@ export const getNetworkTopology = query({
       name: v.string(),
       address: v.string(),
       isActive: v.boolean(),
-      diemBalance: v.number(),
+      usdBalance: v.number(),
       totalPrompts: v.number(),
       healthScore: v.number(),
       lastActivity: v.optional(v.number()),
@@ -213,13 +214,13 @@ export const getNetworkTopology = query({
       // Calculate health score based on multiple factors
       const healthFactors = {
         isActive: provider.isActive ? 1 : 0,
-        hasDiem: (provider.vcuBalance || 0) > 0 ? 1 : 0,
+        hasBalance: (provider.vcuBalance || 0) > 0 ? 1 : 0,
         hasActivity: (points?.lastEarned || 0) > (Date.now() - 24 * 60 * 60 * 1000) ? 1 : 0,
       };
       
       const healthScore = Math.round(
         (healthFactors.isActive * 0.5 + 
-         healthFactors.hasDiem * 0.3 + 
+         healthFactors.hasBalance * 0.3 + 
          healthFactors.hasActivity * 0.2) * 100
       );
 
@@ -228,7 +229,7 @@ export const getNetworkTopology = query({
         name: provider.name,
         address: provider.address,
         isActive: provider.isActive,
-        diemBalance: provider.vcuBalance || 0,
+        usdBalance: (provider.vcuBalance || 0) * 0.10,
         totalPrompts: provider.totalPrompts || 0,
         healthScore,
         lastActivity: points?.lastEarned,
@@ -468,7 +469,7 @@ export const getFinancialMetrics = query({
     adminAddress: v.string(),
   },
   returns: v.object({
-    diemBalance: v.number(),
+    usdBalance: v.number(),
     burnRate: v.object({
       daily: v.number(),
       weekly: v.number(),
@@ -490,26 +491,28 @@ export const getFinancialMetrics = query({
       throw new Error("Unauthorized: Admin access required");
     }
 
-    // Get current Diem balance
+    // Get current USD balance
     const providers = await ctx.db.query("providers")
       .filter((q) => q.eq(q.field("isActive"), true))
       .collect();
     
-    const diemBalance = providers.reduce((sum, provider) => sum + (provider.vcuBalance || 0), 0);
+    const vcuBalance = providers.reduce((sum, provider) => sum + (provider.vcuBalance || 0), 0);
+    const usdBalance = vcuBalance * 0.10; // Convert VCU to USD
 
     // Calculate burn rates (mock data for now)
-    const dailyBurn = 50; // Diem per day
+    const dailyBurn = 5; // USD per day
     const weeklyBurn = dailyBurn * 7;
     const monthlyBurn = dailyBurn * 30;
 
     // Get inference costs
     const inferences = await ctx.db.query("inferences").collect();
-    const totalDiemSpent = inferences.reduce((sum, inf) => sum + inf.vcuCost, 0);
-    const costPerInference = inferences.length > 0 ? totalDiemSpent / inferences.length : 0;
+    const totalVCUSpent = inferences.reduce((sum, inf) => sum + inf.vcuCost, 0);
+    const totalUSDSpent = totalVCUSpent * 0.10; // Convert VCU to USD
+    const costPerInference = inferences.length > 0 ? totalUSDSpent / inferences.length : 0;
 
     // Budget projection
-    const daysRemaining = dailyBurn > 0 ? Math.floor(diemBalance / dailyBurn) : 999;
-    const recommendedTopup = daysRemaining < 30 ? 1000 : 0;
+    const daysRemaining = dailyBurn > 0 ? Math.floor(usdBalance / dailyBurn) : 999;
+    const recommendedTopup = daysRemaining < 30 ? 100 : 0;
 
     // Points metrics
     const allProviderPoints = await ctx.db.query("providerPoints").collect();
@@ -520,7 +523,7 @@ export const getFinancialMetrics = query({
     const pointsThisWeek = recentPoints.reduce((sum, pp) => sum + (pp.totalPoints || 0), 0);
 
     return {
-      diemBalance: Math.round(diemBalance * 100) / 100,
+      usdBalance: Math.round(usdBalance * 100) / 100,
       burnRate: {
         daily: dailyBurn,
         weekly: weeklyBurn,

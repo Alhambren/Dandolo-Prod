@@ -6,7 +6,7 @@ import { useAccount } from 'wagmi';
 
 interface AnimatedPointsProps {
   currentPoints: number;
-  diemBalance: number;
+  usdBalance: number;
   isEarning: boolean;
   lastEarned?: number;
 }
@@ -14,7 +14,7 @@ interface AnimatedPointsProps {
 // Animated Points Counter Component
 const AnimatedPointsCounter: React.FC<AnimatedPointsProps> = ({ 
   currentPoints, 
-  diemBalance, 
+  usdBalance, 
   isEarning,
   lastEarned 
 }) => {
@@ -87,9 +87,9 @@ const AnimatedPointsCounter: React.FC<AnimatedPointsProps> = ({
         </div>
         
         <div className="text-sm text-white/70 space-y-1">
-          <div>Diem Balance: {diemBalance.toLocaleString()}</div>
+          <div>Balance: ${usdBalance.toFixed(2)}</div>
           <div className="text-xs text-white/50">
-            Daily Diem Reward: +{diemBalance} points at midnight UTC
+            Daily Reward: +{Math.round(usdBalance * 10)} points at midnight UTC
           </div>
           {lastEarned && (
             <div className="text-xs text-white/40">
@@ -108,45 +108,45 @@ const AnimatedPointsCounter: React.FC<AnimatedPointsProps> = ({
 };
 
 interface DailyProgressProps {
-  diemBalance: number;
+  usdBalance: number;
   earnedToday: number;
   hoursElapsed: number;
 }
 
 // Daily Progress Bar Component
 const DailyProgress: React.FC<DailyProgressProps> = ({ 
-  diemBalance, 
+  usdBalance, 
   earnedToday, 
   hoursElapsed 
 }) => {
   const progress = Math.min((hoursElapsed / 24) * 100, 100);
-  const diemProgress = Math.min((earnedToday / diemBalance) * 100, 100);
+  const usdProgress = Math.min((earnedToday / (usdBalance * 10)) * 100, 100);
   
   return (
     <div className="card p-6 bg-dark-3 rounded-3xl">
-      <h3 className="text-lg font-semibold mb-4">Daily Diem Progress</h3>
+      <h3 className="text-lg font-semibold mb-4">Daily Reward Progress</h3>
       
       <div className="space-y-4">
         <div className="flex justify-between text-sm">
-          <span>Diem Earned Today</span>
-          <span>{earnedToday.toLocaleString()}/{diemBalance.toLocaleString()} Diem</span>
+          <span>Earned Today</span>
+          <span>{earnedToday.toLocaleString()}/{Math.round(usdBalance * 10).toLocaleString()} points</span>
         </div>
         
-        {/* Diem Progress Bar */}
+        {/* Reward Progress Bar */}
         <div className="w-full bg-white/10 rounded-full h-3">
           <div 
             className="h-3 bg-gradient-to-r from-brand-500 to-brand-600 rounded-full transition-all duration-1000"
-            style={{ width: `${diemProgress}%` }}
+            style={{ width: `${usdProgress}%` }}
           />
         </div>
         
         <div className="flex justify-between text-xs text-white/60">
-          <span>{diemProgress.toFixed(1)}% complete</span>
+          <span>{usdProgress.toFixed(1)}% complete</span>
           <span>{hoursElapsed.toFixed(1)} hours elapsed</span>
         </div>
         
         <div className="text-xs text-white/40">
-          Diem rewards distribute automatically at UTC midnight
+          Rewards distribute automatically at UTC midnight
         </div>
       </div>
     </div>
