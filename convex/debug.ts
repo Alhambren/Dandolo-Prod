@@ -603,9 +603,15 @@ export const systemHealth = query({
 
 // ADMIN-ONLY: Check provider balances to debug zero balance issue
 export const checkProviderBalances = action({
-  handler: async (ctx) => {
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-    return providers.map(p => ({
+  handler: async (ctx): Promise<Array<{
+    name: string;
+    vcuBalance: number;
+    usdValue: number;
+    hasApiKey: boolean;
+    isActive: boolean;
+  }>> => {
+    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    return providers.map((p: any) => ({
       name: p.name,
       vcuBalance: p.vcuBalance || 0,
       usdValue: (p.vcuBalance || 0) * 0.10,

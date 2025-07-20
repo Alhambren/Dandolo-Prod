@@ -1442,8 +1442,8 @@ export const refreshSingleProviderVCU = internalAction({
 
 // Manual balance refresh action for debugging
 export const manualRefreshAllBalances = action({
-  handler: async (ctx) => {
-    const result = await ctx.runAction(internal.providers.refreshAllVCUBalances);
+  handler: async (ctx): Promise<{ message: string; totalProviders: number; updatedCount: number; errorCount: number }> => {
+    const result: { totalProviders: number; updatedCount: number; errorCount: number } = await ctx.runAction(internal.providers.refreshAllVCUBalances);
     return {
       message: "Balance refresh triggered",
       ...result
