@@ -88,7 +88,7 @@ export const getNetworkStats = query({
     return {
       totalProviders: providers.length,
       activeProviders: activeProviders.length,
-      totalDiem: providers.reduce((sum, p) => sum + p.vcuBalance, 0),
+      totalDiem: providers.reduce((sum, p) => sum + (p.vcuBalance || 0), 0),
       totalPrompts: inferences.length,
       promptsToday: todayInferences.length,
       avgResponseTime: Math.round(avgResponseTime),

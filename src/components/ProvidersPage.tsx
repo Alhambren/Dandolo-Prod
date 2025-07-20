@@ -12,6 +12,21 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
   const topProviders = useQuery(api.providers.getTopProviders, { limit: 5 });
   const isLoading = networkStats === undefined || topProviders === undefined;
 
+  // Debug logging
+  React.useEffect(() => {
+    if (networkStats) {
+      console.log('Network Stats:', networkStats);
+      console.log('Total Diem (raw):', networkStats.totalDiem);
+      console.log('Total USD (converted):', (networkStats.totalDiem || 0) * 0.10);
+    }
+    if (topProviders) {
+      console.log('Top Providers:', topProviders);
+      topProviders.forEach((p, i) => {
+        console.log(`Provider ${i}: vcuBalance=${p.vcuBalance}, USD=${(p.vcuBalance || 0) * 0.10}`);
+      });
+    }
+  }, [networkStats, topProviders]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white" data-testid="providers-page">
       <div className="container mx-auto px-4 py-8">
