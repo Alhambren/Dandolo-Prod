@@ -621,8 +621,8 @@ export const checkProviderBalances = action({
   }
 });
 
-// ADMIN-ONLY: Set test balances for debugging (one-time fix)
-export const setTestBalances = mutation({
+// ADMIN-ONLY: Reset all provider balances to zero (for testing real Venice API)
+export const resetProviderBalances = mutation({
   args: { adminAddress: v.string() },
   handler: async (ctx, args) => {
     // Admin check
@@ -633,17 +633,15 @@ export const setTestBalances = mutation({
     const providers = await ctx.db.query("providers").collect();
     const updates = [];
     
-    // Give each provider a test balance
+    // Reset all provider balances to 0 so we can test real Venice API
     for (const provider of providers) {
-      if (provider.vcuBalance === 0 || !provider.vcuBalance) {
-        await ctx.db.patch(provider._id, {
-          vcuBalance: 1000 // 1000 VCU = $100 USD
-        });
-        updates.push(provider.name);
-      }
+      await ctx.db.patch(provider._id, {
+        vcuBalance: 0
+      });
+      updates.push(provider.name);
     }
     
-    return `Updated balances for: ${updates.join(', ')}`;
+    return `Reset balances to 0 for: ${updates.join(', ')}`;
   }
 });
 

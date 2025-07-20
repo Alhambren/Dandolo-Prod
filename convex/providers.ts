@@ -249,8 +249,8 @@ export const validateVeniceApiKey = action({
     }
     
     try {
-      // 3. Get VCU balance from Venice.ai rate limits endpoint
-      const rateLimitsResponse = await fetch("https://api.venice.ai/api/v1/api_keys/rate_limits", {
+      // 3. Get VCU balance from Venice.ai models endpoint (rate limits endpoint doesn't exist)
+      const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${key}`,
@@ -258,71 +258,48 @@ export const validateVeniceApiKey = action({
         },
       });
 
-      if (rateLimitsResponse.ok) {
-        const rateLimitsData = await rateLimitsResponse.json();
+      if (modelsResponse.ok) {
+        const modelsData = await modelsResponse.json();
         
-        // Add debug logging to understand Venice API response structure
-        console.log('Venice API Response:', rateLimitsData);
-        console.log('Balances data:', rateLimitsData.data?.balances);
+        // Verify response contains Venice.ai-specific model patterns
+        const veniceModelPrefixes = ['venice-', 'v-', 'model-'];
+        const hasVeniceModel = modelsData.data?.some((model: any) => 
+          veniceModelPrefixes.some(prefix => model.id?.toLowerCase().includes(prefix.toLowerCase()))
+        );
         
-        // Extract VCU balance from rate limits response - try different paths
-        const vcuBalance = 
-          rateLimitsData.data?.balances?.VCU ||
-          rateLimitsData.balances?.VCU ||
-          rateLimitsData.data?.balance ||
-          rateLimitsData.balance ||
-          0;
+        if (!hasVeniceModel && modelsData.data?.length > 0) {
+          return { 
+            isValid: false, 
+            error: "This API key works but doesn't appear to be from Venice.ai. Please get your key from venice.ai"
+          };
+        }
+
+        // Calculate VCU balance from available context tokens
+        const totalContextTokens = modelsData.data?.reduce((sum: number, model: any) => {
+          return sum + (model.model_spec?.availableContextTokens || 0);
+        }, 0) || 0;
+
+        // Convert context tokens to VCU balance using established conversion rate
+        // Based on existing debug function: 1 USD = 2705.4 context tokens, so VCU = contextTokens / 270.54
+        const vcuBalance = Math.round(totalContextTokens / 270.54);
         
-        console.log('Extracted VCU Balance:', vcuBalance);
+        console.log('Venice API Models Response - Total Context Tokens:', totalContextTokens);
+        console.log('Calculated VCU Balance:', vcuBalance);
         
         return {
           isValid: true,
-          balance: vcuBalance, // Store VCU balance directly, not converted
+          balance: vcuBalance,
           currency: "USD",
-          models: 0, // Not available from this endpoint
-          rateLimitsData: rateLimitsData, // For debugging
+          models: modelsData.data?.length || 0,
+          totalContextTokens: totalContextTokens
         };
+      } else if (modelsResponse.status === 401) {
+        return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
+      } else if (modelsResponse.status === 429) {
+        // Rate limited but key is valid
+        return { isValid: true, balance: 0, currency: "USD", warning: "Rate limited during validation" };
       } else {
-        // Rate limits endpoint failed, fallback to models endpoint for validation
-        const modelsResponse = await fetch("https://api.venice.ai/api/v1/models", {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${key}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (modelsResponse.ok) {
-          const modelsData = await modelsResponse.json();
-          
-          // Verify response contains Venice.ai-specific model patterns
-          const veniceModelPrefixes = ['venice-', 'v-', 'model-'];
-          const hasVeniceModel = modelsData.data?.some((model: any) => 
-            veniceModelPrefixes.some(prefix => model.id?.toLowerCase().includes(prefix.toLowerCase()))
-          );
-          
-          if (!hasVeniceModel && modelsData.data?.length > 0) {
-            return { 
-              isValid: false, 
-              error: "This API key works but doesn't appear to be from Venice.ai. Please get your key from venice.ai"
-            };
-          }
-
-          return {
-            isValid: true,
-            balance: 0, // Could not get balance from rate limits endpoint
-            currency: "USD",
-            models: modelsData.data?.length || 0,
-            warning: "Balance could not be retrieved. Please enter manually during registration."
-          };
-        } else if (modelsResponse.status === 401) {
-          return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
-        } else if (modelsResponse.status === 429) {
-          // Rate limited but key is valid
-          return { isValid: true, balance: 0, currency: "USD", warning: "Rate limited during validation" };
-        } else {
-          return { isValid: false, error: `Venice.ai API error: ${modelsResponse.status}` };
-        }
+        return { isValid: false, error: `Venice.ai API error: ${modelsResponse.status}` };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
