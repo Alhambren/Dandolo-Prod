@@ -15,8 +15,16 @@ const SESSION_STORAGE_KEY = 'dandolo_wallet_session';
 const SESSION_EXPIRY_KEY = 'dandolo_session_expiry';
 
 export function useWalletAuth() {
-  const { address, isConnected } = useAccount();
+  const { address: wagmiAddress, isConnected: wagmiIsConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
+  
+  // Debug logging for wagmi state
+  useEffect(() => {
+    console.log('=== useWalletAuth Wagmi State ===');
+    console.log('wagmiIsConnected:', wagmiIsConnected);
+    console.log('wagmiAddress:', wagmiAddress);
+    console.log('=== End Wagmi State ===');
+  }, [wagmiIsConnected, wagmiAddress]);
   
   const [authState, setAuthState] = useState<AuthState>({
     sessionToken: null,
@@ -37,7 +45,10 @@ export function useWalletAuth() {
 
   // Load and validate stored session on mount and when wallet connects
   useEffect(() => {
-    if (!isConnected || !address) {
+    console.log('Session restoration check - wagmiIsConnected:', wagmiIsConnected, 'wagmiAddress:', wagmiAddress);
+    
+    if (!wagmiIsConnected || !wagmiAddress) {
+      console.log('Wallet not connected, skipping session restoration');
       return;
     }
 
@@ -45,31 +56,42 @@ export function useWalletAuth() {
     const storedExpiry = localStorage.getItem(SESSION_EXPIRY_KEY);
     const storedAddress = localStorage.getItem('dandolo_wallet_address');
     
+    console.log('Stored session data:', {
+      hasToken: !!storedToken,
+      hasExpiry: !!storedExpiry,
+      storedAddress,
+      currentAddress: wagmiAddress
+    });
+    
     if (storedToken && storedExpiry && storedAddress) {
       const expiry = parseInt(storedExpiry, 10);
       const normalizedStoredAddress = storedAddress.toLowerCase();
-      const normalizedCurrentAddress = address.toLowerCase();
+      const normalizedCurrentAddress = wagmiAddress.toLowerCase();
       
       // Check if session is valid for current wallet
       if (normalizedStoredAddress === normalizedCurrentAddress && expiry > Date.now()) {
-        console.log('Restoring valid session for', address);
+        console.log('Restoring valid session for', wagmiAddress);
         setAuthState({
           sessionToken: storedToken,
           isAuthenticated: true,
           isAuthenticating: false,
-          address: address
+          address: wagmiAddress
         });
       } else {
         // Clear invalid session
         console.log('Clearing invalid or expired session');
         clearStoredSession();
       }
+    } else {
+      console.log('No stored session found');
     }
-  }, [isConnected, address]);
+  }, [wagmiIsConnected, wagmiAddress]);
 
   // Validate session token with backend
   useEffect(() => {
     if (sessionValidation !== undefined) {
+      console.log('Session validation result:', sessionValidation);
+      
       if (sessionValidation.authenticated) {
         console.log('Session validated successfully');
         setAuthState(prev => ({
@@ -103,6 +125,7 @@ export function useWalletAuth() {
   }, [sessionValidation, authState.sessionToken, renewSession]);
 
   const clearStoredSession = useCallback(() => {
+    console.log('Clearing stored session');
     localStorage.removeItem(SESSION_STORAGE_KEY);
     localStorage.removeItem(SESSION_EXPIRY_KEY);
     localStorage.removeItem('dandolo_wallet_address');
@@ -110,7 +133,9 @@ export function useWalletAuth() {
 
   // Clear session when wallet disconnects
   useEffect(() => {
-    if (!isConnected || !address) {
+    console.log('Wallet disconnect check - wagmiIsConnected:', wagmiIsConnected, 'wagmiAddress:', wagmiAddress);
+    
+    if (!wagmiIsConnected || !wagmiAddress) {
       clearStoredSession();
       setAuthState({
         sessionToken: null,
@@ -119,10 +144,12 @@ export function useWalletAuth() {
         address: null
       });
     }
-  }, [isConnected, address, clearStoredSession]);
+  }, [wagmiIsConnected, wagmiAddress, clearStoredSession]);
 
   const authenticate = useCallback(async () => {
-    if (!address || !isConnected) {
+    console.log('Starting authentication - wagmiAddress:', wagmiAddress, 'wagmiIsConnected:', wagmiIsConnected);
+    
+    if (!wagmiAddress || !wagmiIsConnected) {
       toast.error('Please connect your wallet first');
       return false;
     }
@@ -131,7 +158,7 @@ export function useWalletAuth() {
       setAuthState(prev => ({ ...prev, isAuthenticating: true }));
 
       // Generate challenge
-      const challengeResult = await generateChallenge({ address });
+      const challengeResult = await generateChallenge({ address: wagmiAddress });
 
       // Sign challenge
       const signature = await signMessageAsync({
@@ -140,7 +167,7 @@ export function useWalletAuth() {
 
       // Verify signature and get session token
       const sessionResult = await verifySignature({
-        address,
+        address: wagmiAddress,
         challenge: challengeResult.challenge,
         signature
       });
@@ -148,13 +175,13 @@ export function useWalletAuth() {
       // Store session
       localStorage.setItem(SESSION_STORAGE_KEY, sessionResult.sessionToken);
       localStorage.setItem(SESSION_EXPIRY_KEY, sessionResult.expires.toString());
-      localStorage.setItem('dandolo_wallet_address', address.toLowerCase());
+      localStorage.setItem('dandolo_wallet_address', wagmiAddress.toLowerCase());
 
       setAuthState({
         sessionToken: sessionResult.sessionToken,
         isAuthenticated: true,
         isAuthenticating: false,
-        address
+        address: wagmiAddress
       });
 
       toast.success('Wallet authenticated successfully');
@@ -171,7 +198,7 @@ export function useWalletAuth() {
       
       return false;
     }
-  }, [address, isConnected, generateChallenge, signMessageAsync, verifySignature]);
+  }, [wagmiAddress, wagmiIsConnected, generateChallenge, signMessageAsync, verifySignature]);
 
   const logout = useCallback(() => {
     clearStoredSession();
@@ -202,11 +229,13 @@ export function useWalletAuth() {
     return null;
   }, [authState.isAuthenticated, authState.sessionToken, authenticate]);
 
+  // IMPORTANT: Return the actual wagmi connection state
   return {
     ...authState,
     authenticate,
     logout,
     requireAuth,
-    isConnected: isConnected && !!address
+    isConnected: wagmiIsConnected && !!wagmiAddress,
+    address: authState.address || wagmiAddress // Use wagmi address if auth address not set
   };
 }
