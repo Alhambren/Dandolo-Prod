@@ -214,23 +214,18 @@ export const checkUSDBalance = action({
         if (response.ok) {
           const data = await response.json();
           
-          const totalContextTokens = data.data?.reduce((sum: number, model: any) => {
-            return sum + (model.model_spec?.availableContextTokens || 0);
-          }, 0) || 0;
-
-          // 1 USD equals 2705.4 context tokens (as per validation function)
-          const currentUSD = Math.round(totalContextTokens / 270.54) * 0.10;
+          // Venice.ai does NOT expose balance via API - this calculation was fake
           const storedUSD = (provider.vcuBalance || 0) * 0.10;
           
           results.push({
             providerName: provider.name,
             address: provider.address,
             storedUSD: storedUSD,
-            currentUSD: currentUSD,
-            difference: currentUSD - storedUSD,
-            isAccurate: Math.abs(currentUSD - storedUSD) < 1.0, // Allow $1.00 tolerance
+            currentUSD: 0, // Venice.ai does not expose balance via API
+            difference: 0 - storedUSD,
+            isAccurate: false, // Cannot verify - no API access to balance
             totalModels: data.data?.length || 0,
-            totalContextTokens: totalContextTokens
+            note: "Venice.ai does not expose balance via API"
           });
         } else {
           const errorText = await response.text();
@@ -246,7 +241,7 @@ export const checkUSDBalance = action({
           providerName: provider.name,
           address: provider.address,
           error: error.message,
-          storedDiem: provider.vcuBalance
+          storedUSD: (provider.vcuBalance || 0) * 0.10
         });
       }
     }

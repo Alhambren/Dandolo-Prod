@@ -141,18 +141,15 @@ const DashboardPage: React.FC = () => {
         throw new Error(validation.error || "Invalid API key");
       }
 
-      // Use automatically detected balance
+      // Venice.ai does NOT expose balance via API - always 0
       const detectedUSDBalance = validation.balance || 0;
       
       if (validation.warning) {
         toast.warning(validation.warning);
       }
       
-      if (detectedUSDBalance > 0) {
-        toast.success(`✅ Validated! Detected $${detectedUSDBalance.toFixed(2)} available (${validation.models || 0} models)`);
-      } else {
-        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Balance will be updated automatically.`);
-      }
+      // Always show that balance must be entered manually
+      toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Balance must be entered manually.`);
 
       const providerId = await registerProviderWithBalance({
         address: address,

@@ -274,24 +274,16 @@ export const validateVeniceApiKey = action({
           };
         }
 
-        // Calculate VCU balance from available context tokens
-        const totalContextTokens = modelsData.data?.reduce((sum: number, model: any) => {
-          return sum + (model.model_spec?.availableContextTokens || 0);
-        }, 0) || 0;
-
-        // Convert context tokens to VCU balance using established conversion rate
-        // Based on existing debug function: 1 USD = 2705.4 context tokens, so VCU = contextTokens / 270.54
-        const vcuBalance = Math.round(totalContextTokens / 270.54);
-        
-        console.log('Venice API Models Response - Total Context Tokens:', totalContextTokens);
-        console.log('Calculated VCU Balance:', vcuBalance);
+        // CONFIRMED: Venice.ai does NOT expose balance information via their API
+        // All balance endpoints (/api/v1/balance, /api/v1/credits, etc.) return 404
+        // Models endpoint works but only contains pricing per token, not account balance
         
         return {
           isValid: true,
-          balance: vcuBalance,
-          currency: "USD",
+          balance: 0, // Venice.ai does not expose balance via API - must be entered manually
+          currency: "USD", 
           models: modelsData.data?.length || 0,
-          totalContextTokens: totalContextTokens
+          warning: "Venice.ai does not expose balance via API. Balance must be entered manually."
         };
       } else if (modelsResponse.status === 401) {
         return { isValid: false, error: "Invalid Venice.ai API key. Check your key at venice.ai" };
