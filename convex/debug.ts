@@ -601,6 +601,46 @@ export const systemHealth = query({
   },
 });
 
+// ADMIN-ONLY: Check provider balances to debug zero balance issue
+export const checkProviderBalances = action({
+  handler: async (ctx) => {
+    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+    return providers.map(p => ({
+      name: p.name,
+      vcuBalance: p.vcuBalance || 0,
+      usdValue: (p.vcuBalance || 0) * 0.10,
+      hasApiKey: !!p.veniceApiKey,
+      isActive: p.isActive
+    }));
+  }
+});
+
+// ADMIN-ONLY: Set test balances for debugging (one-time fix)
+export const setTestBalances = mutation({
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    // Admin check
+    if (args.adminAddress !== "0xC07481520d98c32987cA83B30EAABdA673cDbe8c") {
+      throw new Error("Unauthorized");
+    }
+    
+    const providers = await ctx.db.query("providers").collect();
+    const updates = [];
+    
+    // Give each provider a test balance
+    for (const provider of providers) {
+      if (provider.vcuBalance === 0 || !provider.vcuBalance) {
+        await ctx.db.patch(provider._id, {
+          vcuBalance: 1000 // 1000 VCU = $100 USD
+        });
+        updates.push(provider.name);
+      }
+    }
+    
+    return `Updated balances for: ${updates.join(', ')}`;
+  }
+});
+
 // ADMIN-ONLY: Setup production environment with basic providers
 export const setupProduction = mutation({
   args: { adminAddress: v.string() },

@@ -261,12 +261,23 @@ export const validateVeniceApiKey = action({
       if (rateLimitsResponse.ok) {
         const rateLimitsData = await rateLimitsResponse.json();
         
-        // Extract VCU balance from rate limits response
-        const vcuBalance = rateLimitsData.data?.balances?.VCU || 0;
+        // Add debug logging to understand Venice API response structure
+        console.log('Venice API Response:', rateLimitsData);
+        console.log('Balances data:', rateLimitsData.data?.balances);
+        
+        // Extract VCU balance from rate limits response - try different paths
+        const vcuBalance = 
+          rateLimitsData.data?.balances?.VCU ||
+          rateLimitsData.balances?.VCU ||
+          rateLimitsData.data?.balance ||
+          rateLimitsData.balance ||
+          0;
+        
+        console.log('Extracted VCU Balance:', vcuBalance);
         
         return {
           isValid: true,
-          balance: vcuBalance * 0.10, // Convert VCU to USD
+          balance: vcuBalance, // Store VCU balance directly, not converted
           currency: "USD",
           models: 0, // Not available from this endpoint
           rateLimitsData: rateLimitsData, // For debugging
@@ -1427,6 +1438,17 @@ export const refreshSingleProviderVCU = internalAction({
       };
     }
   },
+});
+
+// Manual balance refresh action for debugging
+export const manualRefreshAllBalances = action({
+  handler: async (ctx) => {
+    const result = await ctx.runAction(internal.providers.refreshAllVCUBalances);
+    return {
+      message: "Balance refresh triggered",
+      ...result
+    };
+  }
 });
 
 // Automatically refresh VCU balances for all providers (called by cron)

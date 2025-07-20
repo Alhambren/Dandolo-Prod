@@ -158,7 +158,7 @@ const DashboardPage: React.FC = () => {
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
-        vcuBalance: detectedUSDBalance / 0.10, // Convert USD back to VCU for storage
+        vcuBalance: detectedUSDBalance, // Now storing VCU balance directly from validation
       });
 
       setProviderName("");

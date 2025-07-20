@@ -1,5 +1,5 @@
 import React from 'react';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import GlassCard from './GlassCard';
 import { api } from '../../convex/_generated/api';
 
@@ -11,6 +11,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
   const topProviders = useQuery(api.providers.getTopProviders, { limit: 5 });
   const isLoading = networkStats === undefined || topProviders === undefined;
+  const refreshBalances = useMutation(api.providers.manualRefreshAllBalances);
 
   // Debug logging
   React.useEffect(() => {
@@ -32,12 +33,23 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold">AI Providers</h1>
-          <button
-            onClick={() => setCurrentPage?.('dashboard')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
-          >
-            Register as Provider
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={async () => {
+                const result = await refreshBalances();
+                console.log('Refresh result:', result);
+              }}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            >
+              Refresh Balances
+            </button>
+            <button
+              onClick={() => setCurrentPage?.('dashboard')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+            >
+              Register as Provider
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
