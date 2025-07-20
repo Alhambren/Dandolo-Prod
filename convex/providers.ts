@@ -1455,16 +1455,6 @@ export const refreshSingleProviderVCU = internalAction({
 });
 
 // Manual balance refresh action for debugging
-export const manualRefreshAllBalances = action({
-  handler: async (ctx): Promise<{ message: string; totalProviders: number; updatedCount: number; errorCount: number }> => {
-    const result: { totalProviders: number; updatedCount: number; errorCount: number } = await ctx.runAction(internal.providers.refreshAllVCUBalances);
-    return {
-      message: "Balance refresh triggered",
-      ...result
-    };
-  }
-});
-
 // Automatically refresh VCU balances for all providers (called by cron)
 export const refreshAllVCUBalances = internalAction({
   args: {},

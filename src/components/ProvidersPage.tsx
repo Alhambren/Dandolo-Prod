@@ -11,7 +11,6 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
   const topProviders = useQuery(api.providers.getTopProviders, { limit: 5 });
   const isLoading = networkStats === undefined || topProviders === undefined;
-  const refreshBalances = useMutation(api.providers.manualRefreshAllBalances);
 
   // Debug logging
   React.useEffect(() => {
@@ -34,15 +33,6 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold">AI Providers</h1>
           <div className="flex gap-3">
-            <button
-              onClick={async () => {
-                const result = await refreshBalances();
-                console.log('Refresh result:', result);
-              }}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-            >
-              Refresh Balances
-            </button>
             <button
               onClick={() => setCurrentPage?.('dashboard')}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
@@ -222,6 +212,23 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
             </GlassCard>
           </div>
         </div>
+
+        {/* Automatic Balance Updates Info */}
+        {networkStats && (
+          <div className="mb-6">
+            <div className="text-center p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-blue-400 font-medium">Automatic Balance Updates</span>
+              </div>
+              <p className="text-sm text-gray-300">
+                Provider balances are automatically refreshed every hour from Venice.ai API. No manual refresh needed!
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Provider Guide */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
