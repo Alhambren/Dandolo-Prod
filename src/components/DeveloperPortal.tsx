@@ -42,6 +42,7 @@ export function DeveloperPortal() {
   );
   const generateKey = useAction(api.apiKeys.createApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
+  const revokeAllUserKeys = useMutation(api.developers.revokeAllUserKeys);
   const networkStats = useQuery(api.stats.getNetworkStats);
   
   // Get availability for new key creation
@@ -62,6 +63,23 @@ export function DeveloperPortal() {
   }, [keyType, canCreateDeveloper, canCreateAgent]);
   
   const handleGenerateKey = async () => {
+    // Add these safety checks at the beginning
+    if (!showGenerator) {
+      console.error('Key generation called but generator not shown');
+      return;
+    }
+    
+    if (!newKeyName.trim()) {
+      toast.error('Please enter a name for your API key');
+      return;
+    }
+    
+    // Add user confirmation
+    const confirmMessage = `Generate a new ${keyType} API key named "${newKeyName}"?\n\nThis key will only be shown once and cannot be retrieved later.`;
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
     // CRITICAL: Require wallet authentication
     if (!isConnected || !address) {
       toast.error('Please connect your wallet to generate API keys');
@@ -81,11 +99,6 @@ export function DeveloperPortal() {
       return;
     }
     
-    if (!newKeyName.trim()) {
-      toast.error('Please enter a name for your API key');
-      return;
-    }
-    
     // Check if user can create this key type
     if (keyType === 'developer' && !canCreateDeveloper) {
       toast.error('You already have a developer key. Each user can only have one developer key.');
@@ -97,23 +110,48 @@ export function DeveloperPortal() {
     }
     
     try {
-      console.log('Generating key with params:', { address, name: newKeyName, keyType });
+      console.log('User confirmed key generation for:', { address, name: newKeyName, keyType });
       const result = await generateKey({
         address,
         name: newKeyName.trim(),
         keyType,
       });
       
-      console.log('Key generation successful:', { keyId: result.keyId, hasKey: !!result.key });
+      // CRITICAL: Ensure modal shows
+      if (!result.key) {
+        throw new Error('Key generation failed - no key returned');
+      }
+      
+      console.log('Key generated successfully, showing modal');
       setGeneratedKey(result.key);
-      setShowKeyModal(true);
+      setShowKeyModal(true);  // This MUST be set to show the modal
       setKeyCopied(false);
       setNewKeyName('');
       setShowGenerator(false);
-      toast.success('API key generated successfully!');
+      
+      // Don't show success toast here - wait until user copies the key
     } catch (error: any) {
       console.error('Key generation failed:', error);
       toast.error(error?.message || 'Failed to generate key');
+    }
+  };
+  
+  const handleCleanupBrokenKeys = async () => {
+    if (!confirm('This will revoke all existing keys. You can then generate new ones. Continue?')) {
+      return;
+    }
+    
+    try {
+      if (!sessionToken) {
+        toast.error('Please authenticate first');
+        return;
+      }
+      const result = await revokeAllUserKeys({ sessionToken });
+      toast.success(`Revoked ${result.revokedCount} keys. You can now generate new ones.`);
+      // Force refresh of API keys list
+      window.location.reload();
+    } catch (error) {
+      toast.error('Failed to cleanup keys');
     }
   };
   
@@ -271,6 +309,19 @@ export function DeveloperPortal() {
           </div>
         )}
         
+        {/* Temporary cleanup for broken keys */}
+        {apiKeys && apiKeys.length > 0 && apiKeys.every(k => k.isActive) && (
+          <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500 rounded-lg">
+            <p className="text-sm mb-2">⚠️ It looks like your keys were auto-generated and can't be accessed.</p>
+            <button
+              onClick={handleCleanupBrokenKeys}
+              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg font-medium"
+            >
+              Clean Up and Start Fresh
+            </button>
+          </div>
+        )}
+        
         {/* Keys List */}
         <div className="space-y-3">
           {apiKeys?.map((key) => (
@@ -375,49 +426,45 @@ export function DeveloperPortal() {
         </div>
       </GlassCard>
       
-      {/* One-time key display modal */}
-      {showKeyModal && (
+      {/* One-time key display modal - ensure this is at the root level of the return statement */}
+      {showKeyModal && generatedKey && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <GlassCard className="p-8 max-w-lg w-full">
             <h2 className="text-2xl font-bold mb-4">🎉 API Key Generated!</h2>
             
             <div className="bg-red-500/20 border border-red-500 p-4 rounded-lg mb-6">
-              <p className="font-semibold mb-1">🔒 SECURITY WARNING</p>
-              <p className="text-sm">This is the ONLY time you'll see the full key. Copy it now and store it securely.</p>
-              <p className="text-sm mt-2">Once you close this dialog, the key will be permanently obscured.</p>
+              <p className="font-semibold mb-1">⚠️ IMPORTANT - SAVE THIS KEY NOW</p>
+              <p className="text-sm">This is the ONLY time you'll see the full key.</p>
+              <p className="text-sm mt-2">Copy it now and store it securely!</p>
             </div>
             
-            <div className="bg-black/50 p-4 rounded-lg font-mono text-sm mb-6 break-all border-2 border-red-400/50">
+            <div className="bg-black/50 p-4 rounded-lg font-mono text-sm mb-6 break-all border-2 border-green-400/50">
               {generatedKey}
             </div>
             
             <div className="flex gap-3">
               <button
                 onClick={() => copyToClipboard(generatedKey)}
-                className={`flex-1 px-4 py-2 ${keyCopied ? 'bg-green-500' : 'bg-blue-500 hover:bg-blue-600'} rounded-lg transition-colors`}
+                className={`flex-1 px-4 py-2 ${keyCopied ? 'bg-green-500' : 'bg-blue-500 hover:bg-blue-600'} rounded-lg transition-colors font-semibold`}
               >
-                {keyCopied ? '✓ Copied!' : 'Copy Key'}
+                {keyCopied ? '✅ Copied to Clipboard!' : '📋 Copy Key'}
               </button>
               <button
                 onClick={() => {
-                  if (!keyCopied && !confirm('Are you sure you\'ve saved the key? You won\'t be able to see it again!')) {
-                    return;
+                  if (!keyCopied) {
+                    if (!confirm('Are you sure? You haven\'t copied the key yet!')) {
+                      return;
+                    }
                   }
                   setShowKeyModal(false);
                   setGeneratedKey('');
-                  setKeyCopied(false);
+                  toast.success('Key saved successfully!');
                 }}
-                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors"
+                className="px-6 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
               >
-                I've Saved It
+                {keyCopied ? 'Close' : 'Close (without copying)'}
               </button>
             </div>
-            
-            {!keyCopied && (
-              <p className="text-center text-yellow-400 text-xs mt-4">
-                💡 Tip: Click "Copy Key" to copy to clipboard first!
-              </p>
-            )}
           </GlassCard>
         </div>
       )}

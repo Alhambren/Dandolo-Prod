@@ -187,3 +187,35 @@ export const resetDailyUsage = mutation({
     return resetCount;
   },
 });
+
+// Temporary function to clean up auto-generated keys
+export const revokeAllUserKeys = mutation({
+  args: { 
+    sessionToken: v.string()
+  },
+  handler: async (ctx, args) => {
+    // Verify session
+    const session = await ctx.db
+      .query("authSessions")
+      .withIndex("by_token", q => q.eq("sessionToken", args.sessionToken))
+      .first();
+
+    if (!session || session.expires < Date.now()) {
+      throw new Error("Invalid or expired session");
+    }
+
+    // Get all active keys for this user
+    const keys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_address", q => q.eq("address", session.address))
+      .filter(q => q.eq(q.field("isActive"), true))
+      .collect();
+    
+    // Revoke each key
+    for (const key of keys) {
+      await ctx.db.patch(key._id, { isActive: false });
+    }
+    
+    return { revokedCount: keys.length };
+  },
+});
