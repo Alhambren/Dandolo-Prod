@@ -302,6 +302,15 @@ export const validateVeniceApiKey = action({
               balanceUSD = parseFloat(balanceData.credits) || 0;
             } else if (balanceData.remaining_credits !== undefined) {
               balanceUSD = parseFloat(balanceData.remaining_credits) || 0;
+            } else if (balanceData.balances !== undefined) {
+              const balancesObj = balanceData.balances;
+              if (balancesObj.VCU !== undefined) {
+                balanceUSD = parseFloat(balancesObj.VCU) || 0;
+              } else if (balancesObj.vcu !== undefined) {
+                balanceUSD = parseFloat(balancesObj.vcu) || 0;
+              } else if (balancesObj.vcu_balance !== undefined) {
+                balanceUSD = parseFloat(balancesObj.vcu_balance) || 0;
+              }
             } else {
               console.log('No balance field found in response, checking for nested data...');
               // Check if balance is nested in data or account object
@@ -310,6 +319,15 @@ export const validateVeniceApiKey = action({
                 balanceUSD = parseFloat(dataObj.balance) || 0;
               } else if (dataObj.vcu_balance !== undefined) {
                 balanceUSD = parseFloat(dataObj.vcu_balance) || 0;
+              } else if (dataObj.balances !== undefined) {
+                const nestedBalances = dataObj.balances;
+                if (nestedBalances.VCU !== undefined) {
+                  balanceUSD = parseFloat(nestedBalances.VCU) || 0;
+                } else if (nestedBalances.vcu !== undefined) {
+                  balanceUSD = parseFloat(nestedBalances.vcu) || 0;
+                } else if (nestedBalances.vcu_balance !== undefined) {
+                  balanceUSD = parseFloat(nestedBalances.vcu_balance) || 0;
+                }
               }
             }
             
@@ -1402,25 +1420,37 @@ export const refreshSingleProviderVCU = internalAction({
   args: { providerId: v.id("providers") },
   handler: async (ctx, args): Promise<{ success: boolean; updated?: boolean; oldBalance?: number; newBalance?: number; message?: string; error?: string }> => {
     try {
+      console.log(`Starting refresh for provider ID: ${args.providerId}`);
       const provider: any = await ctx.runQuery(internal.providers.getById, { 
         id: args.providerId 
       });
+      
+      console.log(`Provider lookup result:`, provider ? `Found ${provider.name}` : 'Not found');
       
       if (!provider || !provider.veniceApiKey) {
         return { success: false, error: "Provider not found or no API key" };
       }
 
-      // Get current VCU balance from Venice.ai rate limits endpoint
-      const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
-        apiKey: provider.veniceApiKey
+      // Decrypt the API key first
+      console.log(`Decrypting API key for provider ${provider.name}`);
+      const decryptedApiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+        providerId: args.providerId
       });
+
+      // Get current VCU balance from Venice.ai rate limits endpoint
+      console.log(`Validating API key for provider ${provider.name}`);
+      const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
+        apiKey: decryptedApiKey
+      });
+      
+      console.log(`Validation result for ${provider.name}:`, validation);
       
       if (validation.isValid) {
         // Use the detected balance if available, or 0 if not detected
         const newBalance = validation.balance || 0;
         
-        // Always update if current balance is 0, otherwise only update if balance has changed significantly (>$0.50 difference)
-        const shouldUpdate = (provider.vcuBalance || 0) === 0 || Math.abs(newBalance - (provider.vcuBalance || 0)) > 5;
+        // Update if balance changed by more than $0.01
+        const shouldUpdate = Math.abs(newBalance - (provider.vcuBalance || 0)) > 0.01;
         
         if (shouldUpdate) {
           await ctx.runMutation(internal.providers.updateVCUBalance, {
@@ -1481,5 +1511,12 @@ export const refreshAllVCUBalances = internalAction({
       errorCount 
     };
   },
+});
+
+// Deprecated function - manual refresh removed in favor of automatic updates
+export const manualRefreshAllBalances = action({
+  handler: async (ctx) => {
+    throw new Error("Manual refresh has been removed. Balances update automatically every hour via cron jobs. Please wait or check the automatic update schedule.");
+  }
 });
 

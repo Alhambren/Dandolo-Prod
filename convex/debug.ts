@@ -245,18 +245,24 @@ export const checkUSDBalance = action({
   },
 });
 
-// Update all balances for all providers
-export const updateAllBalances = action({
+// Manual balance update for debugging (no admin check for testing)
+export const forceUpdateAllBalances = action({
   handler: async (ctx): Promise<{ updatedCount: number; results: any[] }> => {
-    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    console.log('Starting manual balance update for debugging...');
+    const providers: any[] = await ctx.runQuery(internal.providers.getAllProviders);
+    console.log(`Found ${providers.length} providers to update`);
+    
     let updatedCount = 0;
     const results: any[] = [];
     
     for (const provider of providers) {
       try {
+        console.log(`Processing provider: ${provider.name}`);
         const validation: any = await ctx.runAction(api.providers.validateVeniceApiKey, {
           apiKey: provider.veniceApiKey
         });
+        
+        console.log(`Validation result for ${provider.name}:`, validation);
         
         if (validation.isValid && validation.balance !== undefined) {
           await ctx.runMutation(internal.providers.updateVCUBalance, {
@@ -271,12 +277,15 @@ export const updateAllBalances = action({
             updated: true
           });
           updatedCount++;
+          console.log(`Updated ${provider.name}: ${provider.vcuBalance} -> ${validation.balance}`);
         } else {
           results.push({
             providerName: provider.name,
             error: validation.error || "Validation failed",
-            updated: false
+            updated: false,
+            validationResponse: validation
           });
+          console.log(`Failed to update ${provider.name}:`, validation.error);
         }
       } catch (error: any) {
         results.push({
@@ -284,9 +293,11 @@ export const updateAllBalances = action({
           error: error.message,
           updated: false
         });
+        console.log(`Error updating ${provider.name}:`, error.message);
       }
     }
     
+    console.log(`Balance update complete: ${updatedCount}/${providers.length} updated`);
     return { updatedCount, results };
   },
 });
@@ -652,6 +663,205 @@ export const setupProduction = mutation({
     // Note: This is just a placeholder. In production, you would need to add
     // your actual provider data with real API keys
     return "Setup function ready. Add your actual provider data manually through the dashboard or provider registration.";
+  },
+});
+
+// ADMIN-ONLY: Create test API key for debugging
+export const createTestApiKey = mutation({
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
+    
+    const testKey = "dk_test123456789abcdef0123456789abcdef0123456789abcdef";
+    
+    // Check if key already exists
+    const existing = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_key", q => q.eq("key", testKey))
+      .first();
+      
+    if (existing) {
+      return `Test key already exists: ${testKey}`;
+    }
+    
+    // Create test key
+    const keyId = await ctx.db.insert("apiKeys", {
+      address: args.adminAddress,
+      name: "Debug Test Key",
+      key: testKey,
+      keyType: "developer",
+      isActive: true,
+      createdAt: Date.now(),
+      totalUsage: 0,
+      dailyUsage: 0,
+      lastReset: Date.now(),
+    });
+    
+    return `Created test API key: ${testKey} (ID: ${keyId})`;
+  },
+});
+
+// ADMIN-ONLY: List all API keys for debugging
+export const listAllApiKeys = query({
+  args: { adminAddress: v.string() },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
+    
+    const keys = await ctx.db.query("apiKeys").collect();
+    return keys.map(k => ({
+      id: k._id,
+      address: k.address,
+      name: k.name,
+      keyPreview: `${k.key.substring(0, 12)}...${k.key.slice(-4)}`,
+      keyType: k.keyType,
+      isActive: k.isActive,
+      createdAt: new Date(k.createdAt).toISOString(),
+      totalUsage: k.totalUsage,
+      dailyUsage: k.dailyUsage,
+    }));
+  },
+});
+
+// ADMIN-ONLY: Test API key validation flow
+export const testApiKeyValidation = action({
+  args: { adminAddress: v.string(), testKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
+    
+    const keyToTest = args.testKey || "dk_test123456789abcdef0123456789abcdef0123456789abcdef";
+    
+    console.log(`Testing API key validation for: ${keyToTest}`);
+    
+    try {
+      // Test the same validation flow as the router
+      const keyData = await ctx.runQuery(api.apiKeys.validateKey, { key: keyToTest });
+      
+      if (!keyData) {
+        return {
+          success: false,
+          error: "API key validation returned null",
+          key: keyToTest,
+          keyExists: false,
+        };
+      }
+      
+      return {
+        success: true,
+        keyData: {
+          id: keyData._id,
+          address: keyData.address,
+          name: keyData.name,
+          isActive: keyData.isActive,
+          keyType: keyData.keyType,
+          dailyUsage: keyData.dailyUsage,
+          dailyLimit: keyData.dailyLimit,
+        },
+        key: keyToTest,
+        keyExists: true,
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        key: keyToTest,
+        keyExists: "unknown",
+      };
+    }
+  },
+});
+
+// ADMIN-ONLY: Test complete API flow like router does
+export const testApiFlow = action({
+  args: { adminAddress: v.string(), testKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
+    
+    const testKey = args.testKey || "dk_test123456789abcdef0123456789abcdef0123456789abcdef";
+    
+    const results = {
+      steps: [] as Array<{step: string, success: boolean, data?: any, error?: string}>,
+      overallSuccess: false,
+    };
+    
+    // Step 1: Validate API key
+    try {
+      const keyData = await ctx.runQuery(api.apiKeys.validateKey, { key: testKey });
+      if (keyData) {
+        results.steps.push({
+          step: "API Key Validation",
+          success: true,
+          data: {
+            keyId: keyData._id,
+            isActive: keyData.isActive,
+            dailyLimit: keyData.dailyLimit,
+            dailyUsage: keyData.dailyUsage,
+          },
+        });
+      } else {
+        results.steps.push({
+          step: "API Key Validation",
+          success: false,
+          error: "validateKey returned null - key not found or inactive",
+        });
+        return results;
+      }
+      
+      // Step 2: Check rate limiting (similar to router)
+      const userType = testKey.startsWith("ak_") ? "agent" : "developer";
+      results.steps.push({
+        step: "User Type Detection",
+        success: true,
+        data: { userType },
+      });
+      
+      // Step 3: Test provider selection
+      try {
+        const provider = await ctx.runQuery(internal.providers.selectProvider, {});
+        if (provider) {
+          results.steps.push({
+            step: "Provider Selection",
+            success: true,
+            data: { 
+              providerId: provider._id,
+              providerName: provider.name,
+              isActive: provider.isActive,
+            },
+          });
+          
+          results.overallSuccess = true;
+        } else {
+          results.steps.push({
+            step: "Provider Selection",
+            success: false,
+            error: "No providers available",
+          });
+        }
+      } catch (error) {
+        results.steps.push({
+          step: "Provider Selection",
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown provider error",
+        });
+      }
+      
+    } catch (error) {
+      results.steps.push({
+        step: "API Key Validation",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown validation error",
+      });
+    }
+    
+    return results;
   },
 });
 

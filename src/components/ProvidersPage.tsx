@@ -17,12 +17,12 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
     if (networkStats) {
       console.log('Network Stats:', networkStats);
       console.log('Total Diem (raw):', networkStats.totalDiem);
-      console.log('Total USD (converted):', (networkStats.totalDiem || 0) * 0.10);
+      console.log('Total USD:', networkStats.totalDiem || 0);
     }
     if (topProviders) {
       console.log('Top Providers:', topProviders);
       topProviders.forEach((p, i) => {
-        console.log(`Provider ${i}: vcuBalance=${p.vcuBalance}, USD=${(p.vcuBalance || 0) * 0.10}`);
+        console.log(`Provider ${i}: vcuBalance=${p.vcuBalance} USD`);
       });
     }
   }, [networkStats, topProviders]);
@@ -66,7 +66,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                 {isLoading ? (
                   <div className="w-12 h-6 bg-gray-700 rounded animate-pulse"></div>
                 ) : (
-                  <span className="text-2xl font-bold text-blue-400">${((networkStats?.totalDiem || 0) * 0.10).toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-blue-400">${(networkStats?.totalDiem || 0).toFixed(2)}</span>
                 )}
               </div>
               <div className="flex justify-between items-center">
@@ -175,7 +175,7 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                         <div className="flex gap-6 text-right">
                           <div>
                             <p className="text-xs text-gray-400">Balance</p>
-                            <p className="font-semibold text-blue-400">${(provider.vcuBalance * 0.10).toFixed(2)}</p>
+                            <p className="font-semibold text-blue-400">${(provider.vcuBalance || 0).toFixed(2)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-400">Requests Served</p>

@@ -5,8 +5,8 @@ import { api, internal } from "./_generated/api";
 
 // API Key types and limits according to specification
 const API_KEY_TYPES = {
-  developer: { prefix: "dk_", dailyLimit: 1000, pointsPerPrompt: 2 },
-  agent: { prefix: "ak_", dailyLimit: 1000, pointsPerPrompt: 2 }
+  developer: { prefix: "dk_", dailyLimit: 500, pointsPerPrompt: 2 },
+  agent: { prefix: "ak_", dailyLimit: 5000, pointsPerPrompt: 2 }
 } as const;
 
 type ApiKeyType = keyof typeof API_KEY_TYPES;

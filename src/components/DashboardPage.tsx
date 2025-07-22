@@ -197,7 +197,7 @@ const DashboardPage: React.FC = () => {
             {/* Real-time stats grid */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className="text-2xl font-bold text-gold">${((currentProvider.vcuBalance || 0) * 0.10).toFixed(2)}</div>
+                <div className="text-2xl font-bold text-gold">${(currentProvider.vcuBalance || 0).toFixed(2)}</div>
                 <div className="text-sm text-gray-400">Balance Available</div>
                 <div className="text-xs text-gray-500 mt-1">
                   Updates hourly
