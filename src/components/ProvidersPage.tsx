@@ -9,320 +9,339 @@ interface ProvidersPageProps {
 
 const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
-  const topProviders = useQuery(api.providers.getTopProviders, { limit: 5 });
-  const isLoading = networkStats === undefined || topProviders === undefined;
-
-  // Debug logging
+  const allProviders = useQuery(api.providers.list);
+  
+  const isLoading = networkStats === undefined || allProviders === undefined;
+  
+  
+  // Debug logging to understand data state
   React.useEffect(() => {
-    if (networkStats) {
-      console.log('Network Stats:', networkStats);
-      console.log('Total Diem (raw):', networkStats.totalDiem);
-      console.log('Total USD:', networkStats.totalDiem || 0);
-    }
-    if (topProviders) {
-      console.log('Top Providers:', topProviders);
-      topProviders.forEach((p, i) => {
-        console.log(`Provider ${i}: vcuBalance=${p.vcuBalance} USD`);
+    if (allProviders && networkStats) {
+      console.log("🔍 ProvidersPage Debug Data:");
+      console.log("- Total providers from list query:", allProviders.length);
+      console.log("- Active providers from list query:", allProviders.filter(p => p.isActive).length);
+      console.log("- Network stats cache data:", {
+        totalProviders: networkStats.totalProviders,
+        activeProviders: networkStats.activeProviders,
+        cacheAge: networkStats.cacheAge
       });
+      console.log("- All providers data:", allProviders.map(p => ({ 
+        name: p.name, 
+        isActive: p.isActive, 
+        vcuBalance: p.vcuBalance,
+        totalPrompts: p.totalPrompts 
+      })));
     }
-  }, [networkStats, topProviders]);
+  }, [allProviders, networkStats]);
+  
+  // Get ACTUAL active providers from the list query
+  const activeProviders = allProviders?.filter(p => p.isActive) || [];
+  const topProviders = [...activeProviders].sort((a, b) => {
+    // Sort by total prompts served, then by balance
+    if (b.totalPrompts !== a.totalPrompts) return b.totalPrompts - a.totalPrompts;
+    return (b.vcuBalance || 0) - (a.vcuBalance || 0);
+  }).slice(0, 10);
+  
+  // Calculate real metrics from actual provider data
+  const avgResponseTime = activeProviders.length > 0 
+    ? activeProviders.reduce((sum, p) => sum + (p.avgResponseTime || 0), 0) / activeProviders.length 
+    : 0;
+  
+  const totalBalance = activeProviders.reduce((sum, p) => sum + (p.vcuBalance || 0), 0);
+  const totalRequests = activeProviders.reduce((sum, p) => sum + (p.totalPrompts || 0), 0);
+  
+  const successRate = networkStats?.totalPrompts && networkStats.totalPrompts > 0
+    ? ((networkStats.totalPrompts - (networkStats.failedPrompts || 0)) / networkStats.totalPrompts * 100).toFixed(1)
+    : '100.0';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white" data-testid="providers-page">
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold">AI Providers</h1>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setCurrentPage?.('dashboard')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
-            >
-              Register as Provider
-            </button>
-          </div>
+          <button
+            onClick={() => setCurrentPage?.('dashboard')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors"
+          >
+            Register as Provider
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-          {/* Network Health */}
+        {/* Enhanced Network Metrics Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          {/* Network Status - FIXED to show actual count */}
+          <GlassCard className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-400">Network Status</h3>
+              {networkStats?.cacheAge !== undefined && (
+                <div className="text-xs text-gray-500" title={`Cache age: ${Math.round(networkStats.cacheAge / 1000)}s`}>
+                  {networkStats.cacheAge < 5 * 60 * 1000 ? '🟢' : networkStats.cacheAge < 10 * 60 * 1000 ? '🟡' : '🔴'}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold">
+                  {activeProviders.length}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Active Providers
+                  {allProviders && allProviders.length !== activeProviders.length && (
+                    <span className="text-gray-600"> ({allProviders.length} total)</span>
+                  )}
+                </div>
+              </div>
+              <div className={`px-2 py-1 rounded text-xs font-medium ${
+                activeProviders.length >= 5 
+                  ? 'bg-green-500/20 text-green-400' 
+                  : activeProviders.length > 0
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : 'bg-red-500/20 text-red-400'
+              }`}>
+                {activeProviders.length >= 5 ? 'Healthy' : activeProviders.length > 0 ? 'Limited' : 'Offline'}
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Response Time - FIXED to calculate from actual providers */}
+          <GlassCard className="p-6">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">Avg Response Time</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className={`text-2xl font-bold ${
+                  avgResponseTime <= 1000 ? 'text-green-400' : 
+                  avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {avgResponseTime > 0 ? `${Math.round(avgResponseTime)}ms` : 'N/A'}
+                </div>
+                <div className="text-xs text-gray-500">Network average</div>
+              </div>
+              <div className="text-xs text-gray-400">
+                {avgResponseTime > 0 && avgResponseTime <= 1000 ? '⚡ Fast' : 
+                 avgResponseTime > 0 && avgResponseTime <= 3000 ? '🔄 Normal' : 
+                 avgResponseTime > 3000 ? '🐌 Slow' : ''}
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Success Rate */}
+          <GlassCard className="p-6">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">Success Rate</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className={`text-2xl font-bold ${
+                  parseFloat(successRate) >= 99 ? 'text-green-400' : 
+                  parseFloat(successRate) >= 95 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {successRate}%
+                </div>
+                <div className="text-xs text-gray-500">Last 24h</div>
+              </div>
+              <div className="text-2xl">
+                {parseFloat(successRate) >= 99 ? '✨' : 
+                 parseFloat(successRate) >= 95 ? '✓' : '⚠️'}
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Total Capacity - Using actual provider balances */}
+          <GlassCard className="p-6">
+            <h3 className="text-sm font-medium text-gray-400 mb-2">Network Capacity</h3>
+            <div>
+              <div className="text-2xl font-bold text-blue-400">
+                ${(totalBalance * 0.10).toFixed(2)}
+              </div>
+              <div className="text-xs text-gray-500">Total Balance</div>
+              <div className="text-xs text-gray-400 mt-1">
+                {totalRequests.toLocaleString()} requests served
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Network Health Overview */}
           <GlassCard className="p-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-              Network Status
+              <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+              Network Overview
             </h2>
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Active Providers</span>
-                {isLoading ? (
-                  <div className="w-8 h-6 bg-gray-700 rounded animate-pulse"></div>
-                ) : (
-                  <span className="text-2xl font-bold">{networkStats?.activeProviders || 0}</span>
-                )}
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="text-gray-400">Total Balance</span>
-                  <div className="text-xs text-gray-500">Updates hourly</div>
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-400">Network Load</span>
+                  <span className="text-sm">{Math.min(100, Math.round((networkStats?.currentLoad || 0) * 100))}%</span>
                 </div>
-                {isLoading ? (
-                  <div className="w-12 h-6 bg-gray-700 rounded animate-pulse"></div>
-                ) : (
-                  <span className="text-2xl font-bold text-blue-400">${(networkStats?.totalDiem || 0).toFixed(2)}</span>
-                )}
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full transition-all ${
+                      (networkStats?.currentLoad || 0) < 0.7 ? 'bg-green-400' : 
+                      (networkStats?.currentLoad || 0) < 0.9 ? 'bg-yellow-400' : 'bg-red-400'
+                    }`}
+                    style={{ width: `${Math.min(100, (networkStats?.currentLoad || 0) * 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Total Requests</span>
-                {isLoading ? (
-                  <div className="w-12 h-6 bg-gray-700 rounded animate-pulse"></div>
-                ) : (
-                  <span className="text-2xl font-bold">{networkStats?.totalPrompts?.toLocaleString() || 0}</span>
-                )}
+
+              <div className="pt-3 border-t border-gray-700">
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Available Models</h4>
+                <div className="flex flex-wrap gap-1">
+                  {['GPT-4', 'Claude-3', 'Mistral', 'Llama-3'].map(model => (
+                    <span key={model} className="px-2 py-1 bg-gray-700 rounded text-xs">
+                      {model}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Avg Response</span>
-                {isLoading ? (
-                  <div className="w-10 h-6 bg-gray-700 rounded animate-pulse"></div>
-                ) : networkStats?.avgResponseTime && networkStats.avgResponseTime > 0 ? (
-                  <span className="text-2xl font-bold">{Math.round(networkStats.avgResponseTime)}ms</span>
-                ) : (
-                  <span className="text-sm text-gray-500">No data yet</span>
-                )}
-              </div>
-              <div className="pt-2 border-t border-gray-700">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Network Health</span>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    (networkStats?.activeProviders || 0) > 0 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-yellow-500/20 text-yellow-400'
-                  }`}>
-                    {(networkStats?.activeProviders || 0) > 0 ? 'Operational' : 'Initializing'}
-                  </span>
+
+              <div className="pt-3 border-t border-gray-700">
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Network Stats</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Requests Today</span>
+                    <span>{networkStats?.promptsToday?.toLocaleString() || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Active Users</span>
+                    <span>{networkStats?.activeUsers?.toLocaleString() || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Uptime</span>
+                    <span>{activeProviders.length > 0 ? '99.9%' : '0%'}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </GlassCard>
 
-          {/* Top Providers */}
+          {/* Top Providers - Shows actual providers */}
           <div className="xl:col-span-2">
             <GlassCard className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold">Top Providers</h2>
-                {topProviders && topProviders.length > 0 && (
-                  <span className="text-sm text-gray-400">
-                    Ranked by performance
-                  </span>
-                )}
+                <h2 className="text-xl font-semibold">Provider Network</h2>
+                <span className="text-sm text-gray-400">
+                  {activeProviders.length > 0 ? `Top ${Math.min(10, activeProviders.length)} by performance` : 'No active providers'}
+                </span>
               </div>
+              
               {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="p-4 rounded-lg border border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-8 h-8 bg-gray-700 rounded-full animate-pulse"></div>
-                          <div className="flex-1">
-                            <div className="h-4 bg-gray-700 rounded animate-pulse mb-2 w-24"></div>
-                            <div className="h-3 bg-gray-700 rounded animate-pulse w-32"></div>
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="flex items-center justify-between py-4">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 bg-gray-700 rounded-full"></div>
+                          <div>
+                            <div className="h-4 bg-gray-700 rounded w-32 mb-2"></div>
+                            <div className="h-3 bg-gray-700 rounded w-24"></div>
                           </div>
                         </div>
-                        <div className="flex gap-6">
-                          <div>
-                            <div className="h-3 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                            <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                          </div>
-                          <div>
-                            <div className="h-3 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                            <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                          </div>
+                        <div className="text-right">
+                          <div className="h-4 bg-gray-700 rounded w-16 mb-2"></div>
+                          <div className="h-3 bg-gray-700 rounded w-12"></div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : topProviders && topProviders.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="grid grid-cols-12 gap-2 pb-2 border-b border-gray-700 text-xs text-gray-400">
+                    <div className="col-span-1">#</div>
+                    <div className="col-span-4">Provider</div>
+                    <div className="col-span-2 text-center">Status</div>
+                    <div className="col-span-2 text-right">Balance</div>
+                    <div className="col-span-2 text-right">Requests</div>
+                    <div className="col-span-1 text-right">Speed</div>
+                  </div>
+                  
                   {topProviders.map((provider, index) => (
-                    <div key={provider._id} className="group hover:bg-white/5 transition-colors p-4 rounded-lg border border-transparent hover:border-white/10">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                    <div 
+                      key={provider._id} 
+                      className="grid grid-cols-12 gap-2 py-3 border-b border-gray-800 hover:bg-gray-800/30 transition-colors items-center"
+                    >
+                      <div className="col-span-1">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          index === 0 ? 'bg-yellow-500 text-black' :
+                          index === 1 ? 'bg-gray-400 text-black' :
+                          index === 2 ? 'bg-orange-600 text-white' :
+                          'bg-gray-700 text-gray-300'
+                        }`}>
+                          {index + 1}
+                        </div>
+                      </div>
+                      
+                      <div className="col-span-4">
+                        <div className="flex items-center space-x-2">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                            index === 0 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
-                            index === 1 ? 'bg-gradient-to-r from-gray-300 to-gray-500' :
-                            index === 2 ? 'bg-gradient-to-r from-orange-400 to-red-500' :
-                            'bg-gradient-to-r from-blue-400 to-purple-500'
+                            provider.isActive ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-700 text-gray-400'
                           }`}>
-                            {index + 1}
+                            {provider.name?.charAt(0) || '?'}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <h3 className="font-semibold text-white group-hover:text-blue-400 transition-colors">
-                                {provider.name}
-                              </h3>
-                              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                provider.isActive 
-                                  ? 'bg-green-500/20 text-green-400' 
-                                  : 'bg-gray-500/20 text-gray-400'
-                              }`}>
-                                {provider.isActive ? 'Online' : 'Offline'}
-                              </div>
+                          <div>
+                            <div className="font-medium text-sm">{provider.name || 'Unknown'}</div>
+                            <div className="text-xs text-gray-500">
+                              {provider.address.substring(0, 6)}...{provider.address.substring(38)}
                             </div>
-                            <p className="text-sm text-gray-400 font-mono">
-                              {provider.address.substring(0, 8)}...{provider.address.substring(provider.address.length - 6)}
-                            </p>
                           </div>
                         </div>
-                        
-                        <div className="flex gap-6 text-right">
-                          <div>
-                            <p className="text-xs text-gray-400">Balance</p>
-                            <p className="font-semibold text-blue-400">${(provider.vcuBalance || 0).toFixed(2)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-400">Requests Served</p>
-                            <p className="font-semibold text-green-400">{provider.totalPrompts.toLocaleString()}</p>
-                          </div>
+                      </div>
+                      
+                      <div className="col-span-2 text-center">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                          provider.isActive 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-gray-700 text-gray-400'
+                        }`}>
+                          {provider.isActive ? 'Online' : 'Offline'}
+                        </span>
+                      </div>
+                      
+                      <div className="col-span-2 text-right">
+                        <div className="font-medium text-sm">
+                          ${((provider.vcuBalance || 0) * 0.10).toFixed(2)}
+                        </div>
+                      </div>
+                      
+                      <div className="col-span-2 text-right">
+                        <div className="text-sm text-gray-300">
+                          {provider.totalPrompts?.toLocaleString() || 0}
+                        </div>
+                      </div>
+                      
+                      <div className="col-span-1 text-right">
+                        <div className={`text-xs ${
+                          provider.avgResponseTime && provider.avgResponseTime <= 1000 ? 'text-green-400' : 
+                          provider.avgResponseTime && provider.avgResponseTime <= 3000 ? 'text-yellow-400' : 
+                          provider.avgResponseTime ? 'text-red-400' : 'text-gray-500'
+                        }`}>
+                          {provider.avgResponseTime ? `${Math.round(provider.avgResponseTime)}ms` : '-'}
                         </div>
                       </div>
                     </div>
                   ))}
+                  
+                  {activeProviders.length > 10 && (
+                    <div className="pt-3 text-center">
+                      <button className="text-sm text-blue-400 hover:text-blue-300">
+                        View all {activeProviders.length} providers →
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <div className="mb-6">
-                    <div className="w-16 h-16 mx-auto bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">
-                    No Active Providers Yet
-                  </h3>
-                  <p className="text-gray-400 mb-6 max-w-sm mx-auto">
-                    Be the first to provide AI compute and help build the decentralized inference network.
-                  </p>
+                  <div className="text-gray-500 mb-4">No active providers yet</div>
                   <button
                     onClick={() => setCurrentPage?.('dashboard')}
-                    className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg font-medium transition-all transform hover:scale-105"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
                   >
-                    Register as Provider
+                    Be the first provider
                   </button>
                 </div>
               )}
             </GlassCard>
           </div>
-        </div>
-
-        {/* Automatic Balance Updates Info */}
-        {networkStats && (
-          <div className="mb-6">
-            <div className="text-center p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-blue-400 font-medium">Automatic Balance Updates</span>
-              </div>
-              <p className="text-sm text-gray-300">
-                Provider balances are automatically refreshed every hour from Venice.ai API. No manual refresh needed!
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Provider Guide */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-6 flex items-center">
-              <span className="w-6 h-6 bg-gradient-to-r from-green-400 to-blue-500 rounded mr-3 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </span>
-              Quick Start Guide
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-blue-400 font-bold text-sm">1</span>
-                </div>
-                <div>
-                  <p className="font-medium text-white">Obtain Venice Allowance</p>
-                  <p className="text-sm text-gray-400 mt-1">Stake VVV tokens to get Venice allowance for AI model access</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-purple-400 font-bold text-sm">2</span>
-                </div>
-                <div>
-                  <p className="font-medium text-white">Connect Wallet & Register</p>
-                  <p className="text-sm text-gray-400 mt-1">Link your Ethereum wallet and register with your Venice.ai "inference only" API key - your balance will be detected automatically!</p>
-                  <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-green-400 font-medium text-sm">SECURITY BEST PRACTICE</span>
-                    </div>
-                    <p className="text-green-300 text-xs leading-tight">
-                      <strong>Use "inference only" API keys</strong> - they're secure and now support automatic balance detection! Never use admin keys as they could expose your VVV tokens.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-green-400 font-bold text-sm">3</span>
-                </div>
-                <div>
-                  <p className="font-medium text-white">Start Earning Points</p>
-                  <p className="text-sm text-gray-400 mt-1">Process inference requests and earn 1 point per 100 tokens</p>
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-          
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-6 flex items-center">
-              <span className="w-6 h-6 bg-gradient-to-r from-yellow-400 to-red-500 rounded mr-3 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              </span>
-              Provider Benefits
-            </h2>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span className="text-gray-300">Earn points for every request processed</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                <span className="text-gray-300">Real-time performance monitoring</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                <span className="text-gray-300">Priority routing based on reliability</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                <span className="text-gray-300">Contribute to decentralized AI infrastructure</span>
-              </div>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-gray-700">
-              <button
-                onClick={() => setCurrentPage?.('dashboard')}
-                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg font-medium transition-all transform hover:scale-105 flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Register as Provider
-              </button>
-            </div>
-          </GlassCard>
         </div>
       </div>
     </div>
