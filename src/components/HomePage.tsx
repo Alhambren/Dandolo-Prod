@@ -9,6 +9,8 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
+  const overallStats = useQuery(api.inference.getStats);
+  const availableModels = useQuery(api.models.getAvailableModels);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPaused, setIsVideoPaused] = React.useState(false);
 
@@ -157,120 +159,283 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </button>
       </div>
 
-      {/* Stats Section */}
-      <div className="max-w-7xl mx-auto px-6 py-24 relative z-10 bg-dark-1">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Network Statistics</h2>
-          <p className="text-white/60 text-lg">Real-time metrics from our decentralized network</p>
+      {/* OpenRouter-style Statistics */}
+      <div className="max-w-7xl mx-auto px-6 py-16">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          <div>
+            <div className="text-5xl font-bold text-white mb-2">
+              {overallStats?.totalTokens ? 
+                overallStats.totalTokens >= 1000000000000 ? 
+                  (overallStats.totalTokens / 1000000000000).toFixed(1) + 'T' :
+                overallStats.totalTokens >= 1000000000 ? 
+                  (overallStats.totalTokens / 1000000000).toFixed(1) + 'B' :
+                overallStats.totalTokens >= 1000000 ? 
+                  (overallStats.totalTokens / 1000000).toFixed(1) + 'M' :
+                overallStats.totalTokens >= 1000 ? 
+                  (overallStats.totalTokens / 1000).toFixed(1) + 'K' : 
+                  overallStats.totalTokens.toString()
+                : (
+                  <div className="w-20 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                )}
+            </div>
+            <div className="text-white/60 text-lg">Monthly Tokens</div>
+          </div>
+          
+          <div>
+            <div className="text-5xl font-bold text-white mb-2">
+              {networkStats?.activeUsers ? 
+                networkStats.activeUsers >= 1000000 ? 
+                  (networkStats.activeUsers / 1000000).toFixed(1) + 'M+' :
+                networkStats.activeUsers >= 1000 ? 
+                  (networkStats.activeUsers / 1000).toFixed(1) + 'K+' : 
+                  networkStats.activeUsers + '+'
+                : (
+                  <div className="w-20 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                )}
+            </div>
+            <div className="text-white/60 text-lg">Global Users</div>
+          </div>
+          
+          <div>
+            <div className="text-5xl font-bold text-white mb-2">
+              {networkStats?.activeProviders ? 
+                networkStats.activeProviders + '+' 
+                : (
+                  <div className="w-16 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                )}
+            </div>
+            <div className="text-white/60 text-lg">Active Providers</div>
+          </div>
+          
+          <div>
+            <div className="text-5xl font-bold text-brand-500 mb-2">
+              {availableModels && typeof availableModels === 'object' ? 
+                Object.values(availableModels).flat().length + '+' 
+                : (
+                  <div className="w-16 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                )}
+            </div>
+            <div className="text-white/60 text-lg">Models</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Getting Started Section */}
+      <div className="max-w-5xl mx-auto px-6 py-20">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-4">Get Started in 3 Steps</h2>
+          <p className="text-white/60 text-lg">Start using decentralized AI in minutes</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="card card-hover p-8 text-center">
-            <div className="text-4xl font-bold text-brand-500 mb-2">
-              {networkStats?.activeProviders || 0}
+          {/* Step 1: Signup */}
+          <div className="relative">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center">
+                <span className="text-xl font-bold text-brand-500">1</span>
+              </div>
+              <h3 className="text-xl font-semibold">Signup</h3>
             </div>
-            <div className="text-white/80 font-medium mb-1">Active Providers</div>
-            <div className="text-white/50 text-sm">Online and serving requests</div>
-          </div>
-          
-          <div className="card card-hover p-8 text-center">
-            <div className="text-4xl font-bold text-system-green mb-2">
-              {networkStats?.totalPrompts ? 
-                networkStats.totalPrompts >= 1000 ? 
-                  (networkStats.totalPrompts / 1000).toFixed(1) + 'k' : 
-                  networkStats.totalPrompts.toLocaleString() 
-                : '0'}
+            <p className="text-white/60 mb-6">
+              Create an account to get started. You can set up an org for your team later.
+            </p>
+            <div className="flex items-center gap-3 text-white/40">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                <span className="text-sm">👤</span>
+              </div>
+              <div className="flex-1 h-0.5 bg-white/10"></div>
             </div>
-            <div className="text-white/80 font-medium mb-1">Total Requests</div>
-            <div className="text-white/50 text-sm">AI inferences processed</div>
-          </div>
-          
-          <div className="card card-hover p-8 text-center">
-            <div className="text-4xl font-bold text-system-blue mb-2">
-              {networkStats?.activeUsers || 0}
+            <div className="flex items-center gap-2 mt-3 text-sm">
+              <div className="w-6 h-6 rounded bg-orange-500/20 flex items-center justify-center">
+                <span>🎯</span>
+              </div>
+              <div className="w-6 h-6 rounded bg-gray-700/50"></div>
+              <div className="w-6 h-6 rounded bg-orange-600/20 flex items-center justify-center">
+                <span>🦊</span>
+              </div>
+              <div className="w-6 h-6 rounded bg-gray-700/50"></div>
             </div>
-            <div className="text-white/80 font-medium mb-1">Active Users</div>
-            <div className="text-white/50 text-sm">Using the network today</div>
           </div>
+
+          {/* Step 2: Choose Your Access Level */}
+          <div className="relative">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center">
+                <span className="text-xl font-bold text-brand-500">2</span>
+              </div>
+              <h3 className="text-xl font-semibold">Choose Your Access Level</h3>
+            </div>
+            <p className="text-white/60 mb-6">
+              Different API key types with daily rate limits to match your needs.
+            </p>
+            <div className="bg-gray-900/50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Anonymous</span>
+                <span className="font-mono text-white">50/day</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Developer</span>
+                <span className="font-mono text-white">500/day</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Agent</span>
+                <span className="font-mono text-brand-400">5,000/day</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Step 3: Get API key */}
+          <div className="relative">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center">
+                <span className="text-xl font-bold text-brand-500">3</span>
+              </div>
+              <h3 className="text-xl font-semibold">Get your API key</h3>
+            </div>
+            <p className="text-white/60 mb-6">
+              Create an API key and start making requests. <span className="text-brand-400">Fully OpenAI compatible.</span>
+            </p>
+            <div className="bg-gray-900/50 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🔑</span>
+                <div className="flex-1">
+                  <div className="text-xs text-white/40 mb-1">DANDOLO_API_KEY</div>
+                  <div className="font-mono text-sm text-white/80">••••••••••••••</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA Button */}
+        <div className="text-center mt-12">
+          <button
+            onClick={() => handleNavigation('developers')}
+            className="px-8 py-4 bg-brand-500 hover:bg-brand-600 rounded-xl font-semibold text-lg transition-all transform hover:scale-105"
+          >
+            Get Started with Dandolo
+          </button>
         </div>
       </div>
 
-      {/* Features Section */}
+      {/* Why Dandolo Section */}
       <div className="max-w-7xl mx-auto px-6 py-24">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Why Choose Dandolo</h2>
-          <p className="text-white/60 text-lg">The anonymous alternative to centralized AI platforms</p>
+          <h2 className="text-4xl font-bold mb-4">The Decentralized Alternative</h2>
+          <p className="text-white/60 text-lg">Anonymous inference. Multiple providers. No censorship.</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <div className="card card-hover p-8">
-            <div className="w-12 h-12 bg-brand-500/10 rounded-2xl flex items-center justify-center mb-6">
-              <span className="text-2xl">🔒</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-4xl mx-auto">
+          <div>
+            <h3 className="text-2xl font-semibold mb-6">What We Offer</h3>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <span className="text-green-500 mt-1">✓</span>
+                <div>
+                  <p className="font-medium">400+ Uncensored Models</p>
+                  <p className="text-white/60 text-sm">Access the full Venice.ai model catalog</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-green-500 mt-1">✓</span>
+                <div>
+                  <p className="font-medium">Anonymous by Default</p>
+                  <p className="text-white/60 text-sm">No accounts, tracking, or conversation logs</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-green-500 mt-1">✓</span>
+                <div>
+                  <p className="font-medium">OpenAI Compatible API</p>
+                  <p className="text-white/60 text-sm">Drop-in replacement for existing apps</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-green-500 mt-1">✓</span>
+                <div>
+                  <p className="font-medium">Better Reliability</p>
+                  <p className="text-white/60 text-sm">Multiple providers ensure 99.9% uptime</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-green-500 mt-1">✓</span>
+                <div>
+                  <p className="font-medium">Pay Per Token</p>
+                  <p className="text-white/60 text-sm">No subscriptions or commitments</p>
+                </div>
+              </div>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Anonymous by Default</h3>
-            <p className="text-white/60 leading-relaxed">
-              Zero tracking, no accounts, no conversation storage. 
-              Your privacy is guaranteed, not just promised.
-            </p>
           </div>
           
-          <div className="card card-hover p-8">
-            <div className="w-12 h-12 bg-system-blue/10 rounded-2xl flex items-center justify-center mb-6">
-              <span className="text-2xl">⚡</span>
+          <div>
+            <h3 className="text-2xl font-semibold mb-6">How It Works</h3>
+            <div className="space-y-6">
+              <div className="relative pl-8">
+                <div className="absolute left-0 top-0 w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-brand-500"></div>
+                </div>
+                <div className="absolute left-3 top-6 bottom-0 w-px bg-white/10"></div>
+                <div>
+                  <p className="font-medium mb-1">Your request arrives</p>
+                  <p className="text-white/60 text-sm">Encrypted and anonymous from the start</p>
+                </div>
+              </div>
+              
+              <div className="relative pl-8">
+                <div className="absolute left-0 top-0 w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-brand-500"></div>
+                </div>
+                <div className="absolute left-3 top-6 bottom-0 w-px bg-white/10"></div>
+                <div>
+                  <p className="font-medium mb-1">Smart routing selects provider</p>
+                  <p className="text-white/60 text-sm">Based on model availability and performance</p>
+                </div>
+              </div>
+              
+              <div className="relative pl-8">
+                <div className="absolute left-0 top-0 w-6 h-6 rounded-full bg-brand-500/20 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-brand-500"></div>
+                </div>
+                <div>
+                  <p className="font-medium mb-1">Venice.ai processes inference</p>
+                  <p className="text-white/60 text-sm">Through verified provider infrastructure</p>
+                </div>
+              </div>
             </div>
-            <h3 className="text-xl font-semibold mb-3">Better Uptime</h3>
-            <p className="text-white/60 leading-relaxed">
-              Decentralized infrastructure eliminates single points of failure.
-              When one provider goes down, others keep you online.
-            </p>
-          </div>
-          
-          <div className="card card-hover p-8">
-            <div className="w-12 h-12 bg-system-purple/10 rounded-2xl flex items-center justify-center mb-6">
-              <span className="text-2xl">🌐</span>
+            
+            <div className="mt-8 p-4 bg-brand-500/10 border border-brand-500/30 rounded-lg">
+              <p className="text-sm">
+                <span className="font-semibold text-brand-400">Pro tip:</span> Developers get 500 requests/day, 
+                AI agents get 5,000 requests/day
+              </p>
             </div>
-            <h3 className="text-xl font-semibold mb-3">No Subscriptions</h3>
-            <p className="text-white/60 leading-relaxed">
-              Pay per use, not per month. No commitments, no contracts,
-              no recurring charges for features you don't use.
-            </p>
-          </div>
-          
-          <div className="card card-hover p-8">
-            <div className="w-12 h-12 bg-system-green/10 rounded-2xl flex items-center justify-center mb-6">
-              <span className="text-2xl">🔧</span>
-            </div>
-            <h3 className="text-xl font-semibold mb-3">Drop-in Replacement</h3>
-            <p className="text-white/60 leading-relaxed">
-              Compatible with existing tools and workflows.
-              Switch from centralized providers in minutes, not days.
-            </p>
-          </div>
-          
-          <div className="card card-hover p-8">
-            <div className="w-12 h-12 bg-system-orange/10 rounded-2xl flex items-center justify-center mb-6">
-              <span className="text-2xl">🎨</span>
-            </div>
-            <h3 className="text-xl font-semibold mb-3">Censorship Resistant</h3>
-            <p className="text-white/60 leading-relaxed">
-              Decentralized infrastructure means no single entity
-              controls your access to AI capabilities.
-            </p>
-          </div>
-          
-          <div className="card card-hover p-8">
-            <div className="w-12 h-12 bg-system-pink/10 rounded-2xl flex items-center justify-center mb-6">
-              <span className="text-2xl">💰</span>
-            </div>
-            <h3 className="text-xl font-semibold mb-3">Transparent Pricing</h3>
-            <p className="text-white/60 leading-relaxed">
-              No hidden costs or surprise bills. Market-driven pricing
-              keeps costs competitive and fair for everyone.
-            </p>
           </div>
         </div>
       </div>
 
+      {/* Final CTA */}
+      <div className="max-w-4xl mx-auto px-6 py-24 text-center">
+        <h2 className="text-3xl md:text-4xl font-bold mb-6">
+          Ready to Build Without Limits?
+        </h2>
+        <p className="text-xl text-white/70 mb-8 max-w-2xl mx-auto">
+          Join thousands of developers using Dandolo for uncensored, reliable AI inference.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={() => handleNavigation('chat')}
+            className="px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-2xl font-semibold text-lg transition-all"
+          >
+            Try It First
+          </button>
+          <button
+            onClick={() => handleNavigation('developers')}
+            className="px-8 py-4 bg-brand-500 hover:bg-brand-600 rounded-2xl font-semibold text-lg transition-all transform hover:scale-105"
+          >
+            Get API Access
+          </button>
+        </div>
+      </div>
 
       {/* CTA Section */}
       <div className="bg-dark-2 border-y border-dark-4">
