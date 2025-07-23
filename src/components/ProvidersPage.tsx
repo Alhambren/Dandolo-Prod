@@ -40,6 +40,15 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
     }
   }, [allProviders, networkStats]);
   
+  // Debug model data
+  React.useEffect(() => {
+    console.log("📊 Model Data Debug:");
+    console.log("- availableModels:", availableModels);
+    console.log("- usageMetrics:", usageMetrics);
+    console.log("- modelUsageStats:", modelUsageStats);
+    console.log("- overallStats:", overallStats);
+  }, [availableModels, usageMetrics, modelUsageStats, overallStats]);
+  
   // Get ACTUAL active providers from the list query
   const activeProviders = allProviders?.filter(p => p.isActive) || [];
   const topProviders = [...activeProviders].sort((a, b) => {
@@ -191,43 +200,38 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
 
               <div className="pt-3 border-t border-gray-700">
                 <h4 className="text-sm font-medium text-gray-400 mb-2">Available Models</h4>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {availableModels && typeof availableModels === 'object' && Object.entries(availableModels).map(([category, models]) => {
-                    // Ensure models is an array
-                    const modelArray = Array.isArray(models) ? models : [];
-                    if (modelArray.length === 0) return null;
-                    
-                    return (
-                      <div key={category}>
-                        <div className="text-xs text-gray-500 mb-1 capitalize">{category}:</div>
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {modelArray.slice(0, 3).map((model: any) => {
-                            const modelName = model.name || model;
-                            const usageToday = Array.isArray(modelUsageStats) ? 
-                              modelUsageStats.find((m: any) => m.model === modelName)?.count || 0 : 0;
-                            const tokensUsed = Array.isArray(usageMetrics?.modelUsage) ? 
-                              usageMetrics.modelUsage.find((m: any) => m.model === modelName)?.totalTokens || 0 : 0;
-                            return (
-                              <div key={modelName} className="px-2 py-1 bg-gray-700 rounded text-xs" title={`${usageToday} uses today, ${tokensUsed.toLocaleString()} tokens`}>
-                                <div className="flex items-center gap-1">
-                                  <span>{modelName.split('/').pop()}</span>
-                                  {usageToday > 0 && (
-                                    <span className="bg-blue-500 text-white rounded-full px-1 text-[10px]">{usageToday}</span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {modelArray.length > 3 && (
-                            <span className="px-2 py-1 bg-gray-600 rounded text-xs text-gray-300">
-                              +{modelArray.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {(!availableModels || typeof availableModels !== 'object' || Object.keys(availableModels).length === 0) && (
+                <div className="max-h-32 overflow-y-auto">
+                  {isLoading ? (
+                    <div className="flex flex-wrap gap-1">
+                      {[...Array(6)].map((_, i) => (
+                        <div key={i} className="h-6 w-16 bg-gray-700 rounded animate-pulse"></div>
+                      ))}
+                    </div>
+                  ) : availableModels && typeof availableModels === 'object' ? (
+                    <div className="flex flex-wrap gap-1">
+                      {Object.values(availableModels).flat().map((model: any) => {
+                        const modelName = model.name || model;
+                        const tokensUsed = Array.isArray(usageMetrics?.modelUsage) ? 
+                          usageMetrics.modelUsage.find((m: any) => m.model === modelName)?.totalTokens || 0 : 0;
+                        return (
+                          <div 
+                            key={modelName} 
+                            className="px-2 py-1 bg-gray-700 rounded text-xs cursor-pointer hover:bg-gray-600" 
+                            title={`${tokensUsed.toLocaleString()} tokens used today`}
+                          >
+                            <div className="flex items-center gap-1">
+                              <span>{modelName.split('/').pop()}</span>
+                              {tokensUsed > 0 && (
+                                <span className="bg-blue-500 text-white rounded-full px-1 text-[10px]">
+                                  {tokensUsed > 1000 ? `${Math.round(tokensUsed/1000)}k` : tokensUsed}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
                     <div className="flex flex-wrap gap-1">
                       {['GPT-4', 'Claude-3', 'Mistral', 'Llama-3'].map(model => (
                         <span key={model} className="px-2 py-1 bg-gray-700 rounded text-xs">
