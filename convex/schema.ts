@@ -222,5 +222,57 @@ export default defineSchema({
   })
     .index("by_address", ["address"])
     .index("by_token", ["sessionToken"]),
+
+  // MONITORING: System metrics for tracking provider health and performance
+  monitoringMetrics: defineTable({
+    timestamp: v.number(),
+    totalProviders: v.number(),
+    activeProviders: v.number(),
+    inactiveProviders: v.number(),
+    healthyProviders: v.number(),
+    unhealthyProviders: v.number(),
+    averageResponseTime: v.number(),
+    totalVCUBalance: v.number(),
+    validationSuccessRate: v.number(),
+    systemStatus: v.union(v.literal("healthy"), v.literal("degraded"), v.literal("critical")),
+    metrics: v.object({
+      providersWithVCU: v.number(),
+      providersWithoutVCU: v.number(),
+      avgHealthCheckTime: v.number(),
+      recentValidationErrors: v.number(),
+    }),
+  })
+    .index("by_timestamp", ["timestamp"])
+    .index("by_status", ["systemStatus"]),
+
+  // MONITORING: Alerts and notifications
+  monitoringAlerts: defineTable({
+    level: v.union(v.literal("info"), v.literal("warning"), v.literal("error"), v.literal("critical")),
+    message: v.string(),
+    timestamp: v.number(),
+    context: v.optional(v.any()),
+    acknowledged: v.boolean(),
+  })
+    .index("by_timestamp", ["timestamp"])
+    .index("by_level", ["level"])
+    .index("by_acknowledged", ["acknowledged"]),
+
+  // NETWORK STATS CACHE: Cached network statistics for fast dashboard loading
+  networkStatsCache: defineTable({
+    totalProviders: v.number(),
+    activeProviders: v.number(),
+    totalDiem: v.number(),
+    totalPrompts: v.number(),
+    promptsToday: v.number(),
+    avgResponseTime: v.number(),
+    networkHealth: v.number(),
+    activeUsers: v.number(),
+    failedPrompts: v.number(),
+    currentLoad: v.number(),
+    successRate: v.number(),
+    totalTokensProcessed: v.number(),
+    networkUptime: v.number(),
+    lastUpdated: v.number(),
+  }),
 });
 

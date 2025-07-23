@@ -11,6 +11,22 @@ crons.interval(
   {}
 );
 
+// Enhanced monitoring and health checks every 15 minutes
+crons.interval(
+  "enhanced-monitoring",
+  { minutes: 15 },
+  internal.monitoring.runEnhancedHealthChecks,
+  {}
+);
+
+// Collect detailed metrics every hour for dashboard
+crons.interval(
+  "collect-metrics",
+  { hours: 1 },
+  internal.monitoring.collectProviderMetrics,
+  {}
+);
+
 // Update balances every hour using Venice.ai rate limits endpoint
 crons.interval(
   "update-balances",
@@ -40,6 +56,22 @@ crons.interval(
   "backup-refresh-model-cache",
   { minutes: 15 },
   internal.models.refreshModelCacheInternal,
+  {}
+);
+
+// Refresh network stats cache every 5 minutes for fast dashboard loading
+crons.interval(
+  "refresh-network-stats",
+  { minutes: 5 },
+  internal.stats.refreshNetworkStatsCache,
+  {}
+);
+
+// More frequent stats refresh during peak hours (1 PM UTC)
+crons.daily(
+  "peak-hours-stats-refresh",
+  { hourUTC: 13, minuteUTC: 0 },
+  internal.stats.refreshNetworkStatsCache,
   {}
 );
 

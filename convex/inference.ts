@@ -774,20 +774,113 @@ export const route = action({
         };
       }
 
-      const validProviders = providers.filter((p) => 
-        p.veniceApiKey && 
-        !p.veniceApiKey.startsWith('test_') && 
-        p.veniceApiKey.length > 30 &&
-        !p.name.toLowerCase().includes('test') &&
-        !p.name.toLowerCase().includes('testing')
-      );
+      // Enhanced provider validation with detailed logging
+      console.log(`Starting provider validation. Total providers: ${providers.length}`);
+      
+      const validProviders = [];
+      const rejectionReasons = [];
+      
+      for (const provider of providers) {
+        let isValid = true;
+        const reasons = [];
+        
+        // Check if API key exists
+        if (!provider.veniceApiKey) {
+          isValid = false;
+          reasons.push('No API key');
+        }
+        
+        // Check for test API keys (but allow legitimate test environments)
+        if (provider.veniceApiKey && provider.veniceApiKey.startsWith('test_')) {
+          isValid = false;
+          reasons.push('Test API key prefix');
+        }
+        
+        // Reduced API key length requirement from 30 to 20 characters
+        if (provider.veniceApiKey && provider.veniceApiKey.length <= 20) {
+          isValid = false;
+          reasons.push(`API key too short (${provider.veniceApiKey.length} chars, need >20)`);
+        }
+        
+        // Removed overly restrictive name filtering - only block obvious dummy/placeholder names
+        if (provider.name && (
+          provider.name.toLowerCase().includes('dummy') ||
+          provider.name.toLowerCase().includes('placeholder') ||
+          provider.name.toLowerCase().includes('fake')
+        )) {
+          isValid = false;
+          reasons.push('Placeholder/dummy provider name');
+        }
+        
+        if (isValid) {
+          validProviders.push(provider);
+          console.log(`✓ Provider "${provider.name}" passed validation`);
+        } else {
+          rejectionReasons.push(`✗ Provider "${provider.name}" rejected: ${reasons.join(', ')}`);
+        }
+      }
+      
+      // Log all rejection reasons for debugging
+      if (rejectionReasons.length > 0) {
+        console.log('Provider validation rejections:');
+        rejectionReasons.forEach(reason => console.log(`  ${reason}`));
+      }
+      
+      console.log(`Valid providers after strict filtering: ${validProviders.length}/${providers.length}`);
 
+      // If strict validation fails, try fallback validation with relaxed rules
+      let finalProviders = validProviders;
       if (validProviders.length === 0) {
+        console.log('No providers passed strict validation. Attempting fallback validation with relaxed rules...');
+        
+        const fallbackProviders = [];
+        const fallbackReasons = [];
+        
+        for (const provider of providers) {
+          let isValid = true;
+          const reasons = [];
+          
+          // Minimal validation for fallback - just check API key exists and has reasonable length
+          if (!provider.veniceApiKey) {
+            isValid = false;
+            reasons.push('No API key');
+          } else if (provider.veniceApiKey.length < 10) {
+            isValid = false;
+            reasons.push(`API key too short for fallback (${provider.veniceApiKey.length} chars, need ≥10)`);
+          } else if (provider.veniceApiKey.startsWith('test_')) {
+            isValid = false;
+            reasons.push('Test API key prefix (blocked in fallback)');
+          }
+          
+          if (isValid) {
+            fallbackProviders.push(provider);
+            console.log(`✓ Provider "${provider.name}" passed fallback validation`);
+          } else {
+            fallbackReasons.push(`✗ Provider "${provider.name}" fallback rejected: ${reasons.join(', ')}`);
+          }
+        }
+        
+        if (fallbackReasons.length > 0) {
+          console.log('Fallback validation rejections:');
+          fallbackReasons.forEach(reason => console.log(`  ${reason}`));
+        }
+        
+        console.log(`Valid providers after fallback filtering: ${fallbackProviders.length}/${providers.length}`);
+        finalProviders = fallbackProviders;
+      }
+
+      if (finalProviders.length === 0) {
         // Use first provider ID as fallback even if invalid API key
         const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
         
+        // More specific error message about why no providers are available
+        const specificErrors = rejectionReasons.slice(0, 3).join('; '); // Show first 3 rejection reasons
+        const errorMessage = providers.length === 0 
+          ? "No AI providers are registered in the system. Please contact support."
+          : `No valid AI providers available. Issues found: ${specificErrors}${rejectionReasons.length > 3 ? ` (and ${rejectionReasons.length - 3} more)` : ''}. Please contact support or try again later.`;
+        
         return {
-          response: "Sorry, no AI providers with valid API keys are currently available. Please try again later.",
+          response: errorMessage,
           model: "error",
           totalTokens: 0,
           providerId: fallbackProviderId,
@@ -802,7 +895,7 @@ export const route = action({
       }
 
       const randomProvider: Provider =
-        validProviders[Math.floor(Math.random() * validProviders.length)];
+        finalProviders[Math.floor(Math.random() * finalProviders.length)];
 
       // Get API key securely (decrypted from secure storage)
       const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {

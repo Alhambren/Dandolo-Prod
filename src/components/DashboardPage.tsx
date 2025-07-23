@@ -6,11 +6,13 @@ import { api } from '../../convex/_generated/api';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import AnimatedPointsCounter from './AnimatedPointsCounter';
+import MonitoringDashboard from './MonitoringDashboard';
 
 const DashboardPage: React.FC = () => {
   const { address } = useAccount();
   const [providerName, setProviderName] = useState('');
   const [veniceApiKey, setVeniceApiKey] = useState('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'monitoring'>('overview');
   
   // SECURITY NOTE: API key is only temporarily stored in memory during registration
   // and is immediately cleared. It's never persisted or logged.
@@ -176,7 +178,35 @@ const DashboardPage: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
         <div className="container mx-auto px-4 py-8">
           <h1 className="text-4xl font-bold mb-8">Dashboard</h1>
-          <GlassCard className="p-6">
+          
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 mb-6">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'overview'
+                  ? 'bg-gold/20 text-gold border border-gold/30'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+              }`}
+            >
+              Provider Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('monitoring')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'monitoring'
+                  ? 'bg-gold/20 text-gold border border-gold/30'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+              }`}
+            >
+              System Monitoring
+            </button>
+          </div>
+
+          {activeTab === 'monitoring' ? (
+            <MonitoringDashboard className="mb-8" />
+          ) : (
+            <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-white">{currentProvider.name}</h2>
@@ -389,7 +419,8 @@ const DashboardPage: React.FC = () => {
                 Remove Provider
               </button>
             </div>
-          </GlassCard>
+            </GlassCard>
+          )}
         </div>
       </div>
     );

@@ -13,6 +13,11 @@ function verifyAdminAccess(address?: string): boolean {
 // ADMIN-ONLY: Debug query to see what models are available
 export const debugModels = query({
   args: { adminAddress: v.string() },
+  returns: v.object({
+    lastUpdated: v.optional(v.number()),
+    models: v.optional(v.any()),
+    hasImageModels: v.boolean()
+  }),
   handler: async (ctx, args) => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
@@ -26,21 +31,11 @@ export const debugModels = query({
   },
 });
 
-// ADMIN-ONLY: Action to manually refresh models
-export const manualRefreshModels = action({
-  args: { adminAddress: v.string() },
-  handler: async (ctx, args) => {
-    if (!verifyAdminAccess(args.adminAddress)) {
-      throw new Error("Access denied: Admin access required for debug operations");
-    }
-    await ctx.runAction(internal.models.refreshModelCacheInternal);
-    return "Model cache refreshed!";
-  },
-});
 
 // ADMIN-ONLY: Debug query to see current providers (NO API KEYS EXPOSED)
 export const debugProviders = query({
   args: { adminAddress: v.string() },
+  returns: v.array(v.any()),
   handler: async (ctx, args) => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
@@ -63,7 +58,10 @@ export const debugProviders = query({
 // ADMIN-ONLY: Clean up test providers with invalid API keys
 export const cleanupTestProviders = mutation({
   args: { adminAddress: v.string() },
-  handler: async (ctx, args) => {
+  returns: v.object({
+    removedCount: v.number()
+  }),
+  handler: async (ctx, args): Promise<{ removedCount: number }> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
     }
@@ -102,6 +100,7 @@ export const findUSDEndpoint = action({
     adminAddress: v.string(),
     apiKeySuffix: v.optional(v.string()) // Last few chars of API key to identify provider
   },
+  returns: v.any(),
   handler: async (ctx, args): Promise<any> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
@@ -194,10 +193,12 @@ export const findUSDEndpoint = action({
 
 // Check current USD balance from Venice.ai API
 export const checkUSDBalance = action({
-  handler: async (ctx) => {
+  args: {},
+  returns: v.array(v.any()),
+  handler: async (ctx): Promise<any[]> => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
-      return { error: "No providers available" };
+      return [];
     }
     
     const results = [];
@@ -247,6 +248,11 @@ export const checkUSDBalance = action({
 
 // Manual balance update for debugging (no admin check for testing)
 export const forceUpdateAllBalances = action({
+  args: {},
+  returns: v.object({
+    updatedCount: v.number(),
+    results: v.array(v.any())
+  }),
   handler: async (ctx): Promise<{ updatedCount: number; results: any[] }> => {
     console.log('Starting manual balance update for debugging...');
     const providers: any[] = await ctx.runQuery(internal.providers.getAllProviders);
@@ -304,6 +310,8 @@ export const forceUpdateAllBalances = action({
 
 // Test Venice.ai rate limits endpoint (correct endpoint per docs)
 export const testRateLimitsEndpoint = action({
+  args: {},
+  returns: v.any(),
   handler: async (ctx) => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
@@ -344,6 +352,8 @@ export const testRateLimitsEndpoint = action({
 
 // Test the exact same API call that chat uses
 export const testChatApiCall = action({
+  args: {},
+  returns: v.any(),
   handler: async (ctx) => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
@@ -405,6 +415,8 @@ export const testChatApiCall = action({
 
 // Test Venice.ai endpoints to find the VCU balance endpoint
 export const testVeniceEndpoints = action({
+  args: {},
+  returns: v.array(v.any()),
   handler: async (ctx): Promise<any[]> => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
@@ -467,6 +479,8 @@ export const testVeniceEndpoints = action({
 
 // Test chat completions endpoint with a known model
 export const testChatCompletion = action({
+  args: {},
+  returns: v.any(),
   handler: async (ctx): Promise<any> => {
     const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
     if (providers.length === 0) {
@@ -505,6 +519,8 @@ export const testChatCompletion = action({
 
 // Test what inference function gets for models
 export const testInferenceModels = action({
+  args: {},
+  returns: v.any(),
   handler: async (ctx): Promise<any> => {
     try {
       // This simulates what callVeniceAI does
@@ -525,6 +541,8 @@ export const testInferenceModels = action({
 
 // Direct image generation test
 export const testDirectImageGeneration = action({
+  args: {},
+  returns: v.any(),
   handler: async (ctx): Promise<any> => {
     try {
       const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
@@ -563,6 +581,7 @@ export const testDirectImageGeneration = action({
 // Production-safe provider listing (no sensitive data)
 export const listProviders = query({
   args: {},
+  returns: v.array(v.any()),
   handler: async (ctx) => {
     const providers = await ctx.db.query("providers").collect();
     return providers.map(p => ({
@@ -579,6 +598,13 @@ export const listProviders = query({
 // Public diagnostic function to check system health
 export const systemHealth = query({
   args: {},
+  returns: v.object({
+    totalProviders: v.number(),
+    activeProviders: v.number(),
+    validProviders: v.number(),
+    hasValidProviders: v.boolean(),
+    providerIssues: v.array(v.any())
+  }),
   handler: async (ctx) => {
     const providers = await ctx.db.query("providers").collect();
     const activeProviders = providers.filter(p => p.isActive);
@@ -604,6 +630,14 @@ export const systemHealth = query({
 
 // ADMIN-ONLY: Check provider balances to debug zero balance issue
 export const checkProviderBalances = action({
+  args: {},
+  returns: v.array(v.object({
+    name: v.string(),
+    vcuBalance: v.number(),
+    usdValue: v.number(),
+    hasApiKey: v.boolean(),
+    isActive: v.boolean()
+  })),
   handler: async (ctx): Promise<Array<{
     name: string;
     vcuBalance: number;
@@ -625,7 +659,8 @@ export const checkProviderBalances = action({
 // ADMIN-ONLY: Reset all provider balances to zero (for testing real Venice API)
 export const resetProviderBalances = mutation({
   args: { adminAddress: v.string() },
-  handler: async (ctx, args) => {
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
     // Admin check
     if (args.adminAddress !== "0xC07481520d98c32987cA83B30EAABdA673cDbe8c") {
       throw new Error("Unauthorized");
@@ -649,7 +684,8 @@ export const resetProviderBalances = mutation({
 // ADMIN-ONLY: Setup production environment with basic providers
 export const setupProduction = mutation({
   args: { adminAddress: v.string() },
-  handler: async (ctx, args) => {
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
     }
@@ -669,7 +705,8 @@ export const setupProduction = mutation({
 // ADMIN-ONLY: Create test API key for debugging
 export const createTestApiKey = mutation({
   args: { adminAddress: v.string() },
-  handler: async (ctx, args) => {
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
     }
@@ -706,6 +743,7 @@ export const createTestApiKey = mutation({
 // ADMIN-ONLY: List all API keys for debugging
 export const listAllApiKeys = query({
   args: { adminAddress: v.string() },
+  returns: v.array(v.any()),
   handler: async (ctx, args) => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
@@ -729,6 +767,21 @@ export const listAllApiKeys = query({
 // ADMIN-ONLY: Test API key validation flow
 export const testApiKeyValidation = action({
   args: { adminAddress: v.string(), testKey: v.optional(v.string()) },
+  returns: v.object({
+    success: v.boolean(),
+    keyData: v.optional(v.object({
+      id: v.id("apiKeys"),
+      address: v.string(),
+      name: v.string(),
+      isActive: v.boolean(),
+      keyType: v.optional(v.string()),
+      dailyUsage: v.optional(v.number()),
+      dailyLimit: v.optional(v.number())
+    })),
+    key: v.string(),
+    keyExists: v.union(v.boolean(), v.literal("unknown")),
+    error: v.optional(v.string())
+  }),
   handler: async (ctx, args) => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
@@ -740,11 +793,12 @@ export const testApiKeyValidation = action({
     
     try {
       // Test the same validation flow as the router
-      const keyData = await ctx.runQuery(api.apiKeys.validateKey, { key: keyToTest });
+      const keyData: any = await ctx.runQuery(api.apiKeys.validateKey, { key: keyToTest });
       
       if (!keyData) {
         return {
           success: false,
+          keyData: undefined,
           error: "API key validation returned null",
           key: keyToTest,
           keyExists: false,
@@ -755,9 +809,9 @@ export const testApiKeyValidation = action({
         success: true,
         keyData: {
           id: keyData._id,
-          address: keyData.address,
-          name: keyData.name,
-          isActive: keyData.isActive,
+          address: keyData.address || "",
+          name: keyData.name || "",
+          isActive: keyData.isActive || false,
           keyType: keyData.keyType,
           dailyUsage: keyData.dailyUsage,
           dailyLimit: keyData.dailyLimit,
@@ -769,18 +823,104 @@ export const testApiKeyValidation = action({
     } catch (error) {
       return {
         success: false,
+        keyData: undefined,
         error: error instanceof Error ? error.message : "Unknown error",
         key: keyToTest,
-        keyExists: "unknown",
+        keyExists: "unknown" as const,
       };
     }
+  },
+});
+
+// ADMIN-ONLY: Check provider filtering issue for image generation
+export const debugProviderFiltering = action({
+  args: { adminAddress: v.string() },
+  returns: v.object({
+    totalProviders: v.number(),
+    validProviders: v.number(),
+    issue: v.string(),
+    providerAnalysis: v.array(v.any()),
+    message: v.string()
+  }),
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Access denied: Admin access required for debug operations");
+    }
+    
+    const providers: any[] = await ctx.runQuery(internal.providers.listActiveInternal);
+    console.log(`Found ${providers.length} total providers`);
+    
+    if (providers.length === 0) {
+      return {
+        totalProviders: 0,
+        validProviders: 0,
+        issue: "NO_PROVIDERS_REGISTERED",
+        providerAnalysis: [],
+        message: "No providers found in database - Register a provider through the dashboard",
+      };
+    }
+    
+    const providerAnalysis = providers.map(p => {
+      const hasApiKey = !!p.veniceApiKey;
+      const startsWithTest = p.veniceApiKey?.startsWith('test_');
+      const correctLength = p.veniceApiKey?.length > 30;
+      const nameHasTest = p.name.toLowerCase().includes('test') || p.name.toLowerCase().includes('testing');
+      
+      const isValid = hasApiKey && !startsWithTest && correctLength && !nameHasTest;
+      
+      return {
+        id: p._id,
+        name: p.name,
+        isActive: p.isActive,
+        hasApiKey,
+        apiKeyLength: p.veniceApiKey?.length || 0,
+        startsWithTest,
+        nameHasTest,
+        isValid,
+        failureReasons: [
+          !hasApiKey && "NO_API_KEY",
+          startsWithTest && "STARTS_WITH_TEST",
+          !correctLength && `API_KEY_TOO_SHORT_${p.veniceApiKey?.length || 0}`,
+          nameHasTest && "NAME_CONTAINS_TEST"
+        ].filter(Boolean),
+      };
+    });
+    
+    const validProviders = providerAnalysis.filter(p => p.isValid);
+    
+    return {
+      totalProviders: providers.length,
+      validProviders: validProviders.length,
+      issue: validProviders.length === 0 ? "NO_VALID_PROVIDERS" : "PROVIDERS_OK",
+      providerAnalysis,
+      message: validProviders.length === 0 
+        ? "Found providers but none pass validation filters"
+        : `${validProviders.length} valid providers available`
+    };
   },
 });
 
 // ADMIN-ONLY: Test complete API flow like router does
 export const testApiFlow = action({
   args: { adminAddress: v.string(), testKey: v.optional(v.string()) },
-  handler: async (ctx, args) => {
+  returns: v.object({
+    steps: v.array(v.object({
+      step: v.string(),
+      success: v.boolean(),
+      data: v.optional(v.any()),
+      error: v.optional(v.string())
+    })),
+    overallSuccess: v.boolean()
+  }),
+  handler: async (ctx, args): Promise<{
+    steps: Array<{
+      step: string;
+      success: boolean;
+      data?: any;
+      error?: string;
+    }>;
+    overallSuccess: boolean;
+  }> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
     }

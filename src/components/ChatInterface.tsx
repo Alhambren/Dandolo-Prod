@@ -123,6 +123,8 @@ const MessageContent: React.FC<{ msg: Message; role: 'user' | 'assistant' }> = (
   }
 
   if (msg.intentType === 'image' && msg.imageUrl) {
+    const isBase64 = msg.imageUrl.startsWith('data:');
+    
     return (
       <div className="space-y-4">
         <div className="relative group overflow-hidden rounded-xl max-w-md">
@@ -130,9 +132,39 @@ const MessageContent: React.FC<{ msg: Message; role: 'user' | 'assistant' }> = (
             src={msg.imageUrl}
             alt="Generated image"
             className="w-full rounded-xl cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
-            onClick={() => window.open(msg.imageUrl, '_blank')}
+            onClick={() => {
+              if (isBase64) {
+                // For base64 images, create a blob URL and open in new tab
+                try {
+                  const byteCharacters = atob(msg.imageUrl.split(',')[1]);
+                  const byteNumbers = new Array(byteCharacters.length);
+                  for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                  }
+                  const byteArray = new Uint8Array(byteNumbers);
+                  const blob = new Blob([byteArray], { type: 'image/webp' });
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  // Clean up the URL after a delay
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (error) {
+                  console.error('Failed to open base64 image:', error);
+                }
+              } else {
+                window.open(msg.imageUrl, '_blank');
+              }
+            }}
+            onError={(e) => {
+              console.error('Image failed to load:', msg.imageUrl?.substring(0, 100) + '...');
+              console.error('Error:', e);
+            }}
           />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 rounded-xl"></div>
+          {isBase64 && (
+            <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+              Base64 Image
+            </div>
+          )}
         </div>
         {msg.content && !msg.content.includes(msg.imageUrl || '') && (
           <p className={`leading-relaxed ${role === 'user' ? 'text-black font-semibold' : 'text-gray-200 font-medium'}`}>
@@ -473,6 +505,17 @@ export const ChatInterface: React.FC = () => {
         const imageUrlMatch = response.response.match(/!\[.*?\]\((.*?)\)/);
         if (imageUrlMatch) {
           assistantMessage.imageUrl = imageUrlMatch[1];
+          // Debug log for image parsing
+          console.log('Image parsed from response:', {
+            isBase64: imageUrlMatch[1].startsWith('data:'),
+            urlLength: imageUrlMatch[1].length,
+            urlPreview: imageUrlMatch[1].substring(0, 50) + '...'
+          });
+        } else {
+          // Check if response contains image data that wasn't parsed
+          if (response.response.includes('data:image/')) {
+            console.log('Base64 image data found but not parsed:', response.response.substring(0, 100));
+          }
         }
       }
 

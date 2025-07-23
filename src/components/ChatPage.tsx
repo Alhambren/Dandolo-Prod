@@ -72,6 +72,8 @@ const MessageContent: React.FC<{ msg: Message }> = ({ msg }) => {
   }
 
   if (msg.intentType === 'image' && msg.imageUrl) {
+    const isBase64 = msg.imageUrl.startsWith('data:');
+    
     return (
       <div className="space-y-4">
         <div className="relative group overflow-hidden rounded-3xl">
@@ -79,18 +81,67 @@ const MessageContent: React.FC<{ msg: Message }> = ({ msg }) => {
             src={msg.imageUrl}
             alt="Generated image"
             className="w-full max-w-md rounded-3xl shadow-2xl cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
-            onClick={() => window.open(msg.imageUrl, '_blank')}
+            onClick={() => {
+              if (isBase64) {
+                // For base64 images, create a blob URL and open in new tab
+                try {
+                  const byteCharacters = atob(msg.imageUrl.split(',')[1]);
+                  const byteNumbers = new Array(byteCharacters.length);
+                  for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                  }
+                  const byteArray = new Uint8Array(byteNumbers);
+                  const blob = new Blob([byteArray], { type: 'image/webp' });
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  // Clean up the URL after a delay
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (error) {
+                  console.error('Failed to open base64 image:', error);
+                }
+              } else {
+                window.open(msg.imageUrl, '_blank');
+              }
+            }}
+            onError={(e) => {
+              console.error('Image failed to load:', msg.imageUrl?.substring(0, 100) + '...');
+              console.error('Error:', e);
+            }}
           />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-3xl"></div>
           <button 
             className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/50 backdrop-blur-sm text-white px-3 py-2 rounded-xl text-xs font-medium hover:bg-black/70"
             onClick={(e) => {
               e.stopPropagation();
-              window.open(msg.imageUrl, '_blank');
+              if (isBase64) {
+                // For base64 images, create a blob URL and open in new tab
+                try {
+                  const byteCharacters = atob(msg.imageUrl.split(',')[1]);
+                  const byteNumbers = new Array(byteCharacters.length);
+                  for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                  }
+                  const byteArray = new Uint8Array(byteNumbers);
+                  const blob = new Blob([byteArray], { type: 'image/webp' });
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  // Clean up the URL after a delay
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (error) {
+                  console.error('Failed to open base64 image:', error);
+                }
+              } else {
+                window.open(msg.imageUrl, '_blank');
+              }
             }}
           >
             Open Full Size
           </button>
+          {isBase64 && (
+            <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+              Base64 Image
+            </div>
+          )}
         </div>
         {msg.content && !msg.content.includes(msg.imageUrl || '') && (
           <p className="text-black font-medium text-sm leading-relaxed">{msg.content}</p>

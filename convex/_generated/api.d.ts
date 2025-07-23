@@ -27,6 +27,7 @@ import type * as developers from "../developers.js";
 import type * as inference from "../inference.js";
 import type * as migrations from "../migrations.js";
 import type * as models from "../models.js";
+import type * as monitoring from "../monitoring.js";
 import type * as points from "../points.js";
 import type * as providers from "../providers.js";
 import type * as rateLimit from "../rateLimit.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   inference: typeof inference;
   migrations: typeof migrations;
   models: typeof models;
+  monitoring: typeof monitoring;
   points: typeof points;
   providers: typeof providers;
   rateLimit: typeof rateLimit;
