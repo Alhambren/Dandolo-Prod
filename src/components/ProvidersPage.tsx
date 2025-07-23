@@ -192,32 +192,50 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
               <div className="pt-3 border-t border-gray-700">
                 <h4 className="text-sm font-medium text-gray-400 mb-2">Available Models</h4>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {availableModels && Object.entries(availableModels).map(([category, models]) => (
-                    <div key={category}>
-                      <div className="text-xs text-gray-500 mb-1 capitalize">{category}:</div>
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {models.slice(0, 3).map((model: any) => {
-                          const usageToday = modelUsageStats?.find((m: any) => m.model === model.name)?.count || 0;
-                          const tokensUsed = usageMetrics?.modelUsage?.find((m: any) => m.model === model.name)?.totalTokens || 0;
-                          return (
-                            <div key={model.name} className="px-2 py-1 bg-gray-700 rounded text-xs" title={`${usageToday} uses today, ${tokensUsed.toLocaleString()} tokens`}>
-                              <div className="flex items-center gap-1">
-                                <span>{model.name.split('/').pop()}</span>
-                                {usageToday > 0 && (
-                                  <span className="bg-blue-500 text-white rounded-full px-1 text-[10px]">{usageToday}</span>
-                                )}
+                  {availableModels && typeof availableModels === 'object' && Object.entries(availableModels).map(([category, models]) => {
+                    // Ensure models is an array
+                    const modelArray = Array.isArray(models) ? models : [];
+                    if (modelArray.length === 0) return null;
+                    
+                    return (
+                      <div key={category}>
+                        <div className="text-xs text-gray-500 mb-1 capitalize">{category}:</div>
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {modelArray.slice(0, 3).map((model: any) => {
+                            const modelName = model.name || model;
+                            const usageToday = Array.isArray(modelUsageStats) ? 
+                              modelUsageStats.find((m: any) => m.model === modelName)?.count || 0 : 0;
+                            const tokensUsed = Array.isArray(usageMetrics?.modelUsage) ? 
+                              usageMetrics.modelUsage.find((m: any) => m.model === modelName)?.totalTokens || 0 : 0;
+                            return (
+                              <div key={modelName} className="px-2 py-1 bg-gray-700 rounded text-xs" title={`${usageToday} uses today, ${tokensUsed.toLocaleString()} tokens`}>
+                                <div className="flex items-center gap-1">
+                                  <span>{modelName.split('/').pop()}</span>
+                                  {usageToday > 0 && (
+                                    <span className="bg-blue-500 text-white rounded-full px-1 text-[10px]">{usageToday}</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                        {models.length > 3 && (
-                          <span className="px-2 py-1 bg-gray-600 rounded text-xs text-gray-300">
-                            +{models.length - 3} more
-                          </span>
-                        )}
+                            );
+                          })}
+                          {modelArray.length > 3 && (
+                            <span className="px-2 py-1 bg-gray-600 rounded text-xs text-gray-300">
+                              +{modelArray.length - 3} more
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    );
+                  })}
+                  {(!availableModels || typeof availableModels !== 'object' || Object.keys(availableModels).length === 0) && (
+                    <div className="flex flex-wrap gap-1">
+                      {['GPT-4', 'Claude-3', 'Mistral', 'Llama-3'].map(model => (
+                        <span key={model} className="px-2 py-1 bg-gray-700 rounded text-xs">
+                          {model}
+                        </span>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
