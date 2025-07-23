@@ -260,12 +260,16 @@ async function calculateNetworkStats(ctx: QueryCtx | MutationCtx) {
   const todayInferences = inferences.filter((i: Doc<"inferences">) => i.timestamp >= todayTimestamp);
   const recentInferences = inferences.filter((i: Doc<"inferences">) => i.timestamp >= Date.now() - 24 * 60 * 60 * 1000);
   
-  // Calculate average response time from ACTUAL active providers
+  // Calculate average response time from ACTUAL inference data (last 24 hours)
   let avgResponseTime = 0;
-  if (activeProviders.length > 0) {
-    const providersWithResponseTime = activeProviders.filter((p: Doc<"providers">) => p.avgResponseTime && p.avgResponseTime > 0);
-    if (providersWithResponseTime.length > 0) {
-      avgResponseTime = providersWithResponseTime.reduce((sum: number, p: Doc<"providers">) => sum + (p.avgResponseTime || 0), 0) / providersWithResponseTime.length;
+  if (recentInferences.length > 0) {
+    const inferenceResponseTimes = recentInferences
+      .filter((i: Doc<"inferences">) => i.responseTime !== undefined && i.responseTime > 0)
+      .map((i: Doc<"inferences">) => i.responseTime!)
+      .filter((time): time is number => time !== undefined);
+    
+    if (inferenceResponseTimes.length > 0) {
+      avgResponseTime = inferenceResponseTimes.reduce((sum: number, time: number) => sum + time, 0) / inferenceResponseTimes.length;
     }
   }
   

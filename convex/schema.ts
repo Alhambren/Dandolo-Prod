@@ -82,6 +82,7 @@ export default defineSchema({
     intent: v.string(),
     totalTokens: v.number(),
     vcuCost: v.number(),
+    responseTime: v.optional(v.number()),
     timestamp: v.number(),
   })
     .index("by_provider", ["providerId"])

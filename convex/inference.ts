@@ -926,6 +926,7 @@ export const route = action({
         intent: args.intent,
         totalTokens: tokens,
         vcuCost,
+        responseTime,
         timestamp: Date.now(),
       });
 
@@ -1005,6 +1006,7 @@ export const recordInference = mutation({
     intent: v.string(),
     totalTokens: v.number(),
     vcuCost: v.number(),
+    responseTime: v.optional(v.number()),
     timestamp: v.number(),
   },
   returns: v.null(),
@@ -1016,6 +1018,7 @@ export const recordInference = mutation({
       intent: args.intent,
       totalTokens: args.totalTokens,
       vcuCost: args.vcuCost,
+      ...(args.responseTime !== undefined && { responseTime: args.responseTime }),
       timestamp: args.timestamp,
     });
     return null;
