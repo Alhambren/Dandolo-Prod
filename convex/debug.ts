@@ -782,7 +782,13 @@ export const testApiKeyValidation = action({
     keyExists: v.union(v.boolean(), v.literal("unknown")),
     error: v.optional(v.string())
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    success: boolean;
+    keyData?: any;
+    key: string;
+    keyExists: boolean | "unknown";
+    error?: string;
+  }> => {
     if (!verifyAdminAccess(args.adminAddress)) {
       throw new Error("Access denied: Admin access required for debug operations");
     }
