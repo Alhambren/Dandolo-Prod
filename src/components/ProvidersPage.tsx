@@ -10,8 +10,14 @@ interface ProvidersPageProps {
 const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
   const allProviders = useQuery(api.providers.list);
+  const availableModels = useQuery(api.models.getAvailableModels);
+  const usageMetrics = useQuery(api.stats.getUsageMetrics);
+  const modelUsageStats = useQuery(api.analytics.getModelUsageStats);
+  const overallStats = useQuery(api.inference.getStats);
   
-  const isLoading = networkStats === undefined || allProviders === undefined;
+  const isLoading = networkStats === undefined || allProviders === undefined || 
+                   availableModels === undefined || usageMetrics === undefined || 
+                   modelUsageStats === undefined || overallStats === undefined;
   
   
   // Debug logging to understand data state
@@ -185,11 +191,32 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
 
               <div className="pt-3 border-t border-gray-700">
                 <h4 className="text-sm font-medium text-gray-400 mb-2">Available Models</h4>
-                <div className="flex flex-wrap gap-1">
-                  {['GPT-4', 'Claude-3', 'Mistral', 'Llama-3'].map(model => (
-                    <span key={model} className="px-2 py-1 bg-gray-700 rounded text-xs">
-                      {model}
-                    </span>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {availableModels && Object.entries(availableModels).map(([category, models]) => (
+                    <div key={category}>
+                      <div className="text-xs text-gray-500 mb-1 capitalize">{category}:</div>
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {models.slice(0, 3).map((model: any) => {
+                          const usageToday = modelUsageStats?.find((m: any) => m.model === model.name)?.count || 0;
+                          const tokensUsed = usageMetrics?.modelUsage?.find((m: any) => m.model === model.name)?.totalTokens || 0;
+                          return (
+                            <div key={model.name} className="px-2 py-1 bg-gray-700 rounded text-xs" title={`${usageToday} uses today, ${tokensUsed.toLocaleString()} tokens`}>
+                              <div className="flex items-center gap-1">
+                                <span>{model.name.split('/').pop()}</span>
+                                {usageToday > 0 && (
+                                  <span className="bg-blue-500 text-white rounded-full px-1 text-[10px]">{usageToday}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {models.length > 3 && (
+                          <span className="px-2 py-1 bg-gray-600 rounded text-xs text-gray-300">
+                            +{models.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -199,11 +226,28 @@ const ProvidersPage: React.FC<ProvidersPageProps> = ({ setCurrentPage }) => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Requests Today</span>
-                    <span>{networkStats?.promptsToday?.toLocaleString() || 0}</span>
+                    <span>{usageMetrics?.last24h?.toLocaleString() || networkStats?.promptsToday?.toLocaleString() || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Active Users</span>
-                    <span>{networkStats?.activeUsers?.toLocaleString() || 0}</span>
+                    <span className="text-gray-500">Tokens Today</span>
+                    <span className="text-blue-400">
+                      {usageMetrics?.totalTokens?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Total Tokens</span>
+                    <span className="text-green-400">
+                      {overallStats?.totalTokens?.toLocaleString() || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Avg Response</span>
+                    <span className={`${
+                      avgResponseTime <= 1000 ? 'text-green-400' : 
+                      avgResponseTime <= 3000 ? 'text-yellow-400' : 'text-red-400'
+                    }`}>
+                      {avgResponseTime > 0 ? `${Math.round(avgResponseTime)}ms` : 'N/A'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Uptime</span>
