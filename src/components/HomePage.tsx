@@ -332,7 +332,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               <div className="flex items-start gap-3">
                 <span className="text-green-500 mt-1">✓</span>
                 <div>
-                  <p className="font-medium">400+ Uncensored Models</p>
+                  <p className="font-medium">20+ Uncensored Models</p>
                   <p className="text-white/60 text-sm">Access the full Venice.ai model catalog</p>
                 </div>
               </div>
