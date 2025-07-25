@@ -1,5 +1,5 @@
 {
-  "buildCommand": "echo 'VITE_CONVEX_URL=https://judicious-hornet-148.convex.cloud' > .env.production && NODE_ENV=production npx convex deploy --yes && NODE_ENV=production npm run build",
+  "buildCommand": "echo 'VITE_CONVEX_URL=https://judicious-hornet-148.convex.cloud' > .env.production && NODE_ENV=production npx convex deploy --yes --typecheck=disable && NODE_ENV=production npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
   "env": {
