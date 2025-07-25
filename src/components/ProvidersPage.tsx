@@ -17,62 +17,60 @@ const ProviderCard: React.FC<{ provider: any; rank: number }> = ({ provider, ran
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
-    <GlassCard className="mb-4 overflow-hidden transition-all duration-300 hover:border-gray-600/50 active:scale-[0.98]">
+    <GlassCard className="mb-3 overflow-hidden transition-all duration-300 hover:border-gray-600/50 active:scale-[0.98]">
       <div 
         className="p-4 cursor-pointer touch-manipulation"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        {/* Header Row */}
+        {/* Header Row - Compact */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-3 min-w-0 flex-1">
             <div className="flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
                 #{rank}
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-semibold text-white truncate">
+              <h3 className="text-base font-semibold text-white truncate">
                 {provider.name}
               </h3>
-              <p className="text-sm text-gray-400">
+              <p className="text-xs text-gray-400">
                 {provider.region || 'Global'}
               </p>
             </div>
           </div>
           
-          {/* Status Badge */}
-          <div className="flex-shrink-0 ml-3">
-            <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+          {/* Status Badge - Compact */}
+          <div className="flex-shrink-0 ml-2">
+            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
               provider.isActive 
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                ? 'bg-green-500/20 text-green-400' 
+                : 'bg-red-500/20 text-red-400'
             }`}>
-              {provider.isActive ? '🟢 Active' : '🔴 Offline'}
+              {provider.isActive ? '🟢' : '🔴'}
             </span>
           </div>
         </div>
 
-        {/* Key Metrics Row */}
-        <div className="grid grid-cols-3 gap-4 mb-3">
+        {/* Key Metrics Row - Compact */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
           <div className="text-center">
-            <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Points</div>
-            <div className="flex items-center justify-center">
-              <span className="text-lg font-bold text-yellow-400">
-                🏆 {provider.points > 0 ? provider.points.toLocaleString() : '0'}
-              </span>
+            <div className="text-xs text-gray-400 mb-1">Points</div>
+            <div className="text-sm font-bold text-yellow-400">
+              🏆 {provider.points > 0 ? provider.points.toLocaleString() : '0'}
             </div>
           </div>
           
           <div className="text-center">
-            <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Speed</div>
-            <div className="text-lg font-semibold">
+            <div className="text-xs text-gray-400 mb-1">Speed</div>
+            <div className="text-sm font-semibold">
               {provider.avgResponseTime ? (
                 <span className={
                   provider.avgResponseTime < 1000 ? 'text-green-400' :
                   provider.avgResponseTime < 2000 ? 'text-yellow-400' :
                   'text-red-400'
                 }>
-                  ⚡ {Math.round(provider.avgResponseTime)}ms
+                  {Math.round(provider.avgResponseTime)}ms
                 </span>
               ) : (
                 <span className="text-gray-500">-</span>
@@ -81,8 +79,8 @@ const ProviderCard: React.FC<{ provider: any; rank: number }> = ({ provider, ran
           </div>
 
           <div className="text-center">
-            <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Balance</div>
-            <div className="text-lg font-semibold text-blue-400">
+            <div className="text-xs text-gray-400 mb-1">Balance</div>
+            <div className="text-sm font-semibold text-blue-400">
               ${((provider.vcuBalance ?? 0) * 0.10).toFixed(0)}
             </div>
           </div>
@@ -91,7 +89,7 @@ const ProviderCard: React.FC<{ provider: any; rank: number }> = ({ provider, ran
         {/* Expand/Collapse Indicator */}
         <div className="flex items-center justify-center pt-2 border-t border-gray-700/50">
           <div className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
@@ -120,7 +118,7 @@ const ProviderCard: React.FC<{ provider: any; rank: number }> = ({ provider, ran
             {provider.points > 0 && provider.rank > 0 && provider.rank <= 3 && (
               <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg p-3">
                 <div className="flex items-center space-x-2">
-                  <span className="text-xl">
+                  <span className="text-lg">
                     {provider.rank === 1 ? '🥇' : provider.rank === 2 ? '🥈' : '🥉'}
                   </span>
                   <span className="text-sm font-medium text-yellow-400">
@@ -239,10 +237,10 @@ const ProvidersPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+      <div className="max-w-md mx-auto lg:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Network Providers</h1>
+        <div className="mb-6 sm:mb-8 text-center lg:text-left">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">Network Providers</h1>
           <p className="text-gray-400 text-sm sm:text-base">
             Active providers powering the Dandolo.ai network
           </p>
@@ -254,7 +252,7 @@ const ProvidersPage: React.FC = () => {
         </div>
 
         {/* Stats Overview - Responsive Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <GlassCard className="p-4 sm:p-6">
             <div className="text-xs sm:text-sm font-medium text-gray-400">Total Providers</div>
             <div className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold">
