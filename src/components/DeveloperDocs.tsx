@@ -49,12 +49,17 @@ export function DeveloperDocs() {
             <div>
               <h3 className="text-lg font-semibold mb-3">1. Get Your API Key</h3>
               <p className="text-gray-300 mb-3">
-                Choose your key type based on usage:
+                Choose your key type based on usage needs:
               </p>
               <ul className="list-disc list-inside text-gray-400 mb-3">
-                <li><code className="text-blue-400">dk_</code> Developer Keys: 500 requests/day</li>
-                <li><code className="text-blue-400">ak_</code> Agent Keys: 5,000 requests/day</li>
+                <li><code className="text-blue-400">dk_</code> Developer Keys: 500 requests/day - Perfect for development and testing</li>
+                <li><code className="text-blue-400">ak_</code> Agent Keys: 5,000 requests/day - Ideal for production AI agents and applications</li>
               </ul>
+              <div className="bg-green-500/10 border border-green-500 rounded-lg p-3 mt-3">
+                <p className="text-sm text-green-300">
+                  ✅ <strong>Both key types</strong> provide full access to all Dandolo features including chat completions, image generation, and Venice AI model routing.
+                </p>
+              </div>
               <button 
                 onClick={() => window.location.hash = '#portal'}
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
@@ -70,8 +75,18 @@ export function DeveloperDocs() {
                 Connect with any HTTP client:
               </p>
               <pre className="bg-black/50 p-4 rounded-lg">
-{`curl https://dandolo.ai/api/chat/completions \\
-  -H "Authorization: Bearer YOUR_DANDOLO_KEY" \\
+{`# Developer key (500 requests/day)
+curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
+  -H "Authorization: Bearer dk_your_developer_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "auto-select",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# Agent key (5,000 requests/day)  
+curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
+  -H "Authorization: Bearer ak_your_agent_key" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "auto-select",
@@ -98,16 +113,25 @@ export function DeveloperDocs() {
         <div className="space-y-6">
           <div className="mb-6">
             <p className="text-gray-300">
-              All endpoints follow the standard format. Replace the base URL with{' '}
-              <code className="bg-gray-800 px-2 py-1 rounded text-blue-400">https://dandolo.ai/api</code>
+              All endpoints use the Dandolo routing infrastructure. Current base URL:{' '}
+              <code className="bg-gray-800 px-2 py-1 rounded text-blue-400">https://judicious-hornet-148.convex.cloud</code>
             </p>
+            <div className="bg-blue-500/10 border border-blue-500 rounded-lg p-3 mt-3">
+              <p className="text-sm text-blue-300">
+                💡 <strong>Key Authentication:</strong> Both <code>dk_</code> and <code>ak_</code> keys work with all endpoints. 
+                The three-layer validation ensures your requests are properly authenticated and routed through Venice AI providers.
+              </p>
+            </div>
           </div>
           
           <GlassCard className="p-6">
             <h3 className="text-lg font-semibold mb-4">Chat Completions</h3>
             <div className="mb-3">
-              <code className="text-blue-400">POST /chat/completions</code>
+              <code className="text-blue-400">POST /v1/chat/completions</code>
             </div>
+            <p className="text-sm text-gray-400 mb-3">
+              Supports both developer keys (<code>dk_</code>) and agent keys (<code>ak_</code>) for authentication.
+            </p>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
 {`{
   "model": "auto-select",
@@ -131,7 +155,8 @@ export function DeveloperDocs() {
               Returns all available models in the network. No authentication required.
             </p>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
-{`curl https://dandolo.ai/api/models`}
+{`curl https://judicious-hornet-148.convex.cloud/api/v1/models \
+  -H "Authorization: Bearer dk_your_key"  # or ak_your_key`}
             </pre>
           </GlassCard>
           
@@ -159,7 +184,7 @@ export function DeveloperDocs() {
           <div className="mb-6 p-4 bg-blue-500/20 border border-blue-500 rounded-lg">
             <p className="text-sm">
               💡 <strong>Tip:</strong> Dandolo uses standard chat completion API format. 
-              Use any HTTP client - point to <code className="bg-gray-800 px-2 py-1 rounded">https://dandolo.ai/api</code> with your Dandolo key.
+              All requests use <code className="bg-gray-800 px-2 py-1 rounded">https://judicious-hornet-148.convex.cloud</code> and route through Venice AI providers.
             </p>
           </div>
           
@@ -170,8 +195,8 @@ export function DeveloperDocs() {
 import requests
 
 response = requests.post(
-    "https://dandolo.ai/api/chat/completions",
-    headers={"Authorization": "Bearer dk_your_dandolo_key"},
+    "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+    headers={"Authorization": "Bearer dk_your_developer_key"},  # or ak_your_agent_key
     json={
         "model": "auto-select",
         "messages": [{"role": "user", "content": "Hello!"}]
@@ -189,7 +214,10 @@ response = litellm.completion(
     model="dandolo/auto-select",
     messages=[{"role": "user", "content": "Hello!"}],
     api_key="dk_your_dandolo_key",
-    api_base="https://dandolo.ai/api",
+    json={
+        "messages": [{"role": "user", "content": "Hello!"}],
+        "model": "auto-select"
+    }
 )
 
 print(response.choices[0].message.content)`}
@@ -202,7 +230,7 @@ print(response.choices[0].message.content)`}
 {`// Agent keys (ak_) have higher limits for production use
 const DANDOLO_CONFIG = {
   apiKey: 'ak_your_agent_key',  // 5,000 requests/day
-  baseURL: 'https://dandolo.ai/api'
+  baseURL: 'https://judicious-hornet-148.convex.cloud/v1'
 };
 
 // Works with LangChain via custom LLM
@@ -210,7 +238,7 @@ import { LLM } from "@langchain/core/language_models/llms";
 
 class DandoloLLM extends LLM {
   _call(prompt) {
-    return fetch("https://dandolo.ai/api/chat/completions", {
+    return fetch("https://judicious-hornet-148.convex.cloud/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + DANDOLO_CONFIG.apiKey,
@@ -226,14 +254,16 @@ class DandoloLLM extends LLM {
 // Works with any agent framework:
 // - Custom agents, BabyAGI, LangGraph
 // - LiteLLM, LangSmith, CrewAI
-// - Just configure base URL to: https://dandolo.ai/api`}
+// - Just configure base URL to: https://judicious-hornet-148.convex.cloud/v1
+// - Both dk_ and ak_ keys provide full Venice AI model access`}
             </pre>
           </GlassCard>
           
           <GlassCard className="p-6">
             <h3 className="text-lg font-semibold mb-4">cURL</h3>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
-{`curl https://dandolo.ai/api/chat/completions \\
+{`# Developer key (500 requests/day)
+curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
   -H "Authorization: Bearer dk_your_key" \\
   -H "Content-Type: application/json" \\
   -d '{

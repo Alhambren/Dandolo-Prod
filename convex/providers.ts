@@ -566,6 +566,7 @@ export const awardProviderPoints = mutation({
       v.literal("vcu_daily_reward")
     )),
     apiKeyType: v.optional(v.string()),
+    responseTime: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
@@ -578,9 +579,19 @@ export const awardProviderPoints = mutation({
 
     const transactionType = args.transactionType || "prompt_served";
 
+    // Calculate new rolling average response time if provided
+    let updatedAvgResponseTime = provider.avgResponseTime;
+    if (args.responseTime && args.responseTime > 0) {
+      // Using exponential moving average: new_avg = old_avg * 0.9 + new_value * 0.1
+      updatedAvgResponseTime = provider.avgResponseTime && provider.avgResponseTime > 0
+        ? (provider.avgResponseTime * 0.9) + (args.responseTime * 0.1)
+        : args.responseTime;
+    }
+
     // Update provider stats
     await ctx.db.patch(args.providerId, {
       totalPrompts: (provider.totalPrompts ?? 0) + args.promptsServed,
+      ...(updatedAvgResponseTime !== provider.avgResponseTime && { avgResponseTime: updatedAvgResponseTime }),
     });
 
     // Get or create provider points record

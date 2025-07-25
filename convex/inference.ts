@@ -944,6 +944,7 @@ export const route = action({
           tokensProcessed: tokens,
           transactionType: transactionType,
           apiKeyType: args.apiKey?.substring(0, 3) || "anonymous",
+          responseTime: responseTime,
         });
         
         // Award points to user if authenticated

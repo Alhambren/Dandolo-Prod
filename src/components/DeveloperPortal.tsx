@@ -249,8 +249,13 @@ export function DeveloperPortal() {
           <div>
             <h2 className="text-xl font-semibold">API Keys</h2>
             <p className="text-sm text-gray-400 mt-1">
-              You can have one developer key (500/day) and one agent key (5,000/day)
+              You can have one developer key (500/day) and one agent key (5,000/day). Both provide full access to Venice AI models.
             </p>
+            <div className="bg-blue-500/10 border border-blue-500 rounded-lg p-3 mt-2">
+              <p className="text-xs text-blue-300">
+                ✅ <strong>Equal Access:</strong> Both <code>dk_</code> and <code>ak_</code> keys provide identical functionality - chat completions, image generation, and model routing through Venice AI providers. The only difference is daily request limits.
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setShowGenerator(!showGenerator)}
@@ -282,7 +287,7 @@ export function DeveloperPortal() {
                   className="mr-2"
                 />
                 <span className={!canCreateDeveloper ? 'text-gray-500' : ''}>
-                  Developer (500/day) {!canCreateDeveloper && '- Already Created'}
+                  Developer Key (dk_) - 500 requests/day {!canCreateDeveloper && '- Already Created'}
                 </span>
               </label>
               <label className="flex items-center">
@@ -294,7 +299,7 @@ export function DeveloperPortal() {
                   className="mr-2"
                 />
                 <span className={!canCreateAgent ? 'text-gray-500' : ''}>
-                  Agent (5,000/day) {!canCreateAgent && '- Already Created'}
+                  Agent Key (ak_) - 5,000 requests/day {!canCreateAgent && '- Already Created'}
                 </span>
               </label>
             </div>
@@ -417,9 +422,13 @@ export function DeveloperPortal() {
           {apiKeys && apiKeys.length > 0 && (
             <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
               <p className="text-sm text-blue-300 mb-1">🔐 Security Notice</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 mb-2">
                 Your API keys are securely stored and can never be viewed in full again after creation. 
                 Keep your keys safe and never share them publicly.
+              </p>
+              <p className="text-xs text-blue-300">
+                💡 <strong>Key Prefixes:</strong> Developer keys start with <code>dk_</code> and agent keys start with <code>ak_</code>. 
+                Both provide full access to Venice AI models through Dandolo routing.
               </p>
             </div>
           )}
@@ -510,15 +519,29 @@ export function DeveloperPortal() {
         <h2 className="text-xl font-semibold mb-4">Quick Start</h2>
         <pre className="bg-black/50 p-4 rounded-lg overflow-x-auto text-sm">
 {`// Use direct HTTP requests with Dandolo
-const response = await fetch("https://dandolo.ai/api/chat/completions", {
+// Developer key (dk_) for development - 500 requests/day
+const response = await fetch("https://judicious-hornet-148.convex.cloud/v1/chat/completions", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer YOUR_DANDOLO_KEY",
+    "Authorization": "Bearer dk_your_developer_key",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
     model: "auto-select",
     messages: [{ role: "user", content: "Hello!" }]
+  })
+});
+
+// Agent key (ak_) for production - 5,000 requests/day
+const prodResponse = await fetch("https://judicious-hornet-148.convex.cloud/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer ak_your_agent_key",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "auto-select",
+    messages: [{ role: "user", content: "Hello from production!" }]
   })
 });
 

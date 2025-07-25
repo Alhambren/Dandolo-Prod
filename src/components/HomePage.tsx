@@ -113,14 +113,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               </button>
             </div>
             
-            {/* Powered by Venice.ai */}
-            <div className="flex items-center justify-center w-full">
-              <img 
-                src="/logos/powered-by.png" 
-                alt="Powered by Venice.ai" 
-                className="h-28 opacity-95 hover:opacity-100 transition-all duration-300 hover:scale-105"
-              />
-            </div>
             
             {/* Scroll Indicator */}
             <div className="flex justify-center mt-16 animate-bounce">

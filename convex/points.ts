@@ -453,6 +453,59 @@ export const getUserPoints = query({
 });
 
 // Helper mutation to initialize provider points if missing
+// RETROSPECTIVE MIGRATION: Reduce legacy high points for Diem compliance
+export const reduceLegacyPointsForDiem = mutation({
+  args: { 
+    confirmed: v.boolean() 
+  },
+  handler: async (ctx, args) => {
+    if (!args.confirmed) {
+      throw new Error("Migration must be explicitly confirmed with confirmed: true");
+    }
+    
+    const providerPoints = await ctx.db.query("providerPoints").collect();
+    
+    let recordsUpdated = 0;
+    let totalPointsReduced = 0;
+    
+    console.log(`Starting retrospective legacy points reduction for ${providerPoints.length} records...`);
+    
+    for (const record of providerPoints) {
+      const currentTotalPoints = record.totalPoints || record.points || 0;
+      
+      // Reduce legacy high points by 90% (keep 10%)
+      // Only apply to points above 1000 to avoid affecting small balances
+      if (currentTotalPoints > 1000) {
+        const newTotalPoints = Math.floor(currentTotalPoints * 0.1); // Keep 10%
+        const pointsReduction = currentTotalPoints - newTotalPoints;
+        
+        // Get provider for logging
+        const provider = await ctx.db.get(record.providerId);
+        console.log(`Reducing ${provider?.name || 'Unknown'}: ${currentTotalPoints.toLocaleString()} → ${newTotalPoints.toLocaleString()} points (-${pointsReduction.toLocaleString()})`);
+        
+        // Update the record
+        await ctx.db.patch(record._id, {
+          totalPoints: newTotalPoints,
+          points: newTotalPoints, // Update legacy field too
+        });
+        
+        recordsUpdated++;
+        totalPointsReduced += pointsReduction;
+      }
+    }
+    
+    const summary = {
+      success: true,
+      recordsUpdated,
+      totalPointsReduced,
+      message: `Retrospective migration complete: Updated ${recordsUpdated} records, reduced ${totalPointsReduced.toLocaleString()} legacy points (90% reduction)`,
+    };
+    
+    console.log("Retrospective Legacy Points Migration Summary:", summary);
+    return summary;
+  },
+});
+
 export const initializeProviderPoints = mutation({
   args: {},
   handler: async (ctx) => {
@@ -480,7 +533,7 @@ export const initializeProviderPoints = mutation({
   },
 });
 
-// ONE-TIME MIGRATION: Reduce VCU points by 90% for Diem compliance
+// ONE-TIME MIGRATION: Reduce legacy high points by 90% for Diem compliance
 export const migrateVCUPointsForDiem = mutation({
   args: { 
     confirmed: v.boolean() 
@@ -495,26 +548,25 @@ export const migrateVCUPointsForDiem = mutation({
     let recordsUpdated = 0;
     let totalPointsReduced = 0;
     
-    console.log(`Starting VCU points migration for ${providerPoints.length} records...`);
+    console.log(`Starting legacy points migration for ${providerPoints.length} records...`);
     
     for (const record of providerPoints) {
-      const currentVCUPoints = record.vcuProviderPoints || 0;
       const currentTotalPoints = record.totalPoints || record.points || 0;
       
-      if (currentVCUPoints > 0) {
-        // Calculate new values (divide VCU points by 10 - 90% reduction)
-        const newVCUPoints = Math.floor(currentVCUPoints / 10);
-        const pointsReduction = currentVCUPoints - newVCUPoints;
-        const newTotalPoints = Math.max(0, currentTotalPoints - pointsReduction);
+      // Reduce legacy high points by 90% (keep 10%)
+      // Only apply to points above 1000 to avoid affecting small balances
+      if (currentTotalPoints > 1000) {
+        const newTotalPoints = Math.floor(currentTotalPoints * 0.1); // Keep 10%
+        const pointsReduction = currentTotalPoints - newTotalPoints;
         
         // Get provider for logging
         const provider = await ctx.db.get(record.providerId);
-        console.log(`Updating ${provider?.name || 'Unknown'}: ${currentVCUPoints} → ${newVCUPoints} VCU points (-${pointsReduction})`);
+        console.log(`Reducing ${provider?.name || 'Unknown'}: ${currentTotalPoints.toLocaleString()} → ${newTotalPoints.toLocaleString()} points (-${pointsReduction.toLocaleString()})`);
         
         // Update the record
         await ctx.db.patch(record._id, {
           totalPoints: newTotalPoints,
-          vcuProviderPoints: newVCUPoints,
+          points: newTotalPoints, // Update legacy field too
         });
         
         recordsUpdated++;
@@ -526,10 +578,10 @@ export const migrateVCUPointsForDiem = mutation({
       success: true,
       recordsUpdated,
       totalPointsReduced,
-      message: `Migration complete: Updated ${recordsUpdated} records, reduced ${totalPointsReduced.toLocaleString()} VCU points (90% reduction)`,
+      message: `Migration complete: Updated ${recordsUpdated} records, reduced ${totalPointsReduced.toLocaleString()} legacy points (90% reduction)`,
     };
     
-    console.log("VCU Migration Summary:", summary);
+    console.log("Legacy Points Migration Summary:", summary);
     return summary;
   },
 });

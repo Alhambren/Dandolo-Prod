@@ -132,7 +132,7 @@ export function validateApiKeyFormat(apiKey: string): boolean {
   }
   
   // Also accept keys that start with other common AI API prefixes for testing
-  const validPrefixes = ['sk-', 'pk-', 'ak-', 'api_'];
+  const validPrefixes = ['sk-', 'pk-', 'ak_', 'dk_', 'api_'];
   return validPrefixes.some(prefix => cleanKey.startsWith(prefix)) && cleanKey.length >= 32;
 }
 
