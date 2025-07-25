@@ -201,7 +201,7 @@ const ProvidersPage: React.FC = () => {
                     Status
                   </th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Balance
+                    Inference Provided
                   </th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Responses
