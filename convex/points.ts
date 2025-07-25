@@ -160,8 +160,8 @@ export const distributeDailyRewards = internalAction({
     
     for (const provider of activeProviders) {
       try {
-        // Daily reward = VCU balance * 10 (since 1 VCU = $0.10, we give 10 points per dollar)
-        const dailyReward = Math.round((provider.vcuBalance || 0) * 10);
+        // Daily reward = VCU balance * 1 (Diem requirement: 1 point per VCU)
+        const dailyReward = Math.round((provider.vcuBalance || 0) * 1);
         
         if (dailyReward <= 0) {
           continue;
@@ -299,59 +299,104 @@ export const getPointsLeaderboardWithUserRank = query({
   },
 });
 
-// Get provider leaderboard with rank
+// Get provider leaderboard with rank - with better error handling
 export const getProviderLeaderboardWithRank = query({
   args: { 
     limit: v.optional(v.number()),
     currentAddress: v.optional(v.string()) 
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 10;
-    
-    // Get all provider points
-    const allProviderPoints = await ctx.db.query("providerPoints").collect();
-    
-    // Get provider details and create leaderboard
-    const leaderboard = await Promise.all(
-      allProviderPoints.map(async (pp) => {
-        const provider = await ctx.db.get(pp.providerId);
+    try {
+      const limit = args.limit ?? 10;
+      
+      // Debug: Check if providerPoints exist
+      const allProviderPoints = await ctx.db.query("providerPoints").collect();
+      console.log(`[getProviderLeaderboardWithRank] Found ${allProviderPoints.length} provider points records`);
+      
+      if (allProviderPoints.length === 0) {
+        console.log("[getProviderLeaderboardWithRank] No provider points data found, initializing...");
+        
+        // Initialize points for all existing providers
+        const allProviders = await ctx.db.query("providers").collect();
+        console.log(`[getProviderLeaderboardWithRank] Found ${allProviders.length} providers to initialize`);
+        
+        // Return empty result for now (initialization will happen separately)
         return {
-          providerId: pp.providerId,
-          name: provider?.name ?? "Unknown Provider",
-          address: provider?.address ?? "",
-          points: pp.totalPoints ?? pp.points ?? 0,
-          totalPrompts: pp.totalPrompts,
-          vcuBalance: provider?.vcuBalance ?? 0,
-          lastEarned: pp.lastEarned,
-          isCurrentUser: provider?.address === args.currentAddress,
-          rank: 0,
+          topProviders: [],
+          currentProviderEntry: null,
+          totalProviders: allProviders.length,
         };
-      })
-    );
-    
-    // Sort by points and add rankings
-    leaderboard.sort((a, b) => b.points - a.points);
-    leaderboard.forEach((entry, index) => {
-      entry.rank = index + 1;
-    });
-    
-    // Get top N
-    const topProviders = leaderboard.slice(0, limit);
-    
-    // Find current user's provider entry if not in top N
-    let currentProviderEntry = null;
-    if (args.currentAddress) {
-      const userInTop = topProviders.some(p => p.address === args.currentAddress);
-      if (!userInTop) {
-        currentProviderEntry = leaderboard.find(p => p.address === args.currentAddress);
       }
+      
+      // Get provider details and create leaderboard
+      const leaderboardPromises = allProviderPoints.map(async (pp) => {
+        try {
+          const provider = await ctx.db.get(pp.providerId);
+          
+          // Skip if provider no longer exists
+          if (!provider) {
+            console.log(`[getProviderLeaderboardWithRank] Provider ${pp.providerId} not found, skipping`);
+            return null;
+          }
+          
+          return {
+            providerId: pp.providerId,
+            name: provider.name ?? "Unknown Provider",
+            address: provider.address ?? "",
+            points: pp.totalPoints ?? pp.points ?? 0,
+            totalPrompts: pp.totalPrompts ?? 0,
+            vcuBalance: provider.vcuBalance ?? 0,
+            lastEarned: pp.lastEarned,
+            isCurrentUser: provider.address === args.currentAddress,
+            rank: 0, // Will be set after sorting
+          };
+        } catch (error) {
+          console.error(`[getProviderLeaderboardWithRank] Error processing provider ${pp.providerId}:`, error);
+          return null;
+        }
+      });
+      
+      // Wait for all promises and filter out nulls
+      const leaderboardResults = await Promise.all(leaderboardPromises);
+      const leaderboard = leaderboardResults.filter(entry => entry !== null);
+      
+      console.log(`[getProviderLeaderboardWithRank] Created leaderboard with ${leaderboard.length} entries`);
+      
+      // Sort by points and add rankings
+      leaderboard.sort((a, b) => b.points - a.points);
+      leaderboard.forEach((entry, index) => {
+        entry.rank = index + 1;
+      });
+      
+      // Get top N
+      const topProviders = leaderboard.slice(0, limit);
+      
+      // Find current user's provider entry if not in top N
+      let currentProviderEntry = null;
+      if (args.currentAddress) {
+        const userInTop = topProviders.some(p => p.address === args.currentAddress);
+        if (!userInTop) {
+          currentProviderEntry = leaderboard.find(p => p.address === args.currentAddress);
+        }
+      }
+      
+      console.log(`[getProviderLeaderboardWithRank] Returning ${topProviders.length} top providers`);
+      
+      return {
+        topProviders,
+        currentProviderEntry,
+        totalProviders: leaderboard.length,
+      };
+    } catch (error) {
+      console.error("[getProviderLeaderboardWithRank] Fatal error:", error);
+      
+      // Return safe default on any error
+      return {
+        topProviders: [],
+        currentProviderEntry: null,
+        totalProviders: 0,
+      };
     }
-    
-    return {
-      topProviders,
-      currentProviderEntry,
-      totalProviders: leaderboard.length,
-    };
   },
 });
 
@@ -404,5 +449,87 @@ export const getUserPoints = query({
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
     return points?.points ?? 0;
+  },
+});
+
+// Helper mutation to initialize provider points if missing
+export const initializeProviderPoints = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const providers = await ctx.db.query("providers").collect();
+    const existingPoints = await ctx.db.query("providerPoints").collect();
+    
+    const existingProviderIds = new Set(existingPoints.map(pp => pp.providerId));
+    
+    let initialized = 0;
+    for (const provider of providers) {
+      if (!existingProviderIds.has(provider._id)) {
+        await ctx.db.insert("providerPoints", {
+          providerId: provider._id,
+          totalPoints: 0,
+          totalPrompts: provider.totalPrompts ?? 0,
+          lastEarned: Date.now(),
+          isProviderActive: provider.isActive,
+        });
+        initialized++;
+      }
+    }
+    
+    console.log(`Initialized points for ${initialized} providers`);
+    return { initialized };
+  },
+});
+
+// ONE-TIME MIGRATION: Reduce VCU points by 90% for Diem compliance
+export const migrateVCUPointsForDiem = mutation({
+  args: { 
+    confirmed: v.boolean() 
+  },
+  handler: async (ctx, args) => {
+    if (!args.confirmed) {
+      throw new Error("Migration must be explicitly confirmed with confirmed: true");
+    }
+    
+    const providerPoints = await ctx.db.query("providerPoints").collect();
+    
+    let recordsUpdated = 0;
+    let totalPointsReduced = 0;
+    
+    console.log(`Starting VCU points migration for ${providerPoints.length} records...`);
+    
+    for (const record of providerPoints) {
+      const currentVCUPoints = record.vcuProviderPoints || 0;
+      const currentTotalPoints = record.totalPoints || record.points || 0;
+      
+      if (currentVCUPoints > 0) {
+        // Calculate new values (divide VCU points by 10 - 90% reduction)
+        const newVCUPoints = Math.floor(currentVCUPoints / 10);
+        const pointsReduction = currentVCUPoints - newVCUPoints;
+        const newTotalPoints = Math.max(0, currentTotalPoints - pointsReduction);
+        
+        // Get provider for logging
+        const provider = await ctx.db.get(record.providerId);
+        console.log(`Updating ${provider?.name || 'Unknown'}: ${currentVCUPoints} → ${newVCUPoints} VCU points (-${pointsReduction})`);
+        
+        // Update the record
+        await ctx.db.patch(record._id, {
+          totalPoints: newTotalPoints,
+          vcuProviderPoints: newVCUPoints,
+        });
+        
+        recordsUpdated++;
+        totalPointsReduced += pointsReduction;
+      }
+    }
+    
+    const summary = {
+      success: true,
+      recordsUpdated,
+      totalPointsReduced,
+      message: `Migration complete: Updated ${recordsUpdated} records, reduced ${totalPointsReduced.toLocaleString()} VCU points (90% reduction)`,
+    };
+    
+    console.log("VCU Migration Summary:", summary);
+    return summary;
   },
 });
