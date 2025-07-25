@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_ENV=production npx convex deploy --yes && NODE_ENV=production npx vite build",
+    "build": "NODE_ENV=production npx convex deploy --yes --typecheck=disable && NODE_ENV=production npx vite build",
+    "preview": "vite preview",
     "lint": "tsc -p convex --noEmit && tsc -p . --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "cypress run",
-    "test:open": "cypress open"
+    "test:open": "cypress open",
+    "dev:staging": "CONVEX_DEPLOYMENT=judicious-hornet-148 vite",
+    "staging:deploy": "npx convex deploy --deployment-name judicious-hornet-148 -y"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.80",
@@ -19,7 +22,7 @@
     "@wagmi/connectors": "^5.8.4",
     "canvas-confetti": "^1.9.3",
     "clsx": "^2.1.1",
-    "convex": "^1.24.8",
+    "convex": "^1.25.4",
     "framer-motion": "^12.18.1",
     "lucide-react": "^0.522.0",
     "react": "^19.0.0",
