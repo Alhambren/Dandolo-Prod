@@ -585,3 +585,82 @@ export const migrateVCUPointsForDiem = mutation({
     return summary;
   },
 });
+
+// DIRECT FIX: Sync VCU balances to dashboard points
+export const syncVCUBalancesToDashboardPoints = mutation({
+  args: { 
+    confirmed: v.boolean() 
+  },
+  handler: async (ctx, args) => {
+    if (!args.confirmed) {
+      throw new Error("Sync must be explicitly confirmed with confirmed: true");
+    }
+    
+    console.log("🔄 Starting VCU to Dashboard Points Sync...");
+    
+    // Get all providers
+    const providers = await ctx.db.query("providers").collect();
+    const providerPoints = await ctx.db.query("providerPoints").collect();
+    
+    let recordsUpdated = 0;
+    let totalPointsSet = 0;
+    
+    for (const provider of providers) {
+      const vcuBalance = provider.vcuBalance || 0;
+      
+      if (vcuBalance > 0) {
+        // Calculate points using downgraded rate: 10 points per VCU
+        const expectedPoints = Math.floor(vcuBalance * 10);
+        
+        // Find existing points record
+        const pointsRecord = providerPoints.find(p => p.providerId === provider._id);
+        
+        if (pointsRecord) {
+          const currentPoints = pointsRecord.totalPoints || 0;
+          
+          if (currentPoints !== expectedPoints) {
+            console.log(`Updating ${provider.name}: ${currentPoints} → ${expectedPoints} points (VCU: ${vcuBalance.toFixed(2)})`);
+            
+            await ctx.db.patch(pointsRecord._id, {
+              totalPoints: expectedPoints,
+              points: expectedPoints, // Update legacy field too
+              vcuProviderPoints: expectedPoints, // Set VCU provider points
+            });
+            
+            recordsUpdated++;
+            totalPointsSet += expectedPoints;
+          }
+        } else {
+          console.log(`Creating points record for ${provider.name}: ${expectedPoints} points (VCU: ${vcuBalance.toFixed(2)})`);
+          
+          await ctx.db.insert("providerPoints", {
+            providerId: provider._id,
+            address: provider.address,
+            totalPoints: expectedPoints,
+            points: expectedPoints,
+            vcuProviderPoints: expectedPoints,
+            promptServicePoints: 0,
+            developerApiPoints: 0,
+            agentApiPoints: 0,
+            totalPrompts: provider.totalPrompts || 0,
+            isProviderActive: provider.isActive,
+            lastEarned: Date.now(),
+          });
+          
+          recordsUpdated++;
+          totalPointsSet += expectedPoints;
+        }
+      }
+    }
+    
+    const summary = {
+      success: true,
+      recordsUpdated,
+      totalPointsSet,
+      message: `VCU sync complete: Updated ${recordsUpdated} records, set ${totalPointsSet.toLocaleString()} total points from VCU balances`,
+    };
+    
+    console.log("VCU to Dashboard Points Sync Summary:", summary);
+    return summary;
+  },
+});

@@ -6,13 +6,11 @@ import { api } from '../../convex/_generated/api';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import AnimatedPointsCounter from './AnimatedPointsCounter';
-import MonitoringDashboard from './MonitoringDashboard';
 
 const DashboardPage: React.FC = () => {
   const { address } = useAccount();
   const [providerName, setProviderName] = useState('');
   const [veniceApiKey, setVeniceApiKey] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'monitoring'>('overview');
   
   // SECURITY NOTE: API key is only temporarily stored in memory during registration
   // and is immediately cleared. It's never persisted or logged.
@@ -36,7 +34,6 @@ const DashboardPage: React.FC = () => {
   );
   
   // Health and performance queries
-  const networkStats = useQuery(api.stats.getNetworkStats);
   const providerHealth = useQuery(
     api.providers.getProviderUptime,
     currentProvider?._id ? { providerId: currentProvider._id, hours: 24 } : "skip"
@@ -179,34 +176,7 @@ const DashboardPage: React.FC = () => {
         <div className="container mx-auto px-4 py-8">
           <h1 className="text-4xl font-bold mb-8">Dashboard</h1>
           
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 mb-6">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                activeTab === 'overview'
-                  ? 'bg-gold/20 text-gold border border-gold/30'
-                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
-              }`}
-            >
-              Provider Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('monitoring')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                activeTab === 'monitoring'
-                  ? 'bg-gold/20 text-gold border border-gold/30'
-                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
-              }`}
-            >
-              System Monitoring
-            </button>
-          </div>
-
-          {activeTab === 'monitoring' ? (
-            <MonitoringDashboard className="mb-8" />
-          ) : (
-            <GlassCard className="p-6">
+          <GlassCard className="p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-white">{currentProvider.name}</h2>
@@ -325,70 +295,39 @@ const DashboardPage: React.FC = () => {
               </div>
             )}
 
-            {/* Health & Performance Section */}
+            {/* Provider Health Status */}
             <div className="bg-white/5 rounded-lg p-4 mb-4">
-              <h3 className="text-lg font-semibold mb-4 text-white">Health & Performance</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Health Status */}
-                <div>
-                  <h4 className="text-md font-medium mb-3 text-gray-300">Health Status</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Last Health Check</span>
-                      <span className="text-sm text-white">
-                        {currentProvider.lastHealthCheck 
-                          ? new Date(currentProvider.lastHealthCheck).toLocaleString()
-                          : 'Never'
-                        }
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Consecutive Failures</span>
-                      <span className={`text-sm font-semibold ${currentProvider.consecutiveFailures > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {currentProvider.consecutiveFailures || 0}
-                      </span>
-                    </div>
-                    {healthHistory && healthHistory.length > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-400">Recent Checks</span>
-                        <div className="flex space-x-1">
-                          {healthHistory.slice(0, 6).map((check, i) => (
-                            <div
-                              key={i}
-                              className={`w-3 h-3 rounded-full ${check.status ? 'bg-green-500' : 'bg-red-500'}`}
-                              title={`${check.status ? 'Healthy' : 'Failed'} - ${new Date(check.timestamp).toLocaleString()}`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+              <h3 className="text-lg font-semibold mb-4 text-white">Provider Health Status</h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-400">Last Health Check</span>
+                  <span className="text-sm text-white">
+                    {currentProvider.lastHealthCheck 
+                      ? new Date(currentProvider.lastHealthCheck).toLocaleString()
+                      : 'Never'
+                    }
+                  </span>
                 </div>
-
-                {/* Network Stats */}
-                <div>
-                  <h4 className="text-md font-medium mb-3 text-gray-300">Network Overview</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Network Health</span>
-                      <span className={`text-sm font-semibold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {networkStats?.networkHealth?.toFixed(1) || '0.0'}%
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Network Avg Response</span>
-                      <span className="text-sm text-white">
-                        {networkStats?.avgResponseTime ? `${networkStats.avgResponseTime.toFixed(0)}ms` : '~1200ms'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Active Providers</span>
-                      <span className="text-sm text-white">
-                        {networkStats?.activeProviders || 0} / {networkStats?.totalProviders || 0}
-                      </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-400">Consecutive Failures</span>
+                  <span className={`text-sm font-semibold ${currentProvider.consecutiveFailures > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    {currentProvider.consecutiveFailures || 0}
+                  </span>
+                </div>
+                {healthHistory && healthHistory.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-400">Recent Checks</span>
+                    <div className="flex space-x-1">
+                      {healthHistory.slice(0, 6).map((check, i) => (
+                        <div
+                          key={i}
+                          className={`w-3 h-3 rounded-full ${check.status ? 'bg-green-500' : 'bg-red-500'}`}
+                          title={`${check.status ? 'Healthy' : 'Failed'} - ${new Date(check.timestamp).toLocaleString()}`}
+                        />
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -420,7 +359,6 @@ const DashboardPage: React.FC = () => {
               </button>
             </div>
             </GlassCard>
-          )}
         </div>
       </div>
     );
@@ -445,12 +383,10 @@ const DashboardPage: React.FC = () => {
             <p className="text-2xl font-bold">{userStats?.promptsRemaining || 50}</p>
           </GlassCard>
           <GlassCard className="p-4">
-            <h3 className="text-lg font-semibold mb-2">Network Health</h3>
-            <p className={`text-2xl font-bold ${networkStats?.networkHealth >= 95 ? 'text-green-400' : networkStats?.networkHealth >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
-              {networkStats?.networkHealth?.toFixed(1) || '0.0'}%
-            </p>
+            <h3 className="text-lg font-semibold mb-2">Status</h3>
+            <p className="text-2xl font-bold text-green-400">Online</p>
             <div className="text-xs text-gray-400 mt-1">
-              {networkStats?.activeProviders || 0} active providers
+              Service available
             </div>
           </GlassCard>
         </div>

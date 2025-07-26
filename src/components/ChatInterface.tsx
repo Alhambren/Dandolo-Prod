@@ -261,9 +261,6 @@ export const ChatInterface: React.FC = () => {
     if (savedChats) {
       const parsed = JSON.parse(savedChats) as Chat[];
       setChats(parsed);
-      if (parsed.length > 0) {
-        setActiveChat(parsed[0].id);
-      }
     }
     
     if (savedFolders) {
@@ -274,6 +271,18 @@ export const ChatInterface: React.FC = () => {
     if (savedAdultContent) {
       setAllowAdultContent(JSON.parse(savedAdultContent));
     }
+    
+    // Always create a new chat when platform loads - equivalent to clicking "New Chat"
+    const newChat: Chat = {
+      id: `chat_${Date.now()}`,
+      title: 'New Chat',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      taskType: 'chat',
+    };
+    setChats(prev => [newChat, ...prev]);
+    setActiveChat(newChat.id);
   }, []);
 
   // Save chats to localStorage
