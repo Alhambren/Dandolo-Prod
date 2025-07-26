@@ -1,8 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import GlassCard from './GlassCard';
+
+// Get API base URL safely
+const getApiBaseUrl = () => {
+  return import.meta.env.VITE_CONVEX_URL || 'https://api.dandolo.ai';
+};
 
 export function DeveloperDocs() {
   const [activeTab, setActiveTab] = useState('quickstart');
+  const apiBaseUrl = getApiBaseUrl();
   
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -10,7 +18,7 @@ export function DeveloperDocs() {
       
       {/* Tab Navigation */}
       <div className="flex gap-4 mb-8 border-b border-gray-700">
-        {['quickstart', 'endpoints', 'examples', 'models'].map(tab => (
+        {['quickstart', 'endpoints', 'examples', 'agents', 'testing', 'models'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -20,7 +28,7 @@ export function DeveloperDocs() {
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            {tab}
+            {tab === 'agents' ? 'AI Agents' : tab}
           </button>
         ))}
       </div>
@@ -76,7 +84,7 @@ export function DeveloperDocs() {
               </p>
               <pre className="bg-black/50 p-4 rounded-lg">
 {`# Developer key (500 requests/day)
-curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
+curl ${apiBaseUrl}/v1/chat/completions \\
   -H "Authorization: Bearer dk_your_developer_key" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -85,7 +93,7 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
   }'
 
 # Agent key (5,000 requests/day)  
-curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
+curl ${apiBaseUrl}/v1/chat/completions \\
   -H "Authorization: Bearer ak_your_agent_key" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -114,7 +122,7 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
           <div className="mb-6">
             <p className="text-gray-300">
               All endpoints use the Dandolo routing infrastructure. Current base URL:{' '}
-              <code className="bg-gray-800 px-2 py-1 rounded text-blue-400">https://judicious-hornet-148.convex.cloud</code>
+              <code className="bg-gray-800 px-2 py-1 rounded text-blue-400">${apiBaseUrl}</code>
             </p>
             <div className="bg-blue-500/10 border border-blue-500 rounded-lg p-3 mt-3">
               <p className="text-sm text-blue-300">
@@ -155,7 +163,7 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
               Returns all available models in the network. No authentication required.
             </p>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
-{`curl https://judicious-hornet-148.convex.cloud/api/v1/models \
+{`curl ${apiBaseUrl}/api/v1/models \
   -H "Authorization: Bearer dk_your_key"  # or ak_your_key`}
             </pre>
           </GlassCard>
@@ -184,7 +192,7 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
           <div className="mb-6 p-4 bg-blue-500/20 border border-blue-500 rounded-lg">
             <p className="text-sm">
               💡 <strong>Tip:</strong> Dandolo uses standard chat completion API format. 
-              All requests use <code className="bg-gray-800 px-2 py-1 rounded">https://judicious-hornet-148.convex.cloud</code> and route through Venice AI providers.
+              All requests use <code className="bg-gray-800 px-2 py-1 rounded">${apiBaseUrl}</code> and route through Venice AI providers.
             </p>
           </div>
           
@@ -195,7 +203,7 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
 import requests
 
 response = requests.post(
-    "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+    "${apiBaseUrl}/v1/chat/completions",
     headers={"Authorization": "Bearer dk_your_developer_key"},  # or ak_your_agent_key
     json={
         "model": "auto-select",
@@ -230,7 +238,7 @@ print(response.choices[0].message.content)`}
 {`// Agent keys (ak_) have higher limits for production use
 const DANDOLO_CONFIG = {
   apiKey: 'ak_your_agent_key',  // 5,000 requests/day
-  baseURL: 'https://judicious-hornet-148.convex.cloud/v1'
+  baseURL: '${apiBaseUrl}/v1'
 };
 
 // Works with LangChain via custom LLM
@@ -238,7 +246,7 @@ import { LLM } from "@langchain/core/language_models/llms";
 
 class DandoloLLM extends LLM {
   _call(prompt) {
-    return fetch("https://judicious-hornet-148.convex.cloud/v1/chat/completions", {
+    return fetch("${apiBaseUrl}/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + DANDOLO_CONFIG.apiKey,
@@ -254,7 +262,7 @@ class DandoloLLM extends LLM {
 // Works with any agent framework:
 // - Custom agents, BabyAGI, LangGraph
 // - LiteLLM, LangSmith, CrewAI
-// - Just configure base URL to: https://judicious-hornet-148.convex.cloud/v1
+// - Just configure base URL to: ${apiBaseUrl}/v1
 // - Both dk_ and ak_ keys provide full Venice AI model access`}
             </pre>
           </GlassCard>
@@ -263,7 +271,7 @@ class DandoloLLM extends LLM {
             <h3 className="text-lg font-semibold mb-4">cURL</h3>
             <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
 {`# Developer key (500 requests/day)
-curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
+curl ${apiBaseUrl}/v1/chat/completions \\
   -H "Authorization: Bearer dk_your_key" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -271,6 +279,205 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`}
             </pre>
+          </GlassCard>
+        </div>
+      )}
+      
+      {/* AI Agents */}
+      {activeTab === 'agents' && (
+        <div className="space-y-6">
+          <div className="mb-6 p-4 bg-blue-500/20 border border-blue-500 rounded-lg">
+            <p className="text-sm">
+              🤖 <strong>Agent Integration:</strong> Dandolo is designed for AI agents with high-throughput, 
+              uncensored access to multiple models through our decentralized network.
+            </p>
+          </div>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">LangChain Integration</h3>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`from langchain.llms.base import LLM
+import requests
+
+class DandoloLLM(LLM):
+    api_key: str
+    base_url: str = "${apiBaseUrl}/v1"
+    
+    @property
+    def _llm_type(self) -> str:
+        return "dandolo"
+    
+    def _call(self, prompt: str, stop=None) -> str:
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": "auto-select",
+                "messages": [{"role": "user", "content": prompt}]
+            }
+        )
+        return response.json()['choices'][0]['message']['content']
+
+# Usage
+llm = DandoloLLM(api_key="ak_your_agent_key")
+result = llm("Explain quantum computing")`}
+            </pre>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">AutoGen Framework</h3>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`import autogen
+
+config_list = [{
+    "model": "auto-select",
+    "api_key": "ak_your_agent_key",
+    "base_url": "${apiBaseUrl}/v1"
+}]
+
+assistant = autogen.AssistantAgent(
+    name="assistant",
+    llm_config={"config_list": config_list}
+)
+
+user = autogen.UserProxyAgent(
+    name="user",
+    human_input_mode="NEVER"
+)
+
+user.initiate_chat(assistant, message="Hello from AutoGen!")`}
+            </pre>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Agent Best Practices</h3>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">🔑 Key Management</h4>
+                <ul className="text-sm text-gray-300 space-y-1">
+                  <li>• Use <code className="text-blue-400">ak_</code> keys for production (5,000 requests/day)</li>
+                  <li>• Monitor usage with <code className="text-blue-400">/api/v1/balance</code> endpoint</li>
+                  <li>• Implement retry logic with exponential backoff</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">⚡ Performance</h4>
+                <ul className="text-sm text-gray-300 space-y-1">
+                  <li>• Use <code className="text-blue-400">auto-select</code> model for intelligent routing</li>
+                  <li>• Batch multiple requests when possible</li>
+                  <li>• Manage conversation context to stay within token limits</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">🛡️ Error Handling</h4>
+                <ul className="text-sm text-gray-300 space-y-1">
+                  <li>• Handle 429 rate limits with backoff</li>
+                  <li>• Check for 503 provider unavailable and retry</li>
+                  <li>• Validate responses before processing</li>
+                </ul>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+      
+      {/* Testing */}
+      {activeTab === 'testing' && (
+        <div className="space-y-6">
+          <div className="mb-6 p-4 bg-green-500/20 border border-green-500 rounded-lg">
+            <p className="text-sm">
+              🧪 <strong>Testing Tools:</strong> We provide comprehensive testing scripts to validate your integration.
+            </p>
+          </div>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Quick Start Test (Bash)</h3>
+            <p className="text-gray-300 mb-3">
+              Test your API key immediately with our bash script:
+            </p>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`# Download and run the quick start script
+curl -O https://dandolo.ai/quick-start.sh
+chmod +x quick-start.sh
+./quick-start.sh dk_your_api_key
+
+# Or run directly:
+./quick-start.sh`}
+            </pre>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Python Test Suite</h3>
+            <p className="text-gray-300 mb-3">
+              Comprehensive testing with detailed reporting:
+            </p>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`# Download and run Python test suite
+curl -O https://dandolo.ai/test-dandolo-integration.py
+python test-dandolo-integration.py --api-key dk_your_key
+
+# Run with advanced tests (images, embeddings, performance)
+python test-dandolo-integration.py --api-key dk_your_key --advanced`}
+            </pre>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">JavaScript/Node.js Test</h3>
+            <p className="text-gray-300 mb-3">
+              For JavaScript environments:
+            </p>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`# Download and run JavaScript test suite
+curl -O https://dandolo.ai/test-dandolo-integration.js
+node test-dandolo-integration.js --api-key dk_your_key --advanced`}
+            </pre>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Manual Testing with cURL</h3>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Connection Test</h4>
+                <pre className="bg-black/50 p-3 rounded text-xs overflow-x-auto">
+{`curl ${apiBaseUrl}/v1/chat/completions \\
+  -H "Authorization: Bearer dk_your_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model": "auto-select", "messages": [{"role": "user", "content": "Hello!"}]}'`}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Balance Check</h4>
+                <pre className="bg-black/50 p-3 rounded text-xs overflow-x-auto">
+{`curl ${apiBaseUrl}/api/v1/balance \\
+  -H "Authorization: Bearer dk_your_key"`}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Models List</h4>
+                <pre className="bg-black/50 p-3 rounded text-xs overflow-x-auto">
+{`curl ${apiBaseUrl}/v1/models \\
+  -H "Authorization: Bearer dk_your_key"`}
+                </pre>
+              </div>
+            </div>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Common Error Scenarios</h3>
+            <div className="space-y-3">
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded">
+                <p className="text-red-300 font-medium">401 Unauthorized</p>
+                <p className="text-sm text-gray-400">Check API key format (dk_ or ak_ prefix) and validity</p>
+              </div>
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded">
+                <p className="text-yellow-300 font-medium">429 Rate Limited</p>
+                <p className="text-sm text-gray-400">Daily limit reached. Check usage or upgrade to agent key</p>
+              </div>
+              <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded">
+                <p className="text-orange-300 font-medium">503 Service Unavailable</p>
+                <p className="text-sm text-gray-400">No active providers. Retry in 30-60 seconds</p>
+              </div>
+            </div>
           </GlassCard>
         </div>
       )}
@@ -283,45 +490,26 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \\
 
 // Dynamic models list
 function ModelsList() {
-  const [models, setModels] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const availableModels = useQuery(api.models.getAvailableModels);
   
-  useEffect(() => {
-    // Fetch without auth - models endpoint is public
-    fetch('/api/models')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch models');
-        return res.json();
-      })
-      .then(data => {
-        setModels(data.data || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
-  
-  if (loading) {
+  if (availableModels === undefined) {
     return (
       <GlassCard className="p-6">
         <div className="flex items-center justify-center py-8">
-          <div className="loading-spinner w-6 h-6 mr-3"></div>
-          <span>Loading models...</span>
+          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mr-3"></div>
+          <span>Loading models from Venice.ai...</span>
         </div>
       </GlassCard>
     );
   }
   
-  if (error) {
+  if (!availableModels || availableModels.length === 0) {
     return (
       <GlassCard className="p-6">
         <div className="text-center py-8">
-          <p className="text-red-400 mb-4">Failed to load models: {error}</p>
+          <p className="text-red-400 mb-4">No models available</p>
           <p className="text-gray-400 text-sm">
-            Note: Model list requires an active provider connection.
+            Models are dynamically fetched from Venice.ai providers. Please check back later or ensure providers are active.
           </p>
         </div>
       </GlassCard>
@@ -331,22 +519,23 @@ function ModelsList() {
   return (
     <GlassCard className="p-6">
       <h2 className="text-xl font-semibold mb-4">
-        Available Models ({models.length})
+        Available Models ({availableModels.length})
       </h2>
-      {models.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {models.map((model: any) => (
-            <div key={model.id} className="p-3 bg-white/5 rounded-lg">
-              <code className="text-sm text-blue-400">{model.id}</code>
-              <p className="text-xs text-gray-400 mt-1">Available through Dandolo</p>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <p className="text-gray-400">No models available at the moment.</p>
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {availableModels.map((model: any) => (
+          <div key={model.id} className="p-3 bg-white/5 rounded-lg">
+            <code className="text-sm text-blue-400">{model.id}</code>
+            {model.type && (
+              <span className="ml-2 px-2 py-1 bg-gray-700 text-xs rounded">
+                {model.type}
+              </span>
+            )}
+            <p className="text-xs text-gray-400 mt-1">
+              Live from Venice.ai • Updated dynamically
+            </p>
+          </div>
+        ))}
+      </div>
       <p className="text-sm text-gray-400 mt-4">
         * Models are continuously updated in our inference pool
       </p>

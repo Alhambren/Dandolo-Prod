@@ -520,7 +520,7 @@ export function DeveloperPortal() {
         <pre className="bg-black/50 p-4 rounded-lg overflow-x-auto text-sm">
 {`// Use direct HTTP requests with Dandolo
 // Developer key (dk_) for development - 500 requests/day
-const response = await fetch("https://judicious-hornet-148.convex.cloud/v1/chat/completions", {
+const response = await fetch("https://api.dandolo.ai/v1/chat/completions", {
   method: "POST",
   headers: {
     "Authorization": "Bearer dk_your_developer_key",
@@ -533,7 +533,7 @@ const response = await fetch("https://judicious-hornet-148.convex.cloud/v1/chat/
 });
 
 // Agent key (ak_) for production - 5,000 requests/day
-const prodResponse = await fetch("https://judicious-hornet-148.convex.cloud/v1/chat/completions", {
+const prodResponse = await fetch("https://api.dandolo.ai/v1/chat/completions", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ak_your_agent_key",

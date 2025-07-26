@@ -1,7 +1,7 @@
 // convex/http.ts
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 // Create the HTTP router
 const http = httpRouter();
@@ -21,10 +21,28 @@ http.route({
     return new Response(JSON.stringify({ 
       status: "ok", 
       service: "dandolo-inference-router",
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      message: "HTTP routing is working!"
     }), {
       status: 200,
-      headers: { "Content-Type": "application/json", ...getSecureCorsHeaders({} as Request) }
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      }
+    });
+  }),
+});
+
+// Simple test endpoint
+http.route({
+  path: "/test",
+  method: "GET", 
+  handler: httpAction(async () => {
+    return new Response("HTTP routing works!", {
+      status: 200,
+      headers: { "Content-Type": "text/plain" }
     });
   }),
 });
@@ -234,12 +252,24 @@ http.route({
         });
       }
 
-      // Proxy to Venice.ai characters API
+      // Get active provider and decrypt API key
       const providers = await ctx.runQuery(api.providers.list, {});
       const activeProvider = providers?.find(p => p.isActive);
       
-      if (!activeProvider?.veniceApiKey) {
+      if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      // Get decrypted API key
+      const veniceApiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+        providerId: activeProvider._id
+      });
+
+      if (!veniceApiKey) {
+        return new Response(JSON.stringify({ error: "Failed to get provider API key" }), {
           status: 503,
           headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
         });
@@ -247,7 +277,7 @@ http.route({
 
       const veniceResponse = await fetch("https://api.venice.ai/api/v1/characters", {
         headers: {
-          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Authorization": `Bearer ${veniceApiKey}`,
           "Content-Type": "application/json"
         }
       });
@@ -300,8 +330,20 @@ http.route({
       const providers = await ctx.runQuery(api.providers.list, {});
       const activeProvider = providers?.find(p => p.isActive);
       
-      if (!activeProvider?.veniceApiKey) {
+      if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      // Get decrypted API key
+      const veniceApiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+        providerId: activeProvider._id
+      });
+
+      if (!veniceApiKey) {
+        return new Response(JSON.stringify({ error: "Failed to get provider API key" }), {
           status: 503,
           headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
         });
@@ -310,7 +352,7 @@ http.route({
       const veniceResponse = await fetch(`https://api.venice.ai/api/v1/characters/${characterId}/chat`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Authorization": `Bearer ${veniceApiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(body)
@@ -361,8 +403,20 @@ http.route({
       const providers = await ctx.runQuery(api.providers.list, {});
       const activeProvider = providers?.find(p => p.isActive);
       
-      if (!activeProvider?.veniceApiKey) {
+      if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      // Get decrypted API key
+      const veniceApiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+        providerId: activeProvider._id
+      });
+
+      if (!veniceApiKey) {
+        return new Response(JSON.stringify({ error: "Failed to get provider API key" }), {
           status: 503,
           headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
         });
@@ -371,7 +425,7 @@ http.route({
       const veniceResponse = await fetch("https://api.venice.ai/api/v1/images/generations", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Authorization": `Bearer ${veniceApiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(body)
@@ -422,8 +476,20 @@ http.route({
       const providers = await ctx.runQuery(api.providers.list, {});
       const activeProvider = providers?.find(p => p.isActive);
       
-      if (!activeProvider?.veniceApiKey) {
+      if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      // Get decrypted API key
+      const veniceApiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+        providerId: activeProvider._id
+      });
+
+      if (!veniceApiKey) {
+        return new Response(JSON.stringify({ error: "Failed to get provider API key" }), {
           status: 503,
           headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
         });
@@ -432,7 +498,7 @@ http.route({
       const veniceResponse = await fetch("https://api.venice.ai/api/v1/embeddings", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Authorization": `Bearer ${veniceApiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(body)
@@ -482,8 +548,20 @@ http.route({
       const providers = await ctx.runQuery(api.providers.list, {});
       const activeProvider = providers?.find(p => p.isActive);
       
-      if (!activeProvider?.veniceApiKey) {
+      if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      // Get decrypted API key
+      const veniceApiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+        providerId: activeProvider._id
+      });
+
+      if (!veniceApiKey) {
+        return new Response(JSON.stringify({ error: "Failed to get provider API key" }), {
           status: 503,
           headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
         });
@@ -491,7 +569,7 @@ http.route({
 
       const veniceResponse = await fetch("https://api.venice.ai/api/v1/models", {
         headers: {
-          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Authorization": `Bearer ${veniceApiKey}`,
           "Content-Type": "application/json"
         }
       });

@@ -116,7 +116,8 @@ export const createApiKey = action({
     } catch (error) {
       if (error instanceof Error && error.message === "Key collision detected") {
         // Very unlikely, but try again with a new key
-        return await ctx.runAction(api.apiKeys.createApiKey, args);
+        // Retry by generating a new key instead of recursion
+        throw new Error("Key generation failed - please try again");
       }
       throw error;
     }
