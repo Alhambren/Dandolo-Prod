@@ -211,6 +211,309 @@ http.route({
   }),
 });
 
+// Venice Characters API
+http.route({
+  path: "/v1/characters",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const apiKey = authHeader.substring(7);
+      const validation = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!validation) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      // Proxy to Venice.ai characters API
+      const providers = await ctx.runQuery(api.providers.list, {});
+      const activeProvider = providers?.find(p => p.isActive);
+      
+      if (!activeProvider?.veniceApiKey) {
+        return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const veniceResponse = await fetch("https://api.venice.ai/api/v1/characters", {
+        headers: {
+          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await veniceResponse.json();
+      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: validation._id });
+
+      return new Response(JSON.stringify(data), {
+        status: veniceResponse.status,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+
+    } catch (error) {
+      console.error("Characters endpoint error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+    }
+  }),
+});
+
+// Venice Character Chat
+http.route({
+  path: "/v1/characters/{characterId}/chat",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const apiKey = authHeader.substring(7);
+      const validation = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!validation) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const url = new URL(request.url);
+      const characterId = url.pathname.split('/')[3]; // Extract characterId from path
+      const body = await request.json();
+
+      const providers = await ctx.runQuery(api.providers.list, {});
+      const activeProvider = providers?.find(p => p.isActive);
+      
+      if (!activeProvider?.veniceApiKey) {
+        return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const veniceResponse = await fetch(`https://api.venice.ai/api/v1/characters/${characterId}/chat`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await veniceResponse.json();
+      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: validation._id });
+
+      return new Response(JSON.stringify(data), {
+        status: veniceResponse.status,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+
+    } catch (error) {
+      console.error("Character chat endpoint error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+    }
+  }),
+});
+
+// Venice Image Generation
+http.route({
+  path: "/v1/images/generations",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const apiKey = authHeader.substring(7);
+      const validation = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!validation) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const body = await request.json();
+      const providers = await ctx.runQuery(api.providers.list, {});
+      const activeProvider = providers?.find(p => p.isActive);
+      
+      if (!activeProvider?.veniceApiKey) {
+        return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const veniceResponse = await fetch("https://api.venice.ai/api/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await veniceResponse.json();
+      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: validation._id });
+
+      return new Response(JSON.stringify(data), {
+        status: veniceResponse.status,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+
+    } catch (error) {
+      console.error("Image generation endpoint error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+    }
+  }),
+});
+
+// Venice Embeddings
+http.route({
+  path: "/v1/embeddings",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const apiKey = authHeader.substring(7);
+      const validation = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!validation) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const body = await request.json();
+      const providers = await ctx.runQuery(api.providers.list, {});
+      const activeProvider = providers?.find(p => p.isActive);
+      
+      if (!activeProvider?.veniceApiKey) {
+        return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const veniceResponse = await fetch("https://api.venice.ai/api/v1/embeddings", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await veniceResponse.json();
+      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: validation._id });
+
+      return new Response(JSON.stringify(data), {
+        status: veniceResponse.status,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+
+    } catch (error) {
+      console.error("Embeddings endpoint error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+    }
+  }),
+});
+
+// Venice Models (OpenAI compatible)
+http.route({
+  path: "/v1/models",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const apiKey = authHeader.substring(7);
+      const validation = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+      if (!validation) {
+        return new Response(JSON.stringify({ error: "Invalid API key" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const providers = await ctx.runQuery(api.providers.list, {});
+      const activeProvider = providers?.find(p => p.isActive);
+      
+      if (!activeProvider?.veniceApiKey) {
+        return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+        });
+      }
+
+      const veniceResponse = await fetch("https://api.venice.ai/api/v1/models", {
+        headers: {
+          "Authorization": `Bearer ${activeProvider.veniceApiKey}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await veniceResponse.json();
+      await ctx.runMutation(api.apiKeys.recordUsage, { keyId: validation._id });
+
+      return new Response(JSON.stringify(data), {
+        status: veniceResponse.status,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+
+    } catch (error) {
+      console.error("Models endpoint error:", error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
+      });
+    }
+  }),
+});
+
 // CORS preflight for all routes
 http.route({
   path: "/v1/chat/completions",
@@ -236,6 +539,51 @@ http.route({
 
 http.route({
   path: "/api/v1/balance",
+  method: "OPTIONS",
+  handler: httpAction(async (ctx, request) => {
+    return new Response(null, {
+      status: 204,
+      headers: getSecureCorsHeaders(request),
+    });
+  }),
+});
+
+// CORS preflight for new Venice endpoints
+http.route({
+  path: "/v1/characters",
+  method: "OPTIONS",
+  handler: httpAction(async (ctx, request) => {
+    return new Response(null, {
+      status: 204,
+      headers: getSecureCorsHeaders(request),
+    });
+  }),
+});
+
+http.route({
+  path: "/v1/images/generations",
+  method: "OPTIONS",
+  handler: httpAction(async (ctx, request) => {
+    return new Response(null, {
+      status: 204,
+      headers: getSecureCorsHeaders(request),
+    });
+  }),
+});
+
+http.route({
+  path: "/v1/embeddings",
+  method: "OPTIONS",
+  handler: httpAction(async (ctx, request) => {
+    return new Response(null, {
+      status: 204,
+      headers: getSecureCorsHeaders(request),
+    });
+  }),
+});
+
+http.route({
+  path: "/v1/models",
   method: "OPTIONS",
   handler: httpAction(async (ctx, request) => {
     return new Response(null, {
