@@ -3,9 +3,9 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import GlassCard from './GlassCard';
 
-// Get API base URL safely
+// Get sanitized API base URL for documentation (never expose internal URLs)
 const getApiBaseUrl = () => {
-  return import.meta.env.VITE_CONVEX_URL || 'https://api.dandolo.ai';
+  return 'https://api.dandolo.ai';
 };
 
 export function DeveloperDocs() {
