@@ -323,6 +323,7 @@ export const refreshModelCacheInternal = internalAction({
                     name: model.id,
                     contextLength: model.context_length || 0,
                   };
+                  
                   // Categorize based on the API response type and capabilities
                   if (model.type === "image") {
                     categorized.image.push(modelInfo);
@@ -334,10 +335,10 @@ export const refreshModelCacheInternal = internalAction({
                     categorized.code.push(modelInfo);
                   } else if (model.type === "text") {
                     categorized.text.push(modelInfo);
-                  } else {
-                    // Default fallback for embedding, upscale, etc.
-                    categorized.text.push(modelInfo);
                   }
+                  // Skip embedding, upscale, and other specialized models
+                  // These should not appear in chat model lists
+                  // model.type === "embedding" or model.type === "upscale" are intentionally excluded
                 });
               } else {
                 const errorText = await response.text();

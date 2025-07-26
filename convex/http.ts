@@ -272,9 +272,21 @@ http.route({
       }
 
       // Get available models from Convex cache
-      const models = await ctx.runQuery(api.models.getAvailableModels, {});
+      const allModels = await ctx.runQuery(api.models.getAvailableModels, {});
       
-      return new Response(JSON.stringify({ data: models }), {
+      // Filter to only chat-appropriate models (exclude embedding, upscale, etc.)
+      const chatModels = allModels.filter(model => {
+        // Exclude embedding and upscaler models by ID patterns
+        if (model.id.includes('embedding') || model.id.includes('upscal')) {
+          return false;
+        }
+        // Include text, code, and multimodal models
+        return model.type === "text" || 
+               model.type === "code" || 
+               model.type === "multimodal";
+      });
+      
+      return new Response(JSON.stringify({ data: chatModels }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
       });
@@ -724,10 +736,22 @@ http.route({
       }
 
       // Get available models from cache
-      const models = await ctx.runQuery(api.models.getAvailableModels, {});
+      const allModels = await ctx.runQuery(api.models.getAvailableModels, {});
+      
+      // Filter to only chat-appropriate models (exclude embedding, upscale, etc.)
+      const chatModels = allModels.filter(model => {
+        // Exclude embedding and upscaler models by ID patterns
+        if (model.id.includes('embedding') || model.id.includes('upscal')) {
+          return false;
+        }
+        // Include text, code, and multimodal models
+        return model.type === "text" || 
+               model.type === "code" || 
+               model.type === "multimodal";
+      });
       
       // Convert to OpenAI format
-      const openAIModels = models.map(model => ({
+      const openAIModels = chatModels.map(model => ({
         id: model.id,
         object: "model",
         created: Math.floor(Date.now() / 1000),
