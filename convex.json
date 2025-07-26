@@ -1,0 +1,10 @@
+{
+  "node": {
+    "version": "18"
+  },
+  "httpRoutes": {
+    "enabled": true
+  },
+  "functions": "convex/",
+  "generateCommonJSApi": false
+}
