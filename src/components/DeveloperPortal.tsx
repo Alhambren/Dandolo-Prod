@@ -245,8 +245,8 @@ export function DeveloperPortal() {
       
       {/* API Keys Section */}
       <GlassCard className="p-6 mb-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex-1 mr-4">
             <h2 className="text-xl font-semibold">API Keys</h2>
             <p className="text-sm text-gray-400 mt-1">
               You can have one developer key (500/day) and one agent key (5,000/day). Both provide full access to Venice AI models.
@@ -260,7 +260,7 @@ export function DeveloperPortal() {
           <button
             onClick={() => setShowGenerator(!showGenerator)}
             disabled={!canCreateAnyKey || !isConnected || !address}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
           >
             {!isConnected ? 'Connect Wallet' : canCreateAnyKey ? '+ New Key' : 'All Keys Created'}
           </button>
