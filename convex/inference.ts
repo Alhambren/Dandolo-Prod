@@ -585,6 +585,43 @@ export const testFunction = action({
 });
 
 /**
+ * Simple sendMessage wrapper for ChatPage compatibility.
+ * This is a stateless function that doesn't save conversations - only processes them.
+ */
+export const sendMessage = action({
+  args: {
+    messages: v.array(
+      v.object({
+        role: v.union(v.literal("system"), v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+      })
+    ),
+    model: v.string(),
+    providerId: v.id("providers"),
+    address: v.optional(v.string()), // Wallet address of the user
+  },
+  returns: v.object({
+    response: v.string(),
+    model: v.string(),
+    totalTokens: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    // Use the existing route action with provided parameters
+    // This doesn't save any conversation data - just processes the request
+    // No chat history is stored in the database - keeping conversations stateless for privacy
+    return await ctx.runAction(api.inference.route, {
+      messages: args.messages,
+      intent: "chat", // Default to chat intent
+      sessionId: crypto.randomUUID(), // Generate a temporary session ID
+      isAnonymous: !args.address, // Anonymous if no wallet address provided
+      model: args.model,
+      address: args.address || "0x0000000000000000000000000000000000000000",
+      allowAdultContent: false,
+    });
+  },
+});
+
+/**
  * Simplified routing wrapper matching the frontend parameters.
  * Converts a single prompt into message format and maps intent types.
  */

@@ -2,7 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Logo } from './Logo';
 import { WalletConnectButton } from './WalletConnectButton';
-import { useConvex, useMutation, useQuery } from 'convex/react';
+import { useConvex, useMutation, useQuery, useAction } from 'convex/react';
+import { useAccount } from 'wagmi';
 import { api } from '../../convex/_generated/api';
 
 interface ChatPageProps {
@@ -20,9 +21,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
+  const { address } = useAccount();
   const providers = useQuery(api.providers.list);
   const activeProvider = providers?.find(p => p.isActive);
-  const sendMessage = useMutation(api.inference.sendMessage);
+  const sendMessage = useAction(api.inference.sendMessage);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,10 +36,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
     setIsLoading(true);
 
     try {
+      // Send message without saving any conversation history
+      // The system is stateless - conversations are only stored locally in component state
       const response = await sendMessage({
         messages: [...messages, userMessage],
         model: selectedModel,
         providerId: activeProvider._id,
+        address: address, // Pass wallet address if connected
       });
 
       setMessages(prev => [...prev, {
