@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { generateSecureToken } from '../../convex/crypto';
 import {
@@ -15,7 +15,14 @@ import {
   Server,
   TrendingUp,
   Clock,
-  DollarSign
+  DollarSign,
+  Ban,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  UserX,
+  Database,
+  Lock
 } from 'lucide-react';
 
 // CRITICAL: Hardcoded admin address - matches PRD requirement
@@ -480,12 +487,528 @@ const NetworkTopology: React.FC = () => {
   );
 };
 
-const SecurityMonitor: React.FC = () => (
-  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-    <h2 className="text-xl font-bold text-white mb-4">Security Monitor</h2>
-    <p className="text-gray-400">Security monitoring coming soon...</p>
-  </div>
-);
+const SecurityMonitor: React.FC = () => {
+  const [selectedSubTab, setSelectedSubTab] = useState('overview');
+  const [selectedRiskLevel, setSelectedRiskLevel] = useState(40); // Default minimum risk score
+
+  // Fetch security data
+  const suspiciousProviders = useQuery(api.providers.getSuspiciousProviders, { 
+    minRiskScore: selectedRiskLevel 
+  });
+  const clusteringAnalytics = useQuery(api.providers.getProviderClusteringAnalytics, {});
+  
+  // Mutation for updating verification status
+  const updateVerificationStatus = useMutation(api.providers.updateProviderVerificationStatus);
+
+  const handleStatusUpdate = async (providerId: string, newStatus: string, reason?: string) => {
+    try {
+      await updateVerificationStatus({
+        providerId: providerId as any,
+        newStatus: newStatus as any,
+        reason
+      });
+    } catch (error) {
+      console.error('Failed to update verification status:', error);
+    }
+  };
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'verified': return 'text-green-400 bg-green-500/20';
+      case 'pending': return 'text-yellow-400 bg-yellow-500/20';
+      case 'flagged': return 'text-red-400 bg-red-500/20';
+      case 'suspended': return 'text-gray-400 bg-gray-500/20';
+      default: return 'text-gray-400 bg-gray-500/20';
+    }
+  };
+
+  const getRiskColor = (score: number) => {
+    if (score >= 70) return 'text-red-400';
+    if (score >= 40) return 'text-yellow-400';
+    return 'text-green-400';
+  };
+
+  const securityTabs = [
+    { id: 'overview', name: 'Security Overview', icon: Shield },
+    { id: 'providers', name: 'Suspicious Providers', icon: UserX },
+    { id: 'clusters', name: 'Clustering Analysis', icon: Database },
+    { id: 'fingerprints', name: 'Fingerprint Monitor', icon: Lock }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Security Sub-Navigation */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div className="flex space-x-1 mb-6">
+          {securityTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedSubTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  selectedSubTab === tab.id
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.name}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Security Overview */}
+        {selectedSubTab === 'overview' && clusteringAnalytics && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-white">Anti-Gaming Security Overview</h2>
+            
+            {/* Key Security Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Shield className="w-5 h-5 text-green-500" />
+                  <span className="text-sm font-medium text-gray-400">TOTAL PROVIDERS</span>
+                </div>
+                <p className="text-2xl font-bold text-white">{clusteringAnalytics.totalProviders}</p>
+                <p className="text-sm text-gray-400">in network</p>
+              </div>
+              
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  <span className="text-sm font-medium text-gray-400">HIGH RISK</span>
+                </div>
+                <p className="text-2xl font-bold text-red-400">{clusteringAnalytics.riskDistribution.high}</p>
+                <p className="text-sm text-gray-400">providers flagged</p>
+              </div>
+              
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Database className="w-5 h-5 text-yellow-500" />
+                  <span className="text-sm font-medium text-gray-400">CLUSTERS</span>
+                </div>
+                <p className="text-2xl font-bold text-yellow-400">
+                  {clusteringAnalytics.summary.totalSuspiciousClusters}
+                </p>
+                <p className="text-sm text-gray-400">suspicious groups</p>
+              </div>
+              
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Ban className="w-5 h-5 text-purple-500" />
+                  <span className="text-sm font-medium text-gray-400">SUSPENDED</span>
+                </div>
+                <p className="text-2xl font-bold text-purple-400">
+                  {clusteringAnalytics.verificationStatusDistribution.suspended}
+                </p>
+                <p className="text-sm text-gray-400">manually blocked</p>
+              </div>
+            </div>
+
+            {/* Risk Distribution Chart */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Risk Score Distribution</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-400 mb-2">
+                    {clusteringAnalytics.riskDistribution.low}
+                  </div>
+                  <div className="text-sm text-gray-400">Low Risk (0-39)</div>
+                  <div className="text-xs text-green-400">Verified providers</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-yellow-400 mb-2">
+                    {clusteringAnalytics.riskDistribution.medium}
+                  </div>
+                  <div className="text-sm text-gray-400">Medium Risk (40-69)</div>
+                  <div className="text-xs text-yellow-400">Under review</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-red-400 mb-2">
+                    {clusteringAnalytics.riskDistribution.high}
+                  </div>
+                  <div className="text-sm text-gray-400">High Risk (70+)</div>
+                  <div className="text-xs text-red-400">Flagged for gaming</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Verification Status Overview */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Verification Status Breakdown</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <div>
+                    <div className="text-lg font-bold text-white">
+                      {clusteringAnalytics.verificationStatusDistribution.verified}
+                    </div>
+                    <div className="text-sm text-gray-400">Verified</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-yellow-500" />
+                  <div>
+                    <div className="text-lg font-bold text-white">
+                      {clusteringAnalytics.verificationStatusDistribution.pending}
+                    </div>
+                    <div className="text-sm text-gray-400">Pending</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  <div>
+                    <div className="text-lg font-bold text-white">
+                      {clusteringAnalytics.verificationStatusDistribution.flagged}
+                    </div>
+                    <div className="text-sm text-gray-400">Flagged</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <XCircle className="w-5 h-5 text-gray-500" />
+                  <div>
+                    <div className="text-lg font-bold text-white">
+                      {clusteringAnalytics.verificationStatusDistribution.suspended}
+                    </div>
+                    <div className="text-sm text-gray-400">Suspended</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Suspicious Providers Tab */}
+        {selectedSubTab === 'providers' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Suspicious Providers</h2>
+              <div className="flex items-center gap-4">
+                <label className="text-sm text-gray-400">Min Risk Score:</label>
+                <select
+                  value={selectedRiskLevel}
+                  onChange={(e) => setSelectedRiskLevel(Number(e.target.value))}
+                  className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-1"
+                >
+                  <option value={20}>20+ (Very Low)</option>
+                  <option value={40}>40+ (Medium)</option>
+                  <option value={60}>60+ (High)</option>
+                  <option value={70}>70+ (Very High)</option>
+                </select>
+              </div>
+            </div>
+
+            {suspiciousProviders && (
+              <div className="bg-gray-800 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Provider</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Address</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Risk Score</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Risk Factors</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {suspiciousProviders.map((provider) => (
+                        <tr key={provider._id} className="border-b border-gray-800 hover:bg-gray-700/50">
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-white">{provider.name}</div>
+                            <div className="text-sm text-gray-400">
+                              Registered: {new Date(provider.registrationDate).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-mono text-sm text-gray-400">
+                              {provider.address.substring(0, 8)}...{provider.address.substring(34)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className={`text-lg font-bold ${getRiskColor(provider.riskScore || 0)}`}>
+                              {provider.riskScore || 0}
+                            </div>
+                            <div className="text-xs text-gray-400">/ 100</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(provider.verificationStatus)}`}>
+                              {provider.verificationStatus || 'unknown'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-sm text-gray-300 max-w-xs">
+                              {provider.flaggedReason || 'No specific reasons recorded'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleStatusUpdate(provider._id, 'verified', 'Manually verified by admin')}
+                                className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded hover:bg-green-500/30"
+                              >
+                                Verify
+                              </button>
+                              <button
+                                onClick={() => handleStatusUpdate(provider._id, 'flagged', 'Flagged for review by admin')}
+                                className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
+                              >
+                                Flag
+                              </button>
+                              <button
+                                onClick={() => handleStatusUpdate(provider._id, 'suspended', 'Suspended by admin for policy violation')}
+                                className="px-2 py-1 text-xs bg-gray-500/20 text-gray-400 rounded hover:bg-gray-500/30"
+                              >
+                                Suspend
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {suspiciousProviders.length === 0 && (
+                  <div className="p-8 text-center text-gray-400">
+                    No suspicious providers found with risk score ≥ {selectedRiskLevel}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Clustering Analysis Tab */}
+        {selectedSubTab === 'clusters' && clusteringAnalytics && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-white">Provider Clustering Analysis</h2>
+            
+            {/* Fingerprint Clusters */}
+            {clusteringAnalytics.suspiciousClusters.fingerprint.length > 0 && (
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-bold text-white mb-4">
+                  🔍 Fingerprint Clusters ({clusteringAnalytics.suspiciousClusters.fingerprint.length})
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  Groups of providers with identical behavioral fingerprints (likely same user)
+                </p>
+                <div className="space-y-4">
+                  {clusteringAnalytics.suspiciousClusters.fingerprint.map((cluster, index) => (
+                    <div key={index} className="bg-gray-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-yellow-400 font-medium">
+                          Cluster {index + 1} - {cluster.providerCount} providers
+                        </span>
+                        <span className="text-sm text-gray-400">Hash: {cluster.hash}</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {cluster.providers.map((provider, providerIndex) => (
+                          <div key={providerIndex} className="bg-gray-600 rounded p-3">
+                            <div className="font-medium text-white">{provider.name}</div>
+                            <div className="text-sm text-gray-300">
+                              {provider.address.substring(0, 8)}...{provider.address.substring(34)}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={`text-xs px-2 py-1 rounded ${provider.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {provider.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                              <span className={`text-xs ${getRiskColor(provider.riskScore || 0)}`}>
+                                Risk: {provider.riskScore || 0}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* IP Clusters */}
+            {clusteringAnalytics.suspiciousClusters.ip.length > 0 && (
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-bold text-white mb-4">
+                  🌐 IP Address Clusters ({clusteringAnalytics.suspiciousClusters.ip.length})
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  Multiple providers registered from the same IP address
+                </p>
+                <div className="space-y-4">
+                  {clusteringAnalytics.suspiciousClusters.ip.map((cluster, index) => (
+                    <div key={index} className="bg-gray-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-orange-400 font-medium">
+                          IP Cluster {index + 1} - {cluster.providerCount} providers
+                        </span>
+                        <span className="text-sm text-gray-400">Hash: {cluster.hash}</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {cluster.providers.map((provider, providerIndex) => (
+                          <div key={providerIndex} className="bg-gray-600 rounded p-3">
+                            <div className="font-medium text-white">{provider.name}</div>
+                            <div className="text-sm text-gray-300">
+                              {provider.address.substring(0, 8)}...{provider.address.substring(34)}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              Registered: {new Date(provider.registrationDate).toLocaleDateString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* User Agent Clusters */}
+            {clusteringAnalytics.suspiciousClusters.userAgent.length > 0 && (
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-bold text-white mb-4">
+                  🖥️ User Agent Clusters ({clusteringAnalytics.suspiciousClusters.userAgent.length})
+                </h3>
+                <p className="text-sm text-gray-400 mb-4">
+                  Multiple providers with identical browser/device signatures
+                </p>
+                <div className="space-y-4">
+                  {clusteringAnalytics.suspiciousClusters.userAgent.map((cluster, index) => (
+                    <div key={index} className="bg-gray-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-blue-400 font-medium">
+                          User Agent Cluster {index + 1} - {cluster.providerCount} providers
+                        </span>
+                        <span className="text-sm text-gray-400">Hash: {cluster.hash}</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {cluster.providers.map((provider, providerIndex) => (
+                          <div key={providerIndex} className="bg-gray-600 rounded p-3">
+                            <div className="font-medium text-white">{provider.name}</div>
+                            <div className="text-sm text-gray-300">
+                              {provider.address.substring(0, 8)}...{provider.address.substring(34)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No Clusters Found */}
+            {clusteringAnalytics.summary.totalSuspiciousClusters === 0 && (
+              <div className="bg-gray-800 rounded-lg p-8 text-center">
+                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-white mb-2">No Suspicious Clusters Detected</h3>
+                <p className="text-gray-400">
+                  All providers appear to have unique fingerprints, IP addresses, and user agents.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fingerprint Monitor Tab */}
+        {selectedSubTab === 'fingerprints' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-white">Fingerprint Monitor</h2>
+            
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Fingerprinting Technology</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-white mb-3">Detection Methods</h4>
+                  <ul className="space-y-2 text-sm text-gray-400">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      IP Address Clustering
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      User Agent Fingerprinting
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      API Key Pattern Analysis
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      Registration Timing Patterns
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      Behavioral Fingerprinting
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium text-white mb-3">Privacy Protection</h4>
+                  <ul className="space-y-2 text-sm text-gray-400">
+                    <li className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-500" />
+                      All data hashed before storage
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-500" />
+                      No raw IP addresses stored
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-500" />
+                      No personal identifiers
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-500" />
+                      Secure fingerprint algorithms
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-500" />
+                      GDPR compliant design
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Risk Scoring Algorithm</h3>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-3 bg-gray-700 rounded">
+                  <span className="text-gray-300">Fingerprint Collision</span>
+                  <span className="text-red-400 font-medium">+50 points</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-700 rounded">
+                  <span className="text-gray-300">IP Clustering (3+ providers)</span>
+                  <span className="text-orange-400 font-medium">+30 points</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-700 rounded">
+                  <span className="text-gray-300">User Agent Clustering (4+ providers)</span>
+                  <span className="text-yellow-400 font-medium">+20 points</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-700 rounded">
+                  <span className="text-gray-300">Rapid Registration (6+ today)</span>
+                  <span className="text-blue-400 font-medium">+25 points</span>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <h4 className="text-blue-400 font-medium mb-2">Scoring Thresholds</h4>
+                <div className="text-sm text-gray-400 space-y-1">
+                  <div>• 0-39: Verified (Low Risk)</div>
+                  <div>• 40-69: Pending Review (Medium Risk)</div>
+                  <div>• 70+: Flagged (High Risk - Likely Gaming)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const ProtocolGovernance: React.FC = () => (
   <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
