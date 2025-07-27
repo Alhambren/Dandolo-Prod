@@ -29,6 +29,18 @@ export default defineSchema({
     uptime: v.optional(v.number()),
     markedInactiveAt: v.optional(v.number()),
     keyRotatedAt: v.optional(v.number()),
+    // Anti-gaming fingerprinting fields
+    fingerprint: v.optional(v.string()),    // Composite fingerprint for gaming detection
+    registrationIP: v.optional(v.string()), // Hashed IP for clustering detection
+    userAgent: v.optional(v.string()),      // Hashed user agent
+    riskScore: v.optional(v.number()),      // Risk score (0-100, higher = more suspicious)
+    flaggedReason: v.optional(v.string()),  // Why this provider was flagged
+    verificationStatus: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("verified"), 
+      v.literal("flagged"),
+      v.literal("suspended")
+    )),
   })
     .index("by_active", ["isActive"])
     .index("by_address", ["address"])

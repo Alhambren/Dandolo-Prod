@@ -7,6 +7,81 @@ import {
   validateApiKeyFormat 
 } from "./crypto";
 
+// Anti-gaming fingerprinting system
+function createProviderFingerprint(
+  userAgent?: string, 
+  ipAddress?: string,
+  timestamp?: number,
+  apiKeyPattern?: string
+): string {
+  // Create composite fingerprint from multiple factors
+  const factors = [
+    userAgent ? createSecureHash(userAgent) : 'unknown-ua',
+    ipAddress ? createSecureHash(ipAddress) : 'unknown-ip', 
+    timestamp ? Math.floor(timestamp / (24 * 60 * 60 * 1000)).toString() : 'unknown-time', // Day granularity
+    apiKeyPattern || 'unknown-pattern'
+  ];
+  
+  return createSecureHash(factors.join('|'));
+}
+
+function calculateRiskScore(
+  fingerprint: string,
+  existingProviders: any[],
+  registrationIP?: string,
+  userAgent?: string
+): { score: number; reasons: string[] } {
+  let score = 0;
+  const reasons: string[] = [];
+  
+  // Check for fingerprint collisions
+  const fingerprintMatches = existingProviders.filter(p => p.fingerprint === fingerprint);
+  if (fingerprintMatches.length > 0) {
+    score += 50;
+    reasons.push(`Fingerprint matches ${fingerprintMatches.length} existing provider(s)`);
+  }
+  
+  // Check for IP clustering (same IP hash)
+  if (registrationIP) {
+    const ipHash = createSecureHash(registrationIP);
+    const ipMatches = existingProviders.filter(p => p.registrationIP === ipHash);
+    if (ipMatches.length > 2) {
+      score += 30;
+      reasons.push(`IP cluster detected (${ipMatches.length} providers from same IP)`);
+    }
+  }
+  
+  // Check for user agent clustering
+  if (userAgent) {
+    const uaHash = createSecureHash(userAgent);
+    const uaMatches = existingProviders.filter(p => p.userAgent === uaHash);
+    if (uaMatches.length > 3) {
+      score += 20;
+      reasons.push(`User agent cluster detected (${uaMatches.length} providers with same UA)`);
+    }
+  }
+  
+  // Check for rapid registration patterns (same day registrations)
+  const today = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+  const todayRegistrations = existingProviders.filter(p => {
+    const regDay = Math.floor((p.registrationDate || 0) / (24 * 60 * 60 * 1000));
+    return regDay === today;
+  });
+  
+  if (todayRegistrations.length > 5) {
+    score += 25;
+    reasons.push(`High registration volume today (${todayRegistrations.length} registrations)`);
+  }
+  
+  return { score: Math.min(score, 100), reasons };
+}
+
+function determineVerificationStatus(riskScore: number): string {
+  if (riskScore >= 70) return "flagged";
+  if (riskScore >= 40) return "pending";
+  return "verified";
+}
+
 // Helper to verify wallet ownership for authenticated mutations
 async function verifyWalletOwnership(ctx: any, claimedAddress: string, signature: string, message: string): Promise<boolean> {
   try {
@@ -67,6 +142,13 @@ export const createProviderMutation = internalMutation({
     encryptionIv: v.string(),
     authTag: v.string(),
     apiKeyHash: v.string(),
+    // Anti-gaming fingerprinting fields
+    fingerprint: v.optional(v.string()),
+    registrationIP: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    riskScore: v.optional(v.number()),
+    flaggedReason: v.optional(v.string()),
+    verificationStatus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const providerId = await ctx.db.insert("providers", {
@@ -84,6 +166,13 @@ export const createProviderMutation = internalMutation({
       registrationDate: Date.now(),
       avgResponseTime: 0,
       status: "pending",
+      // Anti-gaming fingerprinting data
+      fingerprint: args.fingerprint,
+      registrationIP: args.registrationIP,
+      userAgent: args.userAgent,
+      riskScore: args.riskScore,
+      flaggedReason: args.flaggedReason,
+      verificationStatus: args.verificationStatus || "pending",
     });
 
     // Initialize points
@@ -114,6 +203,13 @@ export const createProviderWithVCUMutation = internalMutation({
     authTag: v.string(),
     apiKeyHash: v.string(),
     vcuBalance: v.number(),
+    // Anti-gaming fingerprinting fields
+    fingerprint: v.optional(v.string()),
+    registrationIP: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    riskScore: v.optional(v.number()),
+    flaggedReason: v.optional(v.string()),
+    verificationStatus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const providerId = await ctx.db.insert("providers", {
@@ -131,6 +227,13 @@ export const createProviderWithVCUMutation = internalMutation({
       registrationDate: Date.now(),
       avgResponseTime: 0,
       status: "active",
+      // Anti-gaming fingerprinting data
+      fingerprint: args.fingerprint,
+      registrationIP: args.registrationIP,
+      userAgent: args.userAgent,
+      riskScore: args.riskScore,
+      flaggedReason: args.flaggedReason,
+      verificationStatus: args.verificationStatus || "verified",
     });
 
     // Initialize points
@@ -379,6 +482,9 @@ export const registerProvider = action({
     veniceApiKey: v.string(),
     signature: v.string(), // Wallet signature proving ownership
     timestamp: v.number(), // Timestamp to prevent replay attacks
+    // Optional fingerprinting data from HTTP headers
+    userAgent: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<any> => {
     const walletAddress = args.address;
@@ -422,12 +528,49 @@ export const registerProvider = action({
       throw new Error("This API key is already registered");
     }
 
+    // ANTI-GAMING FINGERPRINTING
+    // Get all existing providers for risk analysis
+    const allProviders = await ctx.runQuery(internal.providers.getAllProviders);
+    
+    // Create API key pattern for fingerprinting (first 4 + last 4 chars)
+    const apiKeyPattern = cleanApiKey.length >= 8 
+      ? cleanApiKey.substring(0, 4) + '***' + cleanApiKey.substring(cleanApiKey.length - 4)
+      : 'short-key';
+    
+    // Generate provider fingerprint
+    const fingerprint = createProviderFingerprint(
+      args.userAgent,
+      args.ipAddress,
+      args.timestamp,
+      apiKeyPattern
+    );
+    
+    // Calculate risk score
+    const riskAnalysis = calculateRiskScore(
+      fingerprint,
+      allProviders,
+      args.ipAddress,
+      args.userAgent
+    );
+    
+    // Determine verification status
+    const verificationStatus = determineVerificationStatus(riskAnalysis.score);
+    
+    // Prepare flagged reason if high risk
+    const flaggedReason = riskAnalysis.score >= 40 
+      ? riskAnalysis.reasons.join('; ')
+      : undefined;
+
+    // Hash sensitive data for storage
+    const registrationIPHash = args.ipAddress ? createSecureHash(args.ipAddress) : undefined;
+    const userAgentHash = args.userAgent ? createSecureHash(args.userAgent) : undefined;
+
     // Encrypt API key with AES-256-GCM before storage
     const encryptionResult: { encrypted: string; iv: string; authTag: string } = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
       apiKey: cleanApiKey
     });
 
-    // Create provider with AES-encrypted API key
+    // Create provider with AES-encrypted API key and anti-gaming data
     const providerId = await ctx.runMutation(internal.providers.createProviderMutation, {
       address: args.address,
       name: args.name,
@@ -436,9 +579,29 @@ export const registerProvider = action({
       encryptionIv: encryptionResult.iv,
       authTag: encryptionResult.authTag,
       apiKeyHash: apiKeyFingerprint,
+      // Anti-gaming fingerprinting data
+      fingerprint: fingerprint,
+      registrationIP: registrationIPHash,
+      userAgent: userAgentHash,
+      riskScore: riskAnalysis.score,
+      flaggedReason: flaggedReason,
+      verificationStatus: verificationStatus,
     });
 
-    return providerId;
+    // Log the registration with risk analysis for monitoring
+    console.log(`Provider registration: ${args.name} (${args.address})`);
+    console.log(`Risk Score: ${riskAnalysis.score}/100`);
+    console.log(`Verification Status: ${verificationStatus}`);
+    if (flaggedReason) {
+      console.log(`Risk Factors: ${flaggedReason}`);
+    }
+
+    return {
+      providerId,
+      riskScore: riskAnalysis.score,
+      verificationStatus,
+      warnings: riskAnalysis.score >= 40 ? riskAnalysis.reasons : undefined
+    };
   },
 });
 
@@ -449,6 +612,9 @@ export const registerProviderWithVCU = action({
     name: v.string(),
     veniceApiKey: v.string(),
     vcuBalance: v.number(),
+    // Optional fingerprinting data from HTTP headers
+    userAgent: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<any> => {
     // No auth check needed - using wallet signatures for verification
@@ -480,6 +646,43 @@ export const registerProviderWithVCU = action({
       throw new Error("This API key is already registered");
     }
 
+    // ANTI-GAMING FINGERPRINTING
+    // Get all existing providers for risk analysis
+    const allProviders = await ctx.runQuery(internal.providers.getAllProviders);
+    
+    // Create API key pattern for fingerprinting (first 4 + last 4 chars)
+    const apiKeyPattern = cleanApiKey.length >= 8 
+      ? cleanApiKey.substring(0, 4) + '***' + cleanApiKey.substring(cleanApiKey.length - 4)
+      : 'short-key';
+    
+    // Generate provider fingerprint
+    const fingerprint = createProviderFingerprint(
+      args.userAgent,
+      args.ipAddress,
+      Date.now(),
+      apiKeyPattern
+    );
+    
+    // Calculate risk score
+    const riskAnalysis = calculateRiskScore(
+      fingerprint,
+      allProviders,
+      args.ipAddress,
+      args.userAgent
+    );
+    
+    // Determine verification status (with VCU providers treated as lower risk)
+    const verificationStatus = riskAnalysis.score >= 70 ? "flagged" : "verified";
+    
+    // Prepare flagged reason if high risk
+    const flaggedReason = riskAnalysis.score >= 40 
+      ? riskAnalysis.reasons.join('; ')
+      : undefined;
+
+    // Hash sensitive data for storage
+    const registrationIPHash = args.ipAddress ? createSecureHash(args.ipAddress) : undefined;
+    const userAgentHash = args.userAgent ? createSecureHash(args.userAgent) : undefined;
+
     // Encrypt API key with AES-256-GCM before storage
     const encryptionResult: { encrypted: string; iv: string; authTag: string } = await ctx.runAction(internal.cryptoSecure.encryptApiKey, {
       apiKey: cleanApiKey
@@ -494,9 +697,29 @@ export const registerProviderWithVCU = action({
       authTag: encryptionResult.authTag,
       apiKeyHash: apiKeyFingerprint,
       vcuBalance: args.vcuBalance,
+      // Anti-gaming fingerprinting data
+      fingerprint: fingerprint,
+      registrationIP: registrationIPHash,
+      userAgent: userAgentHash,
+      riskScore: riskAnalysis.score,
+      flaggedReason: flaggedReason,
+      verificationStatus: verificationStatus,
     });
 
-    return providerId;
+    // Log the registration with risk analysis for monitoring
+    console.log(`Provider with VCU registration: ${args.name} (${args.address})`);
+    console.log(`Risk Score: ${riskAnalysis.score}/100`);
+    console.log(`Verification Status: ${verificationStatus}`);
+    if (flaggedReason) {
+      console.log(`Risk Factors: ${flaggedReason}`);
+    }
+
+    return {
+      providerId,
+      riskScore: riskAnalysis.score,
+      verificationStatus,
+      warnings: riskAnalysis.score >= 40 ? riskAnalysis.reasons : undefined
+    };
   },
 });
 
@@ -1717,6 +1940,196 @@ export const adminDebugProvider = action({
     });
     
     return status;
+  },
+});
+
+// ANTI-GAMING MONITORING: Get suspicious providers
+export const getSuspiciousProviders = query({
+  args: { minRiskScore: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const minRisk = args.minRiskScore || 40;
+    
+    const allProviders = await ctx.db.query("providers").collect();
+    
+    return allProviders
+      .filter(provider => (provider.riskScore || 0) >= minRisk)
+      .map(provider => ({
+        _id: provider._id,
+        name: provider.name,
+        address: provider.address,
+        isActive: provider.isActive,
+        riskScore: provider.riskScore,
+        flaggedReason: provider.flaggedReason,
+        verificationStatus: provider.verificationStatus,
+        registrationDate: provider.registrationDate,
+        totalPrompts: provider.totalPrompts || 0,
+        // Don't expose sensitive fingerprint data
+      }))
+      .sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
+  },
+});
+
+// ANTI-GAMING ANALYTICS: Get provider clustering analytics
+export const getProviderClusteringAnalytics = query({
+  args: {},
+  handler: async (ctx) => {
+    const allProviders = await ctx.db.query("providers").collect();
+    
+    // Group by fingerprint
+    const fingerprintGroups = new Map<string, any[]>();
+    const ipGroups = new Map<string, any[]>();
+    const uaGroups = new Map<string, any[]>();
+    
+    allProviders.forEach(provider => {
+      // Group by fingerprint
+      if (provider.fingerprint) {
+        if (!fingerprintGroups.has(provider.fingerprint)) {
+          fingerprintGroups.set(provider.fingerprint, []);
+        }
+        fingerprintGroups.get(provider.fingerprint)!.push(provider);
+      }
+      
+      // Group by IP hash
+      if (provider.registrationIP) {
+        if (!ipGroups.has(provider.registrationIP)) {
+          ipGroups.set(provider.registrationIP, []);
+        }
+        ipGroups.get(provider.registrationIP)!.push(provider);
+      }
+      
+      // Group by User Agent hash
+      if (provider.userAgent) {
+        if (!uaGroups.has(provider.userAgent)) {
+          uaGroups.set(provider.userAgent, []);
+        }
+        uaGroups.get(provider.userAgent)!.push(provider);
+      }
+    });
+    
+    // Find suspicious clusters
+    const suspiciousFingerprintClusters = Array.from(fingerprintGroups.entries())
+      .filter(([_, providers]) => providers.length > 1)
+      .map(([fingerprint, providers]) => ({
+        type: 'fingerprint',
+        hash: fingerprint.substring(0, 16) + '...',
+        providerCount: providers.length,
+        providers: providers.map(p => ({
+          name: p.name,
+          address: p.address,
+          isActive: p.isActive,
+          riskScore: p.riskScore,
+          registrationDate: p.registrationDate,
+        }))
+      }));
+    
+    const suspiciousIPClusters = Array.from(ipGroups.entries())
+      .filter(([_, providers]) => providers.length > 2)
+      .map(([ipHash, providers]) => ({
+        type: 'ip',
+        hash: ipHash.substring(0, 16) + '...',
+        providerCount: providers.length,
+        providers: providers.map(p => ({
+          name: p.name,
+          address: p.address,
+          isActive: p.isActive,
+          riskScore: p.riskScore,
+          registrationDate: p.registrationDate,
+        }))
+      }));
+    
+    const suspiciousUAClusters = Array.from(uaGroups.entries())
+      .filter(([_, providers]) => providers.length > 3)
+      .map(([uaHash, providers]) => ({
+        type: 'userAgent',
+        hash: uaHash.substring(0, 16) + '...',
+        providerCount: providers.length,
+        providers: providers.map(p => ({
+          name: p.name,
+          address: p.address,
+          isActive: p.isActive,
+          riskScore: p.riskScore,
+          registrationDate: p.registrationDate,
+        }))
+      }));
+    
+    // Risk statistics
+    const riskDistribution = {
+      low: allProviders.filter(p => (p.riskScore || 0) < 40).length,
+      medium: allProviders.filter(p => (p.riskScore || 0) >= 40 && (p.riskScore || 0) < 70).length,
+      high: allProviders.filter(p => (p.riskScore || 0) >= 70).length,
+    };
+    
+    const verificationStatusDistribution = {
+      verified: allProviders.filter(p => p.verificationStatus === 'verified').length,
+      pending: allProviders.filter(p => p.verificationStatus === 'pending').length,
+      flagged: allProviders.filter(p => p.verificationStatus === 'flagged').length,
+      suspended: allProviders.filter(p => p.verificationStatus === 'suspended').length,
+    };
+    
+    return {
+      totalProviders: allProviders.length,
+      suspiciousClusters: {
+        fingerprint: suspiciousFingerprintClusters,
+        ip: suspiciousIPClusters,
+        userAgent: suspiciousUAClusters,
+      },
+      riskDistribution,
+      verificationStatusDistribution,
+      summary: {
+        totalSuspiciousClusters: suspiciousFingerprintClusters.length + suspiciousIPClusters.length + suspiciousUAClusters.length,
+        highRiskProviders: riskDistribution.high,
+        flaggedProviders: verificationStatusDistribution.flagged,
+      }
+    };
+  },
+});
+
+// ANTI-GAMING ACTION: Update provider verification status manually
+export const updateProviderVerificationStatus = mutation({
+  args: {
+    providerId: v.id("providers"),
+    newStatus: v.union(
+      v.literal("pending"),
+      v.literal("verified"), 
+      v.literal("flagged"),
+      v.literal("suspended")
+    ),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) {
+      throw new Error("Provider not found");
+    }
+    
+    // Update verification status
+    await ctx.db.patch(args.providerId, {
+      verificationStatus: args.newStatus,
+      flaggedReason: args.reason || provider.flaggedReason,
+    });
+    
+    // If suspending, deactivate the provider
+    if (args.newStatus === "suspended") {
+      await ctx.db.patch(args.providerId, {
+        isActive: false,
+        status: "inactive",
+      });
+    }
+    
+    // Log the status change
+    await ctx.db.insert("pointsTransactions", {
+      address: provider.address,
+      providerId: args.providerId,
+      pointsEarned: 0,
+      transactionType: "adjustment",
+      details: {
+        description: `Verification status changed to ${args.newStatus}${args.reason ? ` - ${args.reason}` : ''}`,
+      },
+      timestamp: Date.now(),
+      isProviderActive: provider.isActive && args.newStatus !== "suspended",
+    });
+    
+    return { success: true, newStatus: args.newStatus };
   },
 });
 
