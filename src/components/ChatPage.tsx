@@ -19,12 +19,56 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState('venice-uncensored');
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [lastChunkIndex, setLastChunkIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const { address } = useAccount();
   const providers = useQuery(api.providers.list);
   const activeProvider = providers?.find(p => p.isActive);
-  const sendMessage = useAction(api.inference.sendMessage);
+  const sendMessageStreaming = useAction(api.inference.sendMessageStreaming);
+  const streamingChunks = useQuery(api.inference.getStreamingChunks, 
+    currentStreamId ? { streamId: currentStreamId, fromIndex: lastChunkIndex } : 'skip'
+  );
+
+  // Handle streaming chunks
+  React.useEffect(() => {
+    if (streamingChunks && streamingChunks.length > 0) {
+      let newContent = streamingResponse;
+      let isComplete = false;
+      
+      for (const chunk of streamingChunks) {
+        if (chunk.chunkIndex >= lastChunkIndex) {
+          newContent += chunk.content;
+          setLastChunkIndex(chunk.chunkIndex + 1);
+          
+          if (chunk.done) {
+            isComplete = true;
+            // Add complete response to messages
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: newContent
+            }]);
+            // Reset streaming state
+            setStreamingResponse('');
+            setCurrentStreamId(null);
+            setLastChunkIndex(0);
+            setIsLoading(false);
+          }
+        }
+      }
+      
+      if (!isComplete) {
+        setStreamingResponse(newContent);
+      }
+    }
+  }, [streamingChunks, lastChunkIndex, streamingResponse]);
+
+  // Auto-scroll to bottom when messages change
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, streamingResponse]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,24 +78,35 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setStreamingResponse('');
+    setLastChunkIndex(0);
 
     try {
-      // Send message without saving any conversation history
-      // The system is stateless - conversations are only stored locally in component state
-      const response = await sendMessage({
-        messages: [...messages, userMessage],
+      // Start streaming conversation with context
+      const result = await sendMessageStreaming({
+        messages: [...messages, userMessage], // Include full conversation context
         model: selectedModel,
         providerId: activeProvider._id,
         address: address, // Pass wallet address if connected
+        allowAdultContent: false,
       });
 
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: response.response
-      }]);
+      if (result.success && result.streamId) {
+        setCurrentStreamId(result.streamId);
+      } else {
+        // Handle error
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: result.error || 'Failed to start streaming response'
+        }]);
+        setIsLoading(false);
+      }
     } catch (error) {
       console.error('Error:', error);
-    } finally {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, there was an error processing your request.'
+      }]);
       setIsLoading(false);
     }
   };
@@ -140,11 +195,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
                 <div className={`max-w-[80%] rounded-lg p-3 ${
                   msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'
                 }`}>
-                  {msg.content}
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
                 </div>
               </div>
             ))}
-            {isLoading && (
+            {/* Show streaming response */}
+            {isLoading && streamingResponse && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] bg-gray-800 text-white rounded-lg p-3">
+                  <div className="whitespace-pre-wrap">{streamingResponse}</div>
+                  <div className="flex gap-1 mt-2">
+                    <div className="w-1 h-4 bg-blue-500 animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Show loading indicator when no streaming yet */}
+            {isLoading && !streamingResponse && (
               <div className="flex justify-start">
                 <div className="bg-gray-800 rounded-lg p-3">
                   <div className="flex gap-1">

@@ -287,5 +287,19 @@ export default defineSchema({
     networkUptime: v.number(),
     lastUpdated: v.number(),
   }),
+
+  // STREAMING CHUNKS: Store streaming response chunks for real-time chat
+  streamingChunks: defineTable({
+    streamId: v.string(),               // Unique stream identifier
+    chunkIndex: v.number(),             // Order of chunk in stream
+    content: v.string(),                // Chunk content
+    done: v.boolean(),                  // Whether this is the final chunk
+    model: v.optional(v.string()),      // Model used for generation
+    tokens: v.optional(v.number()),     // Total tokens if final chunk
+    timestamp: v.number(),              // When chunk was created
+    expiresAt: v.number(),              // Auto-cleanup timestamp
+  })
+    .index("by_stream_id", ["streamId"])
+    .index("by_expires", ["expiresAt"]),
 });
 
