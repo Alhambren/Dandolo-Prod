@@ -891,27 +891,40 @@ export const sendMessage = action({
       })
     ),
     model: v.string(),
-    providerId: v.id("providers"),
+    sessionId: v.string(), // Accept sessionId from frontend for provider persistence
     address: v.optional(v.string()), // Wallet address of the user
+    allowAdultContent: v.optional(v.boolean()), // Add for consistency with other actions
   },
   returns: v.object({
     response: v.string(),
     model: v.string(),
     totalTokens: v.number(),
+    provider: v.string(), // Add provider name for debugging
+    providerId: v.id("providers"), // Add provider ID for debugging
   }),
   handler: async (ctx, args) => {
     // Use the existing route action with provided parameters
     // This doesn't save any conversation data - just processes the request
     // No chat history is stored in the database - keeping conversations stateless for privacy
-    return await ctx.runAction(api.inference.route, {
+    console.log(`[SendMessage] Using session ID: ${args.sessionId.substring(0, 8)}... for ${args.messages.length} messages`);
+    
+    const result = await ctx.runAction(api.inference.route, {
       messages: args.messages,
       intent: "chat", // Default to chat intent
-      sessionId: crypto.randomUUID(), // Generate a temporary session ID
+      sessionId: args.sessionId, // Use provided session ID for provider persistence
       isAnonymous: !args.address, // Anonymous if no wallet address provided
       model: args.model,
-      address: args.address || "0x0000000000000000000000000000000000000000",
-      allowAdultContent: false,
+      address: args.address,
+      allowAdultContent: args.allowAdultContent || false,
     });
+
+    return {
+      response: result.response,
+      model: result.model,
+      totalTokens: result.totalTokens,
+      provider: result.provider,
+      providerId: result.providerId,
+    };
   },
 });
 
@@ -1280,7 +1293,7 @@ export const route = action({
       }
       
       // Use the session-assigned provider instead of random selection
-      console.log(`Using session-assigned provider: ${assignedProvider.name} for session ${args.sessionId.substring(0, 8)}`);
+      console.log(`[INFERENCE] Session ${args.sessionId.substring(0, 8)}... using provider: ${assignedProvider.name} (ID: ${assignedProviderId})`);
       
       // Convert to expected Provider format for callVeniceAI compatibility
       const sessionProvider: Provider = {
