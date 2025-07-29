@@ -35,6 +35,7 @@ import type * as monitoring from "../monitoring.js";
 import type * as points from "../points.js";
 import type * as providers from "../providers.js";
 import type * as rateLimit from "../rateLimit.js";
+import type * as sessionProviders from "../sessionProviders.js";
 import type * as stats from "../stats.js";
 import type * as wallets from "../wallets.js";
 
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   points: typeof points;
   providers: typeof providers;
   rateLimit: typeof rateLimit;
+  sessionProviders: typeof sessionProviders;
   stats: typeof stats;
   wallets: typeof wallets;
 }>;

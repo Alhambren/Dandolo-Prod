@@ -103,7 +103,14 @@ export default defineSchema({
 
   // MODEL CACHE: Venice.ai models
   modelCache: defineTable({
-    models: v.any(), // Temporarily accept any format to allow deployment
+    models: v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      type: v.union(v.literal("text"), v.literal("image"), v.literal("code"), v.literal("multimodal"), v.literal("audio")),
+      owned_by: v.optional(v.string()),
+      created: v.optional(v.number()),
+      capabilities: v.optional(v.any()), // Keep as any for flexibility but document structure
+    })),
     lastUpdated: v.number(),
   }),
 
@@ -263,7 +270,12 @@ export default defineSchema({
     level: v.union(v.literal("info"), v.literal("warning"), v.literal("error"), v.literal("critical")),
     message: v.string(),
     timestamp: v.number(),
-    context: v.optional(v.any()),
+    context: v.optional(v.object({
+      providerId: v.optional(v.string()),
+      errorType: v.optional(v.string()),
+      userAgent: v.optional(v.string()),
+      requestSize: v.optional(v.number()),
+    })),
     acknowledged: v.boolean(),
   })
     .index("by_timestamp", ["timestamp"])
@@ -301,5 +313,18 @@ export default defineSchema({
   })
     .index("by_stream_id", ["streamId"])
     .index("by_expires", ["expiresAt"]),
+
+  // SESSION PROVIDERS: Track which provider is assigned to each chat session
+  sessionProviders: defineTable({
+    sessionId: v.string(),              // Unique session identifier
+    providerId: v.id("providers"),      // Assigned provider ID
+    assignedAt: v.number(),             // When provider was assigned
+    lastUsed: v.number(),               // Last time this session was active
+    expiresAt: v.number(),              // When session expires (30 min inactivity)
+    intent: v.optional(v.string()),     // Chat intent for context
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_expiry", ["expiresAt"])
+    .index("by_provider", ["providerId"]),
 });
 

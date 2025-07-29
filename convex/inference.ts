@@ -928,7 +928,7 @@ export const sendMessageStreaming = action({
       })
     ),
     model: v.string(),
-    providerId: v.id("providers"),
+    sessionId: v.string(), // Use session ID for consistent provider assignment
     address: v.optional(v.string()), // Wallet address of the user
     allowAdultContent: v.optional(v.boolean()),
   },
@@ -968,23 +968,35 @@ export const sendMessageStreaming = action({
         }
       }
 
-      // Get active providers
-      const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
+      // Get or assign a provider for this session (key improvement for streaming)
+      const assignedProviderId = await ctx.runMutation(api.sessionProviders.getSessionProvider, {
+        sessionId: args.sessionId,
+        intent: "chat",
+      });
       
-      if (providers.length === 0) {
+      // Get the specific assigned provider
+      const provider = await ctx.runQuery(internal.providers.getProviderById, {
+        providerId: assignedProviderId,
+      });
+      
+      if (!provider || !provider.isActive) {
         return {
           streamId: "",
           success: false,
-          error: "No AI providers are currently available. Please try again later."
+          error: "Assigned provider is not available. Please start a new chat."
         };
       }
 
-      // Select random provider 
-      const randomProvider: Provider = providers[Math.floor(Math.random() * providers.length)];
+      const selectedProvider: Provider = {
+        _id: provider._id,
+        veniceApiKey: provider.veniceApiKey,
+        name: provider.name,
+        isActive: provider.isActive,
+      };
       
       // Get API key securely
       const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
-        providerId: randomProvider._id
+        providerId: selectedProvider._id
       });
 
       if (!apiKey) {
@@ -1028,7 +1040,7 @@ export const sendMessageStreaming = action({
               // Record inference for statistics
               await ctx.runMutation(api.inference.recordInference, {
                 address: args.address || 'anonymous',
-                providerId: randomProvider._id,
+                providerId: selectedProvider._id,
                 model: chunk.model || args.model,
                 intent: "chat",
                 totalTokens: chunk.tokens || 0,
@@ -1040,7 +1052,7 @@ export const sendMessageStreaming = action({
               // Award points if tokens were processed
               if (chunk.tokens && chunk.tokens > 0) {
                 await ctx.runMutation(api.providers.awardProviderPoints, {
-                  providerId: randomProvider._id,
+                  providerId: selectedProvider._id,
                   promptsServed: 1,
                   tokensProcessed: chunk.tokens,
                   transactionType: "prompt_served",
@@ -1200,9 +1212,11 @@ export const route = action({
         });
         
         if (!rateCheck.allowed) {
-          // Get fallback provider ID for error response
-          const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-          const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+          // Use session provider for error response if available
+          const sessionProviderId = await ctx.runQuery(api.sessionProviders.getCurrentSessionProvider, {
+            sessionId: args.sessionId,
+          });
+          const fallbackProviderId = sessionProviderId || ("kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any);
           
           return {
             response: `Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfter || 0) / 1000)} seconds.`,
@@ -1226,9 +1240,11 @@ export const route = action({
         });
         
         if (!dailyCheck.allowed) {
-          // Get fallback provider ID for error response
-          const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-          const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+          // Use session provider for error response if available
+          const sessionProviderId = await ctx.runQuery(api.sessionProviders.getCurrentSessionProvider, {
+            sessionId: args.sessionId,
+          });
+          const fallbackProviderId = sessionProviderId || ("kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any);
           
           const resetTime = new Date(dailyCheck.resetTime).toISOString();
           return {
@@ -1247,158 +1263,40 @@ export const route = action({
         }
       }
       
-      const providers: Provider[] = await ctx.runQuery(internal.providers.listActiveInternal);
-
-      if (providers.length === 0) {
-        // Use hardcoded fallback provider ID since no providers exist
-        const fallbackProviderId = "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
-        
-        // Return a helpful error message instead of throwing
-        return {
-          response: "Sorry, no AI providers are currently available. Please try again later or contact support.",
-          model: "error",
-          totalTokens: 0,
-          providerId: fallbackProviderId,
-          provider: "System",
-          cost: 0,
-          responseTime: 0,
-          pointsAwarded: 0,
-          address: args.address,
-          intent: args.intent,
-          vcuCost: 0,
-        };
-      }
-
-      // Enhanced provider validation with detailed logging
-      console.log(`Starting provider validation. Total providers: ${providers.length}`);
+      // Get or assign a provider for this session (key improvement for streaming)
+      const assignedProviderId = await ctx.runMutation(api.sessionProviders.getSessionProvider, {
+        sessionId: args.sessionId,
+        intent: args.intent,
+      });
       
-      const validProviders = [];
-      const rejectionReasons = [];
+      // Get the specific assigned provider
+      const assignedProvider = await ctx.runQuery(internal.providers.getProviderById, {
+        providerId: assignedProviderId,
+      });
       
-      for (const provider of providers) {
-        let isValid = true;
-        const reasons = [];
-        
-        // Check if API key exists
-        if (!provider.veniceApiKey) {
-          isValid = false;
-          reasons.push('No API key');
-        }
-        
-        // Check for test API keys (but allow legitimate test environments)
-        if (provider.veniceApiKey && provider.veniceApiKey.startsWith('test_')) {
-          isValid = false;
-          reasons.push('Test API key prefix');
-        }
-        
-        // Reduced API key length requirement from 30 to 20 characters
-        if (provider.veniceApiKey && provider.veniceApiKey.length <= 20) {
-          isValid = false;
-          reasons.push(`API key too short (${provider.veniceApiKey.length} chars, need >20)`);
-        }
-        
-        // Removed overly restrictive name filtering - only block obvious dummy/placeholder names
-        if (provider.name && (
-          provider.name.toLowerCase().includes('dummy') ||
-          provider.name.toLowerCase().includes('placeholder') ||
-          provider.name.toLowerCase().includes('fake')
-        )) {
-          isValid = false;
-          reasons.push('Placeholder/dummy provider name');
-        }
-        
-        if (isValid) {
-          validProviders.push(provider);
-          console.log(`✓ Provider "${provider.name}" passed validation`);
-        } else {
-          rejectionReasons.push(`✗ Provider "${provider.name}" rejected: ${reasons.join(', ')}`);
-        }
+      if (!assignedProvider || !assignedProvider.isActive) {
+        // Provider became inactive, the session manager should have handled this
+        throw new Error(`Assigned provider ${assignedProviderId} is not available`);
       }
       
-      // Log all rejection reasons for debugging
-      if (rejectionReasons.length > 0) {
-        console.log('Provider validation rejections:');
-        rejectionReasons.forEach(reason => console.log(`  ${reason}`));
-      }
+      // Use the session-assigned provider instead of random selection
+      console.log(`Using session-assigned provider: ${assignedProvider.name} for session ${args.sessionId.substring(0, 8)}`);
       
-      console.log(`Valid providers after strict filtering: ${validProviders.length}/${providers.length}`);
+      // Convert to expected Provider format for callVeniceAI compatibility
+      const sessionProvider: Provider = {
+        _id: assignedProvider._id,
+        veniceApiKey: assignedProvider.veniceApiKey,
+        name: assignedProvider.name,
+        isActive: assignedProvider.isActive,
+      };
 
-      // If strict validation fails, try fallback validation with relaxed rules
-      let finalProviders = validProviders;
-      if (validProviders.length === 0) {
-        console.log('No providers passed strict validation. Attempting fallback validation with relaxed rules...');
-        
-        const fallbackProviders = [];
-        const fallbackReasons = [];
-        
-        for (const provider of providers) {
-          let isValid = true;
-          const reasons = [];
-          
-          // Minimal validation for fallback - just check API key exists and has reasonable length
-          if (!provider.veniceApiKey) {
-            isValid = false;
-            reasons.push('No API key');
-          } else if (provider.veniceApiKey.length < 10) {
-            isValid = false;
-            reasons.push(`API key too short for fallback (${provider.veniceApiKey.length} chars, need ≥10)`);
-          } else if (provider.veniceApiKey.startsWith('test_')) {
-            isValid = false;
-            reasons.push('Test API key prefix (blocked in fallback)');
-          }
-          
-          if (isValid) {
-            fallbackProviders.push(provider);
-            console.log(`✓ Provider "${provider.name}" passed fallback validation`);
-          } else {
-            fallbackReasons.push(`✗ Provider "${provider.name}" fallback rejected: ${reasons.join(', ')}`);
-          }
-        }
-        
-        if (fallbackReasons.length > 0) {
-          console.log('Fallback validation rejections:');
-          fallbackReasons.forEach(reason => console.log(`  ${reason}`));
-        }
-        
-        console.log(`Valid providers after fallback filtering: ${fallbackProviders.length}/${providers.length}`);
-        finalProviders = fallbackProviders;
-      }
-
-      if (finalProviders.length === 0) {
-        // Use first provider ID as fallback even if invalid API key
-        const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
-        
-        // More specific error message about why no providers are available
-        const specificErrors = rejectionReasons.slice(0, 3).join('; '); // Show first 3 rejection reasons
-        const errorMessage = providers.length === 0 
-          ? "No AI providers are registered in the system. Please contact support."
-          : `No valid AI providers available. Issues found: ${specificErrors}${rejectionReasons.length > 3 ? ` (and ${rejectionReasons.length - 3} more)` : ''}. Please contact support or try again later.`;
-        
-        return {
-          response: errorMessage,
-          model: "error",
-          totalTokens: 0,
-          providerId: fallbackProviderId,
-          provider: "System",
-          cost: 0,
-          responseTime: 0,
-          pointsAwarded: 0,
-          address: args.address,
-          intent: args.intent,
-          vcuCost: 0,
-        };
-      }
-
-      const randomProvider: Provider =
-        finalProviders[Math.floor(Math.random() * finalProviders.length)];
-
-      // Get API key securely (decrypted from secure storage)
+      // Get API key securely for the session-assigned provider
       const apiKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
-        providerId: randomProvider._id
+        providerId: sessionProvider._id
       });
 
       if (!apiKey) {
-        throw new Error("Provider API key not available");
+        throw new Error(`Session provider ${sessionProvider.name} API key not available`);
       }
 
       const { response, model: usedModel, tokens, responseTime } =
@@ -1416,7 +1314,7 @@ export const route = action({
 
       await ctx.runMutation(api.inference.recordInference, {
         address: args.address || 'anonymous',
-        providerId: randomProvider._id,
+        providerId: sessionProvider._id,
         model: usedModel,
         intent: args.intent,
         totalTokens: tokens,
@@ -1434,7 +1332,7 @@ export const route = action({
                               args.apiKey?.startsWith("ak_") ? "agent_api" : "prompt_served";
         
         await ctx.runMutation(api.providers.awardProviderPoints, {
-          providerId: randomProvider._id,
+          providerId: sessionProvider._id,
           promptsServed: 1,
           tokensProcessed: tokens,
           transactionType: transactionType,
@@ -1461,8 +1359,8 @@ export const route = action({
         response,
         model: usedModel,
         totalTokens: tokens,
-        providerId: randomProvider._id,
-        provider: randomProvider.name,
+        providerId: sessionProvider._id,
+        provider: sessionProvider.name,
         cost: vcuCost,
         responseTime,
         pointsAwarded,
@@ -1471,11 +1369,12 @@ export const route = action({
         vcuCost,
       };
     } catch (error) {
-      // Get any provider ID for error case (or use a dummy one if none exist)
+      // Get any provider ID for error case
       const providers = await ctx.runQuery(internal.providers.listActiveInternal);
-      const fallbackProviderId = providers.length > 0 ? providers[0]._id : "kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any;
+      const fallbackProviderId = providers.length > 0 ? providers[0]._id : ("kh70t8fqs9nb2ev64faympm6kx7j2sqx" as any);
       
-      // Return error response instead of throwing
+      // Return standardized error response
+      
       return {
         response: `Error: ${error instanceof Error ? error.message : String(error)}`,
         model: "error",

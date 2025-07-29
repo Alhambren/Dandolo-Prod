@@ -5,6 +5,7 @@ import { WalletConnectButton } from './WalletConnectButton';
 import { useConvex, useMutation, useQuery, useAction } from 'convex/react';
 import { useAccount } from 'wagmi';
 import { api } from '../../convex/_generated/api';
+import { useSession } from '../lib/session';
 
 interface ChatPageProps {
   onNavigate: (page: string) => void;
@@ -24,9 +25,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
   const [lastChunkIndex, setLastChunkIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
+  // Use the new session management system
+  const { sessionId, endSession, updateActivity } = useSession();
+  
   const { address } = useAccount();
   const providers = useQuery(api.providers.list);
-  const activeProvider = providers?.find(p => p.isActive);
+  const activeProviders = providers?.filter(p => p.isActive) || [];
   const sendMessageStreaming = useAction(api.inference.sendMessageStreaming);
   const streamingChunks = useQuery(api.inference.getStreamingChunks, 
     currentStreamId ? { streamId: currentStreamId, fromIndex: lastChunkIndex } : 'skip'
@@ -70,11 +74,35 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingResponse]);
 
+  // Clear session and start a new chat
+  const startNewChat = () => {
+    setMessages([]);
+    endSession(); // End the current session
+    setStreamingResponse('');
+    setCurrentStreamId(null);
+    setLastChunkIndex(0);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !activeProvider || isLoading) return;
+    
+    // Input validation
+    const trimmedInput = input.trim();
+    if (!trimmedInput || activeProviders.length === 0 || isLoading) return;
+    
+    // Prevent excessively long inputs (DoS protection)
+    if (trimmedInput.length > 4000) {
+      alert('Message too long. Please keep it under 4000 characters.');
+      return;
+    }
+    
+    // Basic content validation
+    if (trimmedInput.length < 2) {
+      alert('Please enter a meaningful message.');
+      return;
+    }
 
-    const userMessage = { role: 'user' as const, content: input };
+    const userMessage = { role: 'user' as const, content: trimmedInput };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
@@ -82,11 +110,14 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
     setLastChunkIndex(0);
 
     try {
-      // Start streaming conversation with context
+      // Update session activity
+      updateActivity();
+
+      // Start streaming conversation with session-based provider assignment
       const result = await sendMessageStreaming({
         messages: [...messages, userMessage], // Include full conversation context
         model: selectedModel,
-        providerId: activeProvider._id,
+        sessionId: sessionId, // Use session ID for consistent provider assignment
         address: address, // Pass wallet address if connected
         allowAdultContent: false,
       });
@@ -120,7 +151,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
             <Logo variant="shield" showText={false} className="h-8" />
             <span className="text-white font-semibold">Dandolo.ai</span>
           </div>
-          <WalletConnectButton />
+          <div className="flex items-center gap-3">
+            {messages.length > 0 && (
+              <button
+                onClick={startNewChat}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
+              >
+                New Chat
+              </button>
+            )}
+            <WalletConnectButton />
+          </div>
         </div>
       </div>
 
@@ -229,9 +270,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
 
       {/* Input Area */}
       <div className="bg-gray-800 border-t border-gray-700 p-4">
-        {!activeProvider && (
+        {activeProviders.length === 0 && (
           <div className="mb-3 text-center text-red-400 text-sm">
             <button onClick={() => onNavigate('providers')} className="underline">Add a provider</button> to start
+          </div>
+        )}
+        
+        {/* Show session info */}
+        {messages.length > 0 && (
+          <div className="mb-3 text-center text-gray-400 text-xs">
+            Session: {sessionId.substring(0, 12)}... (provider assigned automatically)
           </div>
         )}
         
@@ -241,13 +289,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask me anything..."
-            disabled={!activeProvider || isLoading}
+            disabled={activeProviders.length === 0 || isLoading}
             className="flex-grow bg-gray-700 text-white rounded-lg px-4 py-3 outline-none"
             style={{ fontSize: '16px' }}
           />
           <button
             type="submit"
-            disabled={!activeProvider || isLoading || !input.trim()}
+            disabled={activeProviders.length === 0 || isLoading || !input.trim()}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg disabled:opacity-50"
           >
             Send

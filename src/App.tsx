@@ -11,8 +11,8 @@ import { AdminDashboardPage } from './components/AdminDashboard';
 import { WalletConnectButton } from './components/WalletConnectButton';
 import { Logo } from './components/Logo';
 
-// CRITICAL: Hardcoded admin address - must match AdminDashboard.tsx
-const ADMIN_ADDRESS = "0xC07481520d98c32987cA83B30EAABdA673cDbe8c";
+// Admin address from environment variable (fallback to original for backward compatibility)
+const ADMIN_ADDRESS = import.meta.env.VITE_ADMIN_ADDRESS || "0xC07481520d98c32987cA83B30EAABdA673cDbe8c";
 
 export default function App() {
   const { address, isConnected } = useAccount();

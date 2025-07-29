@@ -9,12 +9,13 @@ export function WalletConnectButton() {
   const { signMessageAsync } = useSignMessage()
   const [isVerified, setIsVerified] = useState(false)
 
-  // Check connection status without auto-popup
+  // Check connection status and verify wallet ownership
   useEffect(() => {
-    // If wallet is connected, consider it verified (since connection itself proves ownership)
-    // This prevents the need for manual re-verification on every page load
+    // Connection alone does not prove ownership - signature verification required
     if (address) {
-      setIsVerified(true)
+      // For now, mark as connected but not verified
+      // TODO: Implement proper wallet verification flow with challenge-response
+      setIsVerified(false) // Changed: require proper verification
     } else {
       setIsVerified(false)
     }

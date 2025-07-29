@@ -98,6 +98,40 @@ async function verifyWalletOwnership(ctx: any, claimedAddress: string, signature
 
 // DEPRECATED: Legacy hash function - replaced with secure fingerprinting
 // Kept temporarily for migration compatibility
+
+/**
+ * Get a specific provider by ID (internal use only)
+ */
+
+/**
+ * Get provider with decrypted API key for inference
+ */
+export const getProviderForInference = internalQuery({
+  args: { providerId: v.id("providers") },
+  returns: v.union(
+    v.object({
+      _id: v.id("providers"),
+      name: v.string(),
+      isActive: v.boolean(),
+      hasValidApiKey: v.boolean(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    
+    if (!provider) {
+      return null;
+    }
+    
+    return {
+      _id: provider._id,
+      name: provider.name,
+      isActive: provider.isActive,
+      hasValidApiKey: Boolean(provider.veniceApiKey && provider.veniceApiKey.length > 10),
+    };
+  },
+});
 function hashApiKey(apiKey: string): string {
   return createSecureHash(apiKey);
 }

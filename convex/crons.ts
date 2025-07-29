@@ -75,5 +75,21 @@ crons.daily(
   {}
 );
 
+// Clean up expired session provider assignments every 30 minutes
+crons.interval(
+  "cleanup-expired-sessions",
+  { minutes: 30 },
+  internal.sessionProviders.cleanupExpiredSessions,
+  {}
+);
+
+// Clean up expired auth sessions and challenges every hour
+crons.interval(
+  "cleanup-auth-sessions",
+  { hours: 1 },
+  internal.auth.cleanupExpiredSessionsInternal,
+  {}
+);
+
 export default crons;
 
