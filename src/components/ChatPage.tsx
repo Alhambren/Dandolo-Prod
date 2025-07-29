@@ -113,6 +113,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
       // Update session activity
       updateActivity();
 
+      console.log('[ChatPage] Using session ID:', sessionId, 'for message:', trimmedInput.substring(0, 50));
+
       // Start streaming conversation with session-based provider assignment
       const result = await sendMessageStreaming({
         messages: [...messages, userMessage], // Include full conversation context

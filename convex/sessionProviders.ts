@@ -29,6 +29,7 @@ export const getSessionProvider = mutation({
       const provider = await ctx.db.get(existing.providerId);
       
       if (provider && provider.isActive) {
+        console.log(`[Session] Reusing provider "${provider.name}" for session ${args.sessionId.substring(0, 8)}... (${Math.floor((existing.expiresAt - now) / 60000)}min left)`);
         // Update last used timestamp and extend expiry
         await ctx.db.patch(existing._id, {
           lastUsed: now,
@@ -36,10 +37,12 @@ export const getSessionProvider = mutation({
         });
         return existing.providerId;
       } else {
+        console.log(`[Session] Provider for session ${args.sessionId.substring(0, 8)}... became inactive, reassigning`);
         // Provider became inactive, clean up this session
         await ctx.db.delete(existing._id);
       }
     } else if (existing) {
+      console.log(`[Session] Session ${args.sessionId.substring(0, 8)}... expired, creating new assignment`);
       // Session expired, clean it up
       await ctx.db.delete(existing._id);
     }
@@ -56,7 +59,7 @@ export const getSessionProvider = mutation({
     // For now, use random selection but this can be improved
     const selectedProvider = providers[Math.floor(Math.random() * providers.length)];
     
-    console.log(`Assigning provider "${selectedProvider.name}" to session ${args.sessionId.substring(0, 8)}...`);
+    console.log(`[Session] NEW ASSIGNMENT: Provider "${selectedProvider.name}" assigned to session ${args.sessionId.substring(0, 8)}... (${providers.length} providers available)`);
     
     // Create new session assignment
     await ctx.db.insert("sessionProviders", {
