@@ -103,14 +103,33 @@ export default defineSchema({
 
   // MODEL CACHE: Venice.ai models
   modelCache: defineTable({
-    models: v.array(v.object({
-      id: v.string(),
-      name: v.string(),
-      type: v.union(v.literal("text"), v.literal("image"), v.literal("code"), v.literal("multimodal"), v.literal("audio")),
-      owned_by: v.optional(v.string()),
-      created: v.optional(v.number()),
-      capabilities: v.optional(v.any()), // Keep as any for flexibility but document structure
-    })),
+    models: v.object({
+      text: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      image: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      code: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      multimodal: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+      audio: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        contextLength: v.optional(v.number()),
+      })),
+    }),
     lastUpdated: v.number(),
   }),
 
@@ -275,6 +294,11 @@ export default defineSchema({
       errorType: v.optional(v.string()),
       userAgent: v.optional(v.string()),
       requestSize: v.optional(v.number()),
+      // Additional monitoring context fields
+      averageResponseTime: v.optional(v.number()),
+      healthyProviders: v.optional(v.number()),
+      totalProviders: v.optional(v.number()),
+      unhealthyProviders: v.optional(v.number()),
     })),
     acknowledged: v.boolean(),
   })
