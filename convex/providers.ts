@@ -206,7 +206,7 @@ export const createProviderMutation = internalMutation({
       userAgent: args.userAgent,
       riskScore: args.riskScore,
       flaggedReason: args.flaggedReason,
-      verificationStatus: args.verificationStatus || "pending",
+      verificationStatus: (args.verificationStatus as "pending" | "verified" | "flagged" | "suspended") || "pending",
     });
 
     // Initialize points
@@ -267,7 +267,7 @@ export const createProviderWithVCUMutation = internalMutation({
       userAgent: args.userAgent,
       riskScore: args.riskScore,
       flaggedReason: args.flaggedReason,
-      verificationStatus: args.verificationStatus || "verified",
+      verificationStatus: (args.verificationStatus as "pending" | "verified" | "flagged" | "suspended") || "verified",
     });
 
     // Initialize points

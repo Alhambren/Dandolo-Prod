@@ -468,6 +468,8 @@ async function* callVeniceAIStreaming(
 
   // Text streaming
   try {
+    console.log(`[VENICE_STREAMING] Starting stream with model: ${model || selectedModel}`);
+    
     // Add system message for adult content if enabled
     let finalMessages = [...messages];
     if (allowAdultContent && selectedModel?.toLowerCase().includes("uncensored")) {
@@ -478,6 +480,8 @@ async function* callVeniceAIStreaming(
       finalMessages = [systemMessage, ...messages];
     }
 
+    console.log(`[VENICE_STREAMING] Sending request to Venice.ai with ${finalMessages.length} messages`);
+    
     const response = await fetch(
       "https://api.venice.ai/api/v1/chat/completions",
       {
@@ -501,23 +505,30 @@ async function* callVeniceAIStreaming(
 
     if (!response.ok) {
       const error = await response.text();
+      console.error(`[VENICE_STREAMING] API error: ${response.status} - ${error}`);
       throw new Error(`Venice API error: ${response.status} - ${error}`);
     }
 
+    console.log(`[VENICE_STREAMING] Response received, starting to read stream`);
+    
     const reader = response.body?.getReader();
     if (!reader) {
+      console.error(`[VENICE_STREAMING] Response body is not readable`);
       throw new Error("Response body is not readable");
     }
 
     const decoder = new TextDecoder();
     let buffer = '';
     let totalTokens = 0;
+    let chunkCount = 0;
 
     try {
       while (true) {
         const { done, value } = await reader.read();
+        chunkCount++;
         
         if (done) {
+          console.log(`[VENICE_STREAMING] Stream completed after ${chunkCount} chunks`);
           break;
         }
 
@@ -879,6 +890,82 @@ export const testFunction = action({
 });
 
 /**
+ * Debug function to check provider status and streaming capability
+ */
+export const debugProviderStatus = action({
+  args: {},
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+    details: v.any(),
+  }),
+  handler: async (ctx) => {
+    try {
+      // Check providers
+      const providers = await ctx.runQuery(api.providers.list);
+      const activeProviders = providers?.filter((p: any) => p.isActive) || [];
+      
+      console.log(`[DEBUG] Found ${activeProviders.length} active providers out of ${providers?.length || 0} total`);
+      
+      if (activeProviders.length === 0) {
+        return {
+          success: false,
+          message: "No active providers found - this is why streaming is failing",
+          details: {
+            totalProviders: providers?.length || 0,
+            activeProviders: 0,
+            suggestion: "Add a provider with a valid Venice.ai API key to enable streaming"
+          }
+        };
+      }
+      
+      // Test session provider assignment
+      const testSessionId = `debug_session_${Date.now()}`;
+      try {
+        const assignedProviderId = await ctx.runMutation(api.sessionProviders.getSessionProvider, {
+          sessionId: testSessionId,
+          intent: "chat",
+        });
+        
+        const assignedProvider = await ctx.runQuery(internal.providers.getProviderById, {
+          providerId: assignedProviderId,
+        });
+        
+        return {
+          success: true,
+          message: "Provider assignment working correctly",
+          details: {
+            totalProviders: providers?.length || 0,
+            activeProviders: activeProviders.length,
+            assignedProvider: assignedProvider?.name,
+            testSessionId
+          }
+        };
+      } catch (error) {
+        return {
+          success: false,
+          message: `Provider assignment failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          details: {
+            totalProviders: providers?.length || 0,
+            activeProviders: activeProviders.length,
+            error: error instanceof Error ? error.message : "Unknown error"
+          }
+        };
+      }
+      
+    } catch (error) {
+      return {
+        success: false,
+        message: `Debug check failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        details: {
+          error: error instanceof Error ? error.message : "Unknown error"
+        }
+      };
+    }
+  },
+});
+
+/**
  * Simple sendMessage wrapper for ChatPage compatibility.
  * This is a stateless function that doesn't save conversations - only processes them.
  */
@@ -902,13 +989,19 @@ export const sendMessage = action({
     provider: v.string(), // Add provider name for debugging
     providerId: v.id("providers"), // Add provider ID for debugging
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    response: string;
+    model: string;
+    totalTokens: number;
+    provider: string;
+    providerId: Id<"providers">;
+  }> => {
     // Use the existing route action with provided parameters
     // This doesn't save any conversation data - just processes the request
     // No chat history is stored in the database - keeping conversations stateless for privacy
     console.log(`[SendMessage] Using session ID: ${args.sessionId.substring(0, 8)}... for ${args.messages.length} messages`);
     
-    const result = await ctx.runAction(api.inference.route, {
+    const result: RouteReturnType = await ctx.runAction(api.inference.route, {
       messages: args.messages,
       intent: "chat", // Default to chat intent
       sessionId: args.sessionId, // Use provided session ID for provider persistence
@@ -950,11 +1043,15 @@ export const sendMessageStreaming = action({
     success: v.boolean(),
     error: v.optional(v.string()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    streamId: string;
+    success: boolean;
+    error?: string;
+  }> => {
     try {
       // Rate limiting and daily limit checks (same as regular route)
       if (args.address) {
-        const rateCheck = await ctx.runMutation(api.rateLimit.checkRateLimit, {
+        const rateCheck: { allowed: boolean; retryAfter?: number } = await ctx.runMutation(api.rateLimit.checkRateLimit, {
           identifier: args.address,
           userType: "user",
         });
@@ -967,7 +1064,7 @@ export const sendMessageStreaming = action({
           };
         }
         
-        const dailyCheck = await ctx.runMutation(api.rateLimit.checkDailyLimit, {
+        const dailyCheck: { allowed: boolean; resetTime: number; limit: number } = await ctx.runMutation(api.rateLimit.checkDailyLimit, {
           address: args.address,
         });
         
@@ -1027,7 +1124,18 @@ export const sendMessageStreaming = action({
       // Start streaming and store chunks in background
       (async () => {
         try {
+          console.log(`[STREAMING] Starting stream ${streamId} with provider ${selectedProvider.name}`);
           let chunkIndex = 0;
+          
+          // Store initial chunk to indicate streaming has started
+          await ctx.runMutation(api.inference.storeStreamingChunk, {
+            streamId,
+            chunkIndex: chunkIndex++,
+            content: "",
+            done: false,
+            model: args.model,
+            expiresAt,
+          });
           
           for await (const chunk of callVeniceAIStreaming(
             ctx,
@@ -1038,6 +1146,8 @@ export const sendMessageStreaming = action({
             args.model,
             args.allowAdultContent
           )) {
+            console.log(`[STREAMING] Received chunk ${chunkIndex}: done=${chunk.done}, content length=${chunk.content?.length || 0}`);
+            
             // Store chunk in database
             await ctx.runMutation(api.inference.storeStreamingChunk, {
               streamId,
@@ -1050,6 +1160,8 @@ export const sendMessageStreaming = action({
             });
             
             if (chunk.done) {
+              console.log(`[STREAMING] Stream ${streamId} completed with ${chunk.tokens || 0} tokens`);
+              
               // Record inference for statistics
               await ctx.runMutation(api.inference.recordInference, {
                 address: args.address || 'anonymous',
@@ -1078,6 +1190,8 @@ export const sendMessageStreaming = action({
             }
           }
         } catch (error) {
+          console.error(`[STREAMING] Error in stream ${streamId}:`, error);
+          
           // Store error as final chunk
           await ctx.runMutation(api.inference.storeStreamingChunk, {
             streamId,

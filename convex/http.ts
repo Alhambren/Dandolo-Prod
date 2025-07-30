@@ -131,7 +131,7 @@ http.route({
       // Use existing Convex inference system with all required parameters
       const result = await ctx.runAction(api.inference.route, {
         messages: body.messages,
-        intent: intent,
+        intent: intent as "image" | "code" | "chat" | "analysis",
         sessionId: crypto.randomUUID(),
         isAnonymous: false,
         address: validation.address,
@@ -175,9 +175,9 @@ http.route({
           "X-RateLimit-Limit": validation.dailyLimit.toString(),
           "X-RateLimit-Remaining": Math.max(0, remainingRequests).toString(),
           "X-RateLimit-Reset": resetTime.toString(),
-          "X-RateLimit-Type": validation.keyType,
+          "X-RateLimit-Type": validation.keyType || "unknown",
           ...getSecureCorsHeaders(request) 
-        },
+        } as HeadersInit,
       });
 
     } catch (error) {
@@ -275,7 +275,7 @@ http.route({
       const allModels = await ctx.runQuery(api.models.getAvailableModels, {});
       
       // Filter to only chat-appropriate models (exclude embedding, upscale, etc.)
-      const chatModels = allModels.filter(model => {
+      const chatModels = allModels.filter((model: any) => {
         // Exclude embedding and upscaler models by ID patterns
         if (model.id.includes('embedding') || model.id.includes('upscal')) {
           return false;
@@ -358,7 +358,7 @@ http.route({
 
       // Get active provider and decrypt API key
       const providers = await ctx.runQuery(api.providers.list, {});
-      const activeProvider = providers?.find(p => p.isActive);
+      const activeProvider = providers?.find((p: any) => p.isActive);
       
       if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
@@ -432,7 +432,7 @@ http.route({
       const body = await request.json();
 
       const providers = await ctx.runQuery(api.providers.list, {});
-      const activeProvider = providers?.find(p => p.isActive);
+      const activeProvider = providers?.find((p: any) => p.isActive);
       
       if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
@@ -505,7 +505,7 @@ http.route({
 
       const body = await request.json();
       const providers = await ctx.runQuery(api.providers.list, {});
-      const activeProvider = providers?.find(p => p.isActive);
+      const activeProvider = providers?.find((p: any) => p.isActive);
       
       if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
@@ -578,7 +578,7 @@ http.route({
 
       const body = await request.json();
       const providers = await ctx.runQuery(api.providers.list, {});
-      const activeProvider = providers?.find(p => p.isActive);
+      const activeProvider = providers?.find((p: any) => p.isActive);
       
       if (!activeProvider) {
         return new Response(JSON.stringify({ error: "No active Venice provider available" }), {
@@ -739,7 +739,7 @@ http.route({
       const allModels = await ctx.runQuery(api.models.getAvailableModels, {});
       
       // Filter to only chat-appropriate models (exclude embedding, upscale, etc.)
-      const chatModels = allModels.filter(model => {
+      const chatModels = allModels.filter((model: any) => {
         // Exclude embedding and upscaler models by ID patterns
         if (model.id.includes('embedding') || model.id.includes('upscal')) {
           return false;
@@ -751,7 +751,7 @@ http.route({
       });
       
       // Convert to OpenAI format
-      const openAIModels = chatModels.map(model => ({
+      const openAIModels = chatModels.map((model: any) => ({
         id: model.id,
         object: "model",
         created: Math.floor(Date.now() / 1000),

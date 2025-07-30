@@ -10,6 +10,92 @@ function verifyAdminAccess(address?: string): boolean {
   return address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
 }
 
+/**
+ * Quick debug action to check if there are any active providers
+ */
+export const checkProviders = action({
+  args: {},
+  handler: async (ctx) => {
+    try {
+      const providers = await ctx.runQuery(api.providers.list);
+      const activeProviders = providers?.filter((p: any) => p.isActive) || [];
+      
+      console.log(`[DEBUG] Found ${activeProviders.length} active providers out of ${providers?.length || 0} total`);
+      
+      return {
+        activeCount: activeProviders.length,
+        totalCount: providers?.length || 0,
+        details: activeProviders.map((p: any) => ({
+          name: p.name,
+          id: p._id,
+          isActive: p.isActive
+        }))
+      };
+    } catch (error) {
+      console.error("Error checking providers:", error);
+      return {
+        activeCount: 0,
+        totalCount: 0,
+        details: []
+      };
+    }
+  }
+});
+
+/**
+ * Test streaming chunks storage and retrieval
+ */
+export const testStreamingChunks = action({
+  args: {},
+  handler: async (ctx) => {
+    const testStreamId = `test_${Date.now()}`;
+    const expiresAt = Date.now() + (10 * 60 * 1000);
+    
+    try {
+      // Store a test chunk
+      await ctx.runMutation(api.inference.storeStreamingChunk, {
+        streamId: testStreamId,
+        chunkIndex: 0,
+        content: "Test chunk content",
+        done: false,
+        model: "test-model",
+        expiresAt
+      });
+      
+      // Store completion chunk
+      await ctx.runMutation(api.inference.storeStreamingChunk, {
+        streamId: testStreamId,
+        chunkIndex: 1,
+        content: " - Complete!",
+        done: true,
+        model: "test-model",
+        tokens: 10,
+        expiresAt
+      });
+      
+      // Retrieve chunks
+      const chunks = await ctx.runQuery(api.inference.getStreamingChunks, {
+        streamId: testStreamId
+      });
+      
+      console.log("Test chunks stored and retrieved:", chunks);
+      
+      return {
+        success: true,
+        streamId: testStreamId,
+        chunks: chunks
+      };
+    } catch (error) {
+      console.error("Test failed:", error);
+      return {
+        success: false,
+        streamId: "",
+        error: error instanceof Error ? error.message : "Unknown error"
+      };
+    }
+  }
+});
+
 // ADMIN-ONLY: Debug query to see what models are available
 export const debugModels = query({
   args: { adminAddress: v.string() },

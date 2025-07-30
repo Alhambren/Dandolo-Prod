@@ -15,7 +15,7 @@ export const getSessionProvider = mutation({
     intent: v.optional(v.string()),
   },
   returns: v.id("providers"),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"providers">> => {
     const now = Date.now();
     
     // Check for existing active session
@@ -46,7 +46,7 @@ export const getSessionProvider = mutation({
     
     // Need to assign a new provider
     // Get all active providers with proper validation
-    const providers = await ctx.runQuery(internal.providers.listActiveInternal);
+    const providers: Array<{ _id: Id<"providers">; name: string; isActive: boolean }> = await ctx.runQuery(internal.providers.listActiveInternal);
     
     if (providers.length === 0) {
       throw new Error("No active providers available for session assignment");
@@ -54,7 +54,7 @@ export const getSessionProvider = mutation({
     
     // Simple load balancing: select provider with least recent assignments
     // For now, use random selection but this can be improved
-    const selectedProvider = providers[Math.floor(Math.random() * providers.length)];
+    const selectedProvider: { _id: Id<"providers">; name: string; isActive: boolean } = providers[Math.floor(Math.random() * providers.length)];
     
     // Create new session assignment
     await ctx.db.insert("sessionProviders", {
@@ -207,14 +207,14 @@ export const reassignSession = mutation({
     forceProviderId: v.optional(v.id("providers")),
   },
   returns: v.id("providers"),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"providers">> => {
     // Remove existing session
-    await ctx.runMutation(internal.sessionProviders.removeSession, {
+    await ctx.runMutation(api.sessionProviders.removeSession, {
       sessionId: args.sessionId,
     });
     
     // Create new assignment
-    return await ctx.runMutation(internal.sessionProviders.getSessionProvider, {
+    return await ctx.runMutation(api.sessionProviders.getSessionProvider, {
       sessionId: args.sessionId,
       intent: "chat",
     });
