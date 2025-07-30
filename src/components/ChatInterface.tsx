@@ -952,6 +952,19 @@ export const ChatInterface: React.FC = () => {
                     </div>
                   </div>
                 ))}
+                
+                {/* Production-safe session debug info - only shown when there are messages */}
+                {currentChat && currentChat.messages.length > 1 && (
+                  <div className="mt-8 p-3 bg-gray-800/50 rounded-lg text-xs text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span>Session: {sessionId.substring(0, 8)}...</span>
+                      <span className="text-gray-600">•</span>
+                      <span>Provider persistence active</span>
+                    </div>
+                  </div>
+                )}
+                
                 <div ref={messagesEndRef} />
               </div>
             ) : (
