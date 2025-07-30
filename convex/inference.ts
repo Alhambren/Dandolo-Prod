@@ -1328,7 +1328,13 @@ export const sendMessageStreaming = action({
  */
 export const routeSimple = action({
   args: {
-    prompt: v.string(),
+    prompt: v.optional(v.string()), // Keep for backward compatibility
+    messages: v.optional(v.array(
+      v.object({
+        role: v.union(v.literal("system"), v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+      })
+    )), // Add full conversation support
     address: v.string(),
     sessionId: v.optional(v.string()), // Add session ID for provider persistence
     intentType: v.optional(
@@ -1351,10 +1357,11 @@ export const routeSimple = action({
   }),
   handler: async (ctx, args): Promise<RouteSimpleReturnType> => {
     try {
-      const messages = [
+      // Use full conversation if provided, otherwise fall back to single prompt
+      const messages = args.messages || [
         {
           role: "user" as const,
-          content: args.prompt,
+          content: args.prompt || "",
         },
       ];
 

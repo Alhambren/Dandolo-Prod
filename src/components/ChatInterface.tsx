@@ -500,9 +500,16 @@ export const ChatInterface: React.FC = () => {
       // Update session activity
       updateActivity();
 
-      // Use the original working API with session ID for provider persistence
+      // Use the original working API with full conversation context and session ID
+      const conversationMessages = compactedMessages
+        .filter(msg => !msg.isLoading) // Remove loading messages
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
       const response = await routeInference({
-        prompt: message,
+        messages: conversationMessages, // Send full conversation for context
         address: address || 'anonymous',
         sessionId: sessionId, // Add session ID for provider persistence
         intentType: taskType,
