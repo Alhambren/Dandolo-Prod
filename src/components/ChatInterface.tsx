@@ -3,6 +3,7 @@ import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAccount } from 'wagmi';
 import { toast } from 'sonner';
+import { useSession } from '../lib/session';
 import { 
   Plus, 
   ChevronDown, 
@@ -186,6 +187,9 @@ const MessageContent: React.FC<{ msg: Message; role: 'user' | 'assistant' }> = (
 
 export const ChatInterface: React.FC = () => {
   const { address } = useAccount();
+  
+  // Add session management
+  const { sessionId, endSession, updateActivity } = useSession();
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0]);
   const [taskType, setTaskType] = useState<TaskType>('chat');
@@ -202,10 +206,85 @@ export const ChatInterface: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // API calls
-  const routeInference = useAction(api.inference.routeSimple);
+  // API calls - CHANGED: Use streaming API with session support
+  const sendMessageStreaming = useAction(api.inference.sendMessageStreaming);
+  
+  // Add streaming state management
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const [currentStreamId, setCurrentStreamId] = useState<string | null>(null);
+  const [lastChunkIndex, setLastChunkIndex] = useState(0);
+  
+  // Query for streaming chunks
+  const streamingChunks = useQuery(api.inference.getStreamingChunks, 
+    currentStreamId ? { streamId: currentStreamId, fromIndex: lastChunkIndex } : 'skip'
+  );
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
   const availableModels = useQuery(api.models.getAvailableModels);
+
+  // Handle streaming chunks
+  React.useEffect(() => {
+    if (streamingChunks && streamingChunks.length > 0) {
+      let newContent = streamingResponse;
+      let isComplete = false;
+      
+      for (const chunk of streamingChunks) {
+        if (chunk.chunkIndex >= lastChunkIndex) {
+          newContent += chunk.content;
+          setLastChunkIndex(chunk.chunkIndex + 1);
+          
+          if (chunk.done) {
+            isComplete = true;
+            // Update the active chat with complete response
+            setChats(prevChats => {
+              return prevChats.map(chat => {
+                if (chat.id === activeChat) {
+                  const updatedMessages = [...chat.messages];
+                  // Replace loading message with complete response
+                  const lastMessageIndex = updatedMessages.length - 1;
+                  if (lastMessageIndex >= 0 && updatedMessages[lastMessageIndex].isLoading) {
+                    updatedMessages[lastMessageIndex] = {
+                      ...updatedMessages[lastMessageIndex],
+                      content: newContent,
+                      isLoading: false
+                    };
+                  }
+                  return { ...chat, messages: updatedMessages };
+                }
+                return chat;
+              });
+            });
+            
+            // Reset streaming state
+            setStreamingResponse('');
+            setCurrentStreamId(null);
+            setLastChunkIndex(0);
+            setIsLoading(false);
+          }
+        }
+      }
+      
+      if (!isComplete) {
+        setStreamingResponse(newContent);
+        // Update the loading message with current stream content
+        setChats(prevChats => {
+          return prevChats.map(chat => {
+            if (chat.id === activeChat) {
+              const updatedMessages = [...chat.messages];
+              const lastMessageIndex = updatedMessages.length - 1;
+              if (lastMessageIndex >= 0 && updatedMessages[lastMessageIndex].isLoading) {
+                updatedMessages[lastMessageIndex] = {
+                  ...updatedMessages[lastMessageIndex],
+                  content: newContent
+                };
+              }
+              return { ...chat, messages: updatedMessages };
+            }
+            return chat;
+          });
+        });
+      }
+    }
+  }, [streamingChunks, lastChunkIndex, streamingResponse, activeChat]);
 
   // Filter models by task type
   const modelsToShow = useMemo(() => {
@@ -320,6 +399,13 @@ export const ChatInterface: React.FC = () => {
   const getCurrentChat = () => chats.find(c => c.id === activeChat);
 
   const createNewChat = () => {
+    // End current session when starting new chat
+    endSession();
+    // Reset streaming state
+    setStreamingResponse('');
+    setCurrentStreamId(null);
+    setLastChunkIndex(0);
+    
     const newChat: Chat = {
       id: `chat_${Date.now()}`,
       title: 'New Chat',
@@ -487,52 +573,51 @@ export const ChatInterface: React.FC = () => {
     setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? updatedChat : c));
     setMessage('');
     setIsLoading(true);
+    setStreamingResponse('');
+    setLastChunkIndex(0);
 
     try {
-      const response = await routeInference({
-        prompt: message,
-        address: address || 'anonymous',
-        intentType: taskType,
+      // Update session activity
+      updateActivity();
+
+      // CHANGED: Use streaming API with session support
+      // Convert messages to the format expected by sendMessageStreaming
+      const conversationMessages = compactedMessages
+        .filter(msg => !msg.isLoading)
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
+      const result = await sendMessageStreaming({
+        messages: conversationMessages,
         model: selectedModel,
+        sessionId: sessionId, // Use session ID for consistent provider assignment
+        address: address, // Pass wallet address if connected
         allowAdultContent,
       });
 
-      const assistantMessage: Message = {
-        id: `msg_${Date.now()}_response`,
-        role: 'assistant',
-        content: response.response,
-        timestamp: Date.now(),
-        model: response.model,
-        provider: response.provider,
-        tokens: response.totalTokens,
-        responseTime: response.responseTime,
-        intentType: taskType,
-      };
+      if (result.success && result.streamId) {
+        setCurrentStreamId(result.streamId);
+      } else {
+        // Handle error - replace loading message with error
+        const errorMessage: Message = {
+          id: `msg_${Date.now()}_error`,
+          role: 'assistant',
+          content: '',
+          error: result.error || 'Failed to start streaming response',
+          timestamp: Date.now(),
+          intentType: taskType,
+        };
 
-      // Parse response for special content
-      if (taskType === 'image') {
-        const imageUrlMatch = response.response.match(/!\[.*?\]\((.*?)\)/);
-        if (imageUrlMatch) {
-          assistantMessage.imageUrl = imageUrlMatch[1];
-          // Debug log for image parsing
-          console.log('Image parsed from response:', {
-            isBase64: imageUrlMatch[1].startsWith('data:'),
-            urlLength: imageUrlMatch[1].length,
-            urlPreview: imageUrlMatch[1].substring(0, 50) + '...'
-          });
-        } else {
-          // Check if response contains image data that wasn't parsed
-          if (response.response.includes('data:image/')) {
-            console.log('Base64 image data found but not parsed:', response.response.substring(0, 100));
-          }
-        }
+        const errorMessages = autoCompactChat(updatedChat.messages.slice(0, -1).concat([errorMessage]));
+        const errorChat = { ...updatedChat, messages: errorMessages };
+        
+        setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? errorChat : c));
+        setIsLoading(false);
       }
-
-      const finalMessages = autoCompactChat(updatedChat.messages.slice(0, -1).concat([assistantMessage]));
-      const finalChat = { ...updatedChat, messages: finalMessages };
-      
-      setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? finalChat : c));
     } catch (error) {
+      console.error('Error:', error);
       const errorMessage: Message = {
         id: `msg_${Date.now()}_error`,
         role: 'assistant',
@@ -547,7 +632,6 @@ export const ChatInterface: React.FC = () => {
       
       setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? errorChat : c));
       toast.error('Failed to send message');
-    } finally {
       setIsLoading(false);
     }
   };

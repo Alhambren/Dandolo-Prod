@@ -12,6 +12,7 @@ interface ChatPageProps {
 }
 
 export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
+  
   const [messages, setMessages] = useState<Array<{
     role: 'user' | 'assistant';
     content: string;
@@ -113,7 +114,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
       // Update session activity
       updateActivity();
 
-      console.log('[ChatPage] Using session ID:', sessionId, 'for message:', trimmedInput.substring(0, 50));
 
       // Start streaming conversation with session-based provider assignment
       const result = await sendMessageStreaming({

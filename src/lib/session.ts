@@ -29,13 +29,13 @@ export function getSessionId(): string {
         // Update last used timestamp
         sessionInfo.lastUsed = now;
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionInfo));
-        console.log('[Session] Reusing existing session:', sessionInfo.sessionId.substring(0, 12), '(age:', Math.floor((now - sessionInfo.createdAt) / 60000), 'min)');
         return sessionInfo.sessionId;
       } else {
-        console.log('[Session] Session expired, creating new one. Old session age:', Math.floor((now - sessionInfo.createdAt) / 60000), 'min');
+        // Session expired, clean it up
+        localStorage.removeItem(SESSION_STORAGE_KEY);
       }
     } else {
-      console.log('[Session] No stored session found, creating new one');
+      // No stored session found
     }
   } catch (error) {
     console.warn('Failed to retrieve stored session:', error);
@@ -60,7 +60,6 @@ export function createNewSession(): string {
 
   try {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionInfo));
-    console.log('[Session] NEW SESSION CREATED:', sessionId.substring(0, 12));
   } catch (error) {
     console.warn('Failed to store session:', error);
   }
@@ -169,7 +168,6 @@ export function getSessionTimeRemaining(): number | null {
 export function useSession() {
   // Use useState to ensure sessionId is stable across renders
   const [sessionId] = React.useState(() => {
-    console.log('[useSession] Initializing session hook');
     return getSessionId();
   });
   
