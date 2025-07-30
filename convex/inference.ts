@@ -901,69 +901,159 @@ export const debugProviderStatus = action({
   }),
   handler: async (ctx) => {
     try {
-      // Check providers
+      console.log('[DEBUG_STREAMING] Starting comprehensive debug check...');
+      
+      // Step 1: Check providers
       const providers = await ctx.runQuery(api.providers.list);
       const activeProviders = providers?.filter((p: any) => p.isActive) || [];
       
-      console.log(`[DEBUG] Found ${activeProviders.length} active providers out of ${providers?.length || 0} total`);
+      console.log(`[DEBUG_STREAMING] Found ${activeProviders.length} active providers out of ${providers?.length || 0} total`);
       
       if (activeProviders.length === 0) {
         return {
           success: false,
-          message: "No active providers found - this is why streaming is failing",
+          message: "CRITICAL: No active providers found - this is why streaming fails immediately",
           details: {
             totalProviders: providers?.length || 0,
             activeProviders: 0,
-            suggestion: "Add a provider with a valid Venice.ai API key to enable streaming"
+            allProviders: providers?.map(p => ({
+              name: p.name,
+              isActive: p.isActive,
+              hasApiKey: !!p.veniceApiKey
+            })),
+            solution: "Need to activate at least one provider with valid Venice.ai API key"
           }
         };
       }
       
-      // Test session provider assignment
+      // Step 2: Test session provider assignment
       const testSessionId = `debug_session_${Date.now()}`;
+      console.log(`[DEBUG_STREAMING] Testing session provider assignment for ${testSessionId}`);
+      
       try {
         const assignedProviderId = await ctx.runMutation(api.sessionProviders.getSessionProvider, {
           sessionId: testSessionId,
           intent: "chat",
         });
         
+        console.log(`[DEBUG_STREAMING] Assigned provider ID: ${assignedProviderId}`);
+        
         const assignedProvider = await ctx.runQuery(internal.providers.getProviderById, {
           providerId: assignedProviderId,
         });
         
+        console.log(`[DEBUG_STREAMING] Assigned provider details:`, {
+          name: assignedProvider?.name,
+          isActive: assignedProvider?.isActive,
+          hasApiKey: !!assignedProvider?.veniceApiKey
+        });
+        
+        // Step 3: Test API key decryption
+        let apiKeyStatus = "unknown";
+        let decryptedKey = null;
+        try {
+          decryptedKey = await ctx.runAction(internal.providers.getDecryptedApiKey, {
+            providerId: assignedProviderId
+          });
+          apiKeyStatus = decryptedKey ? "decrypted_successfully" : "decryption_failed";
+          console.log(`[DEBUG_STREAMING] API key decryption: ${apiKeyStatus}`);
+        } catch (error) {
+          apiKeyStatus = `decryption_error: ${error instanceof Error ? error.message : "Unknown"}`;
+          console.error(`[DEBUG_STREAMING] API key decryption failed:`, error);
+        }
+        
+        // Step 4: Test Venice.ai connection if we have a key
+        let veniceStatus = "not_tested";
+        if (decryptedKey) {
+          try {
+            const veniceResponse = await fetch("https://api.venice.ai/api/v1/models", {
+              method: "GET",
+              headers: {
+                "Authorization": `Bearer ${decryptedKey}`,
+                "Content-Type": "application/json",
+              },
+            });
+            veniceStatus = veniceResponse.ok ? "connected" : `error_${veniceResponse.status}`;
+            console.log(`[DEBUG_STREAMING] Venice.ai connection test: ${veniceStatus}`);
+          } catch (error) {
+            veniceStatus = `connection_failed: ${error instanceof Error ? error.message : "Unknown"}`;
+            console.error(`[DEBUG_STREAMING] Venice.ai connection failed:`, error);
+          }
+        }
+        
         return {
           success: true,
-          message: "Provider assignment working correctly",
+          message: "Debug analysis complete - check details for potential issues",
           details: {
-            totalProviders: providers?.length || 0,
-            activeProviders: activeProviders.length,
-            assignedProvider: assignedProvider?.name,
-            testSessionId
+            step1_providers: {
+              totalProviders: providers?.length || 0,
+              activeProviders: activeProviders.length,
+              activeProviderNames: activeProviders.map(p => p.name)
+            },
+            step2_session: {
+              testSessionId,
+              assignedProviderId,
+              assignedProviderName: assignedProvider?.name,
+              providerIsActive: assignedProvider?.isActive
+            },
+            step3_apiKey: {
+              status: apiKeyStatus,
+              hasDecryptedKey: !!decryptedKey,
+              keyLength: decryptedKey?.length
+            },
+            step4_venice: {
+              status: veniceStatus
+            },
+            diagnosis: diagnoseIssue(activeProviders.length, assignedProvider?.isActive, apiKeyStatus, veniceStatus)
           }
         };
-      } catch (error) {
+      } catch (sessionError) {
+        console.error(`[DEBUG_STREAMING] Session provider assignment failed:`, sessionError);
         return {
           success: false,
-          message: `Provider assignment failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          message: `Provider assignment failed: ${sessionError instanceof Error ? sessionError.message : "Unknown error"}`,
           details: {
             totalProviders: providers?.length || 0,
             activeProviders: activeProviders.length,
-            error: error instanceof Error ? error.message : "Unknown error"
+            error: sessionError instanceof Error ? sessionError.message : "Unknown error",
+            phase: "session_assignment"
           }
         };
       }
       
     } catch (error) {
+      console.error(`[DEBUG_STREAMING] Overall debug check failed:`, error);
       return {
         success: false,
         message: `Debug check failed: ${error instanceof Error ? error.message : "Unknown error"}`,
         details: {
-          error: error instanceof Error ? error.message : "Unknown error"
+          error: error instanceof Error ? error.message : "Unknown error",
+          phase: "initialization"
         }
       };
     }
   },
 });
+
+// Helper function to diagnose the most likely issue
+function diagnoseIssue(activeProviderCount: number, isProviderActive: boolean | undefined, apiKeyStatus: string, veniceStatus: string): string {
+  if (activeProviderCount === 0) {
+    return "CRITICAL: No active providers - streaming will fail immediately";
+  }
+  if (!isProviderActive) {
+    return "CRITICAL: Assigned provider is inactive - streaming will fail";
+  }
+  if (apiKeyStatus.includes("error") || apiKeyStatus.includes("failed")) {
+    return "CRITICAL: API key decryption failed - streaming will fail";
+  }
+  if (veniceStatus.includes("error") || veniceStatus.includes("failed")) {
+    return "CRITICAL: Venice.ai connection failed - streaming will fail";
+  }
+  if (veniceStatus === "connected") {
+    return "GOOD: All systems appear functional - issue may be in frontend or chunk retrieval";
+  }
+  return "UNKNOWN: Some components not tested - check individual steps";
+}
 
 /**
  * Simple sendMessage wrapper for ChatPage compatibility.
@@ -1122,7 +1212,8 @@ export const sendMessageStreaming = action({
       const expiresAt = Date.now() + (10 * 60 * 1000); // Expire in 10 minutes
       
       // Start streaming and store chunks in background
-      (async () => {
+      // IMPORTANT: We need to await this or it might not run completely
+      const streamingPromise = (async () => {
         try {
           console.log(`[STREAMING] Starting stream ${streamId} with provider ${selectedProvider.name}`);
           let chunkIndex = 0;
@@ -1136,6 +1227,8 @@ export const sendMessageStreaming = action({
             model: args.model,
             expiresAt,
           });
+          
+          console.log(`[STREAMING] Initial chunk stored, starting Venice.ai streaming...`);
           
           for await (const chunk of callVeniceAIStreaming(
             ctx,
@@ -1192,16 +1285,27 @@ export const sendMessageStreaming = action({
         } catch (error) {
           console.error(`[STREAMING] Error in stream ${streamId}:`, error);
           
-          // Store error as final chunk
+          // Store error as final chunk with detailed error info
+          const errorMessage = error instanceof Error ? error.message : "Unknown streaming error";
+          const errorStack = error instanceof Error ? error.stack : undefined;
+          
+          console.error(`[STREAMING] Full error details:`, { errorMessage, errorStack });
+          
           await ctx.runMutation(api.inference.storeStreamingChunk, {
             streamId,
             chunkIndex: 999,
-            content: `Error: ${error instanceof Error ? error.message : "Unknown streaming error"}`,
+            content: `Error: ${errorMessage}`,
             done: true,
             expiresAt,
           });
         }
       })();
+      
+      // Don't await the streaming promise to allow immediate response,
+      // but catch any unhandled rejections
+      streamingPromise.catch((error) => {
+        console.error(`[STREAMING] Unhandled streaming promise error:`, error);
+      });
       
       return {
         streamId,
@@ -1226,6 +1330,7 @@ export const routeSimple = action({
   args: {
     prompt: v.string(),
     address: v.string(),
+    sessionId: v.optional(v.string()), // Add session ID for provider persistence
     intentType: v.optional(
       v.union(
         v.literal("chat"),
@@ -1255,7 +1360,8 @@ export const routeSimple = action({
 
       const intent = args.intentType || "chat";
 
-      const sessionId = `session-${args.address}-${Date.now()}`;
+      // Use provided sessionId for provider persistence, or generate fallback
+      const sessionId = args.sessionId || `session-${args.address}-${Date.now()}`;
 
       const result: RouteReturnType = await ctx.runAction(api.inference.route, {
         messages,
