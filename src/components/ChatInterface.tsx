@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useAction } from 'convex/react';
+import { useQuery, useAction, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAccount } from 'wagmi';
 import { toast } from 'sonner';
@@ -208,6 +208,7 @@ export const ChatInterface: React.FC = () => {
 
   // API calls - Using the original working API
   const routeInference = useAction(api.inference.routeSimple);
+  const removeSession = useMutation(api.sessionProviders.removeSession);
   const userStats = useQuery(api.points.getUserStats, address ? { address } : 'skip');
   const availableModels = useQuery(api.models.getAvailableModels);
 
@@ -324,8 +325,17 @@ export const ChatInterface: React.FC = () => {
 
   const getCurrentChat = () => chats.find(c => c.id === activeChat);
 
-  const createNewChat = () => {
-    // End current session when starting new chat
+  const createNewChat = async () => {
+    try {
+      // First, remove the session from backend database
+      await removeSession({ sessionId });
+      console.log(`🗑️ Removed backend session: ${sessionId.substring(0, 8)}...`);
+    } catch (error) {
+      console.warn('Failed to remove backend session:', error);
+      // Continue anyway - frontend cleanup is still valuable
+    }
+    
+    // Then end the frontend session (clears localStorage and generates new session ID)
     endSession();
     
     const newChat: Chat = {

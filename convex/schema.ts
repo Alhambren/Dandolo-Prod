@@ -344,11 +344,10 @@ export default defineSchema({
     providerId: v.id("providers"),      // Assigned provider ID
     assignedAt: v.number(),             // When provider was assigned
     lastUsed: v.number(),               // Last time this session was active
-    expiresAt: v.number(),              // When session expires (30 min inactivity)
+    expiresAt: v.optional(v.number()),  // Legacy field - will be removed after migration
     intent: v.optional(v.string()),     // Chat intent for context
   })
     .index("by_session", ["sessionId"])
-    .index("by_expiry", ["expiresAt"])
     .index("by_provider", ["providerId"]),
 });
 

@@ -5,5 +5,16 @@
   "env": {
     "NODE_ENV": "production",
     "VITE_CONVEX_URL": "https://judicious-hornet-148.convex.cloud"
-  }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control", 
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ]
 }

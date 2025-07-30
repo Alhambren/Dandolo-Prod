@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 
-const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+// No timeout - sessions persist until explicitly ended by user
 
 /**
  * Get or assign a provider for a session.
@@ -18,30 +18,26 @@ export const getSessionProvider = mutation({
   handler: async (ctx, args): Promise<Id<"providers">> => {
     const now = Date.now();
     
-    // Check for existing active session
+    // Check for existing session (no expiry check)
     const existing = await ctx.db
       .query("sessionProviders")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .first();
     
-    if (existing && existing.expiresAt > now) {
+    if (existing) {
       // Verify the assigned provider is still active
       const provider = await ctx.db.get(existing.providerId);
       
       if (provider && provider.isActive) {
-        // Update last used timestamp and extend expiry
+        // Update last used timestamp (no expiry extension needed)
         await ctx.db.patch(existing._id, {
           lastUsed: now,
-          expiresAt: now + SESSION_TIMEOUT,
         });
         return existing.providerId;
       } else {
         // Provider became inactive, clean up this session
         await ctx.db.delete(existing._id);
       }
-    } else if (existing) {
-      // Session expired, clean it up
-      await ctx.db.delete(existing._id);
     }
     
     // Need to assign a new provider
@@ -54,15 +50,19 @@ export const getSessionProvider = mutation({
     
     // Simple load balancing: select provider with least recent assignments
     // For now, use random selection but this can be improved
-    const selectedProvider: { _id: Id<"providers">; name: string; isActive: boolean } = providers[Math.floor(Math.random() * providers.length)];
+    const randomValue = Math.random();
+    const randomIndex = Math.floor(randomValue * providers.length);
+    const selectedProvider: { _id: Id<"providers">; name: string; isActive: boolean } = providers[randomIndex];
     
-    // Create new session assignment
+    // Random provider selection for new session
+    console.log(`New session ${args.sessionId.substring(0, 8)}: Selected provider '${selectedProvider.name}' (index ${randomIndex}/${providers.length})`);
+    
+    // Create new session assignment (no expiry)
     await ctx.db.insert("sessionProviders", {
       sessionId: args.sessionId,
       providerId: selectedProvider._id,
       assignedAt: now,
       lastUsed: now,
-      expiresAt: now + SESSION_TIMEOUT,
       intent: args.intent,
     });
     
@@ -77,14 +77,12 @@ export const getCurrentSessionProvider = query({
   args: { sessionId: v.string() },
   returns: v.union(v.id("providers"), v.null()),
   handler: async (ctx, args) => {
-    const now = Date.now();
-    
     const session = await ctx.db
       .query("sessionProviders")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .first();
     
-    if (!session || session.expiresAt <= now) {
+    if (!session) {
       return null;
     }
     
@@ -131,11 +129,10 @@ export const getSessionStats = query({
     providerDistribution: v.record(v.string(), v.number()),
   }),
   handler: async (ctx) => {
-    const now = Date.now();
     const allSessions = await ctx.db.query("sessionProviders").collect();
     
-    const activeSessions = allSessions.filter(s => s.expiresAt > now);
-    const expiredSessions = allSessions.filter(s => s.expiresAt <= now);
+    // All sessions are considered active (no expiry)
+    const activeSessions = allSessions;
     
     // Count sessions per provider
     const providerDistribution: Record<string, number> = {};
@@ -149,14 +146,14 @@ export const getSessionStats = query({
     
     return {
       totalActiveSessions: activeSessions.length,
-      expiredSessions: expiredSessions.length,
+      expiredSessions: 0, // No sessions expire anymore
       providerDistribution,
     };
   },
 });
 
 /**
- * Cleanup expired sessions (called by cron job)
+ * Cleanup expired sessions (no longer needed - sessions don't expire)
  */
 export const cleanupExpiredSessions = internalMutation({
   args: {},
@@ -165,36 +162,8 @@ export const cleanupExpiredSessions = internalMutation({
     errors: v.number(),
   }),
   handler: async (ctx) => {
-    const now = Date.now();
-    let cleaned = 0;
-    let errors = 0;
-    
-    try {
-      const expiredSessions = await ctx.db
-        .query("sessionProviders")
-        .withIndex("by_expiry", (q) => q.lt("expiresAt", now))
-        .collect();
-      
-      for (const session of expiredSessions) {
-        try {
-          await ctx.db.delete(session._id);
-          cleaned++;
-        } catch (error) {
-          console.error(`Failed to delete session ${session.sessionId}:`, error);
-          errors++;
-        }
-      }
-      
-      if (cleaned > 0) {
-        console.log(`Cleaned up ${cleaned} expired sessions`);
-      }
-      
-    } catch (error) {
-      console.error("Failed to cleanup expired sessions:", error);
-      errors++;
-    }
-    
-    return { cleaned, errors };
+    // No sessions expire anymore, so nothing to clean up
+    return { cleaned: 0, errors: 0 };
   },
 });
 
@@ -230,21 +199,17 @@ export const getProviderSessions = query({
     sessionId: v.string(),
     assignedAt: v.number(),
     lastUsed: v.number(),
-    expiresAt: v.number(),
   })),
   handler: async (ctx, args) => {
-    const now = Date.now();
     const sessions = await ctx.db
       .query("sessionProviders")
       .withIndex("by_provider", (q) => q.eq("providerId", args.providerId))
-      .filter((q) => q.gt(q.field("expiresAt"), now))
       .collect();
     
     return sessions.map(s => ({
       sessionId: s.sessionId,
       assignedAt: s.assignedAt,
       lastUsed: s.lastUsed,
-      expiresAt: s.expiresAt,
     }));
   },
 });

@@ -5,7 +5,7 @@
 import React from 'react';
 
 const SESSION_STORAGE_KEY = 'dandolo_session_id';
-const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes (matches backend)
+// No timeout - sessions persist until explicitly ended by user
 
 interface SessionInfo {
   sessionId: string;
@@ -15,33 +15,24 @@ interface SessionInfo {
 
 /**
  * Get or create a session ID for the current chat session
- * Returns the same session ID for 30 minutes of inactivity
+ * Sessions persist until explicitly ended by user
  */
 export function getSessionId(): string {
   try {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY);
     if (stored) {
       const sessionInfo: SessionInfo = JSON.parse(stored);
-      const now = Date.now();
       
-      // Check if session is still valid (within 30 minutes of last use)
-      if (now - sessionInfo.lastUsed < SESSION_TIMEOUT) {
-        // Update last used timestamp
-        sessionInfo.lastUsed = now;
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionInfo));
-        return sessionInfo.sessionId;
-      } else {
-        // Session expired, clean it up
-        localStorage.removeItem(SESSION_STORAGE_KEY);
-      }
-    } else {
-      // No stored session found
+      // Update last used timestamp and return existing session
+      sessionInfo.lastUsed = Date.now();
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionInfo));
+      return sessionInfo.sessionId;
     }
   } catch (error) {
     console.warn('Failed to retrieve stored session:', error);
   }
 
-  // Create new session
+  // Create new session if none exists
   return createNewSession();
 }
 
@@ -85,13 +76,7 @@ export function getCurrentSessionInfo(): SessionInfo | null {
   try {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY);
     if (stored) {
-      const sessionInfo: SessionInfo = JSON.parse(stored);
-      const now = Date.now();
-      
-      // Check if session is still valid
-      if (now - sessionInfo.lastUsed < SESSION_TIMEOUT) {
-        return sessionInfo;
-      }
+      return JSON.parse(stored);
     }
   } catch (error) {
     console.warn('Failed to get session info:', error);
@@ -148,7 +133,7 @@ export function getSessionAge(): number | null {
 }
 
 /**
- * Get time until session expires (in minutes)
+ * Get time until session expires (sessions never expire now)
  */
 export function getSessionTimeRemaining(): number | null {
   const sessionInfo = getCurrentSessionInfo();
@@ -156,28 +141,41 @@ export function getSessionTimeRemaining(): number | null {
     return null;
   }
   
-  const timeElapsed = Date.now() - sessionInfo.lastUsed;
-  const timeRemaining = SESSION_TIMEOUT - timeElapsed;
-  
-  return Math.max(0, Math.floor(timeRemaining / (1000 * 60)));
+  // Sessions no longer have timeouts - they persist until explicitly ended
+  return null;
 }
 
 /**
  * Hook for React components to manage session state
  */
 export function useSession() {
-  // Use useState to ensure sessionId is stable across renders
-  const [sessionId] = React.useState(() => {
+  // Use useState with state updater to properly handle session changes
+  const [sessionId, setSessionId] = React.useState(() => {
     return getSessionId();
   });
+  
+  // Custom endSession that updates the React state
+  const endSessionWithUpdate = React.useCallback(() => {
+    endSession();
+    // Force a new session ID to be generated
+    const newSessionId = createNewSession();
+    setSessionId(newSessionId);
+  }, []);
+  
+  // Custom createNewSession that updates the React state
+  const createNewSessionWithUpdate = React.useCallback(() => {
+    const newSessionId = createNewSession();
+    setSessionId(newSessionId);
+    return newSessionId;
+  }, []);
   
   return {
     sessionId,
     hasActiveSession: hasActiveSession(),
     sessionAge: getSessionAge(),
     timeRemaining: getSessionTimeRemaining(),
-    endSession,
-    createNewSession,
+    endSession: endSessionWithUpdate,
+    createNewSession: createNewSessionWithUpdate,
     updateActivity: updateSessionActivity,
   };
 }
