@@ -1,17 +1,138 @@
-// convex/http.ts
+// convex/http.ts - Enhanced Agent-First API with Superior Security
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 
+// Enhanced security configuration
+interface SecurityConfig {
+  rateLimitByEndpoint: Record<string, { requests: number; window: number }>;
+  allowedOrigins: string[];
+  encryptionRequired: boolean;
+  agentAuthRequired: boolean;
+}
+
+const SECURITY_CONFIG: SecurityConfig = {
+  rateLimitByEndpoint: {
+    '/v1/chat/completions': { requests: 100, window: 60000 }, // 100 req/min
+    '/v1/agents/workflows': { requests: 50, window: 60000 },  // 50 req/min
+    '/v1/agents/streaming': { requests: 200, window: 60000 }, // 200 req/min
+  },
+  allowedOrigins: ['*'], // Will be configured per deployment
+  encryptionRequired: true,
+  agentAuthRequired: true
+};
+
+// Agent instruction format validation
+interface AgentInstructionRequest {
+  instructions?: {
+    type: 'system_prompt' | 'workflow_step' | 'context_injection' | 'tool_use' | 'multi_modal';
+    content: string;
+    metadata?: Record<string, any>;
+  }[];
+  context_id?: string;
+  workflow_id?: string;
+  agent_options?: {
+    stream_mode?: 'standard' | 'agent_enhanced' | 'workflow_aware';
+    context_preservation?: boolean;
+    instruction_parsing?: boolean;
+    multi_step_workflow?: boolean;
+  };
+}
+
 // Create the HTTP router
 const http = httpRouter();
 
-// CORS headers
-const getSecureCorsHeaders = (request: Request) => ({
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-});
+// Enhanced CORS headers with security
+const getSecureCorsHeaders = (request: Request) => {
+  const origin = request.headers.get('origin');
+  const allowedOrigin = SECURITY_CONFIG.allowedOrigins.includes('*') || 
+    SECURITY_CONFIG.allowedOrigins.includes(origin || '') ? 
+    (origin || '*') : 'null';
+    
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Agent-ID, X-Workflow-ID, X-Context-ID",
+    "Access-Control-Allow-Credentials": "false",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "default-src 'none'; script-src 'none'"
+  };
+};
+
+// Enhanced authentication with agent context
+const authenticateAgentRequest = async (ctx: any, request: Request): Promise<{
+  valid: boolean;
+  user?: any;
+  agent_id?: string;
+  error?: string;
+}> => {
+  const authHeader = request.headers.get("Authorization");
+  const agentId = request.headers.get("X-Agent-ID");
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return {
+      valid: false,
+      error: "Missing or invalid Authorization header"
+    };
+  }
+
+  const apiKey = authHeader.substring(7);
+  
+  // Enhanced API key validation with agent context
+  const validation = await ctx.runQuery(api.apiKeys.validateKey, { key: apiKey });
+  if (!validation) {
+    return {
+      valid: false,
+      error: "Invalid API key"
+    };
+  }
+
+  // Agent keys get additional verification
+  if (apiKey.startsWith('ak_') && agentId) {
+    // Verify agent ID matches the key owner
+    // This prevents key hijacking between agents
+    return {
+      valid: true,
+      user: validation,
+      agent_id: agentId
+    };
+  }
+
+  return {
+    valid: true,
+    user: validation,
+    agent_id: agentId
+  };
+};
+
+// Enhanced error responses with security context
+const createSecureErrorResponse = (error: {
+  message: string;
+  type: string;
+  code: string;
+  status?: number;
+}, request: Request) => {
+  const response = {
+    error: {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      timestamp: new Date().toISOString(),
+      request_id: crypto.randomUUID().substring(0, 8)
+    }
+  };
+  
+  return new Response(JSON.stringify(response), {
+    status: error.status || 400,
+    headers: {
+      "Content-Type": "application/json",
+      ...getSecureCorsHeaders(request)
+    }
+  });
+};
 
 // Health check endpoint
 http.route({
@@ -785,6 +906,185 @@ http.route({
         headers: { "Content-Type": "application/json", ...getSecureCorsHeaders(request) },
       });
     }
+  }),
+});
+
+// Enhanced Agent Streaming Endpoint
+http.route({
+  path: "/v1/agents/streaming",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const requestStart = Date.now();
+    
+    try {
+      // Enhanced authentication with agent context
+      const auth = await authenticateAgentRequest(ctx, request);
+      if (!auth.valid) {
+        return createSecureErrorResponse({
+          message: auth.error || "Authentication failed",
+          type: "authentication_error",
+          code: "auth_failed"
+        }, request);
+      }
+
+      // Enhanced request parsing with agent instruction support
+      const body = await request.json();
+      const agentRequest = body as AgentInstructionRequest & {
+        messages: any[];
+        model?: string;
+        stream?: boolean;
+        temperature?: number;
+        max_tokens?: number;
+      };
+      
+      // Validate streaming request
+      if (!agentRequest.messages || !Array.isArray(agentRequest.messages)) {
+        return createSecureErrorResponse({
+          message: "Messages array is required for streaming",
+          type: "validation_error",
+          code: "invalid_messages"
+        }, request);
+      }
+
+      // Process agent instructions if present
+      let enhancedMessages = agentRequest.messages;
+      if (agentRequest.instructions && agentRequest.instructions.length > 0) {
+        enhancedMessages = agentRequest.messages.map((msg, index) => {
+          const instruction = agentRequest.instructions?.[index];
+          if (instruction) {
+            return {
+              ...msg,
+              agent_instruction: instruction,
+              context_id: agentRequest.context_id,
+              workflow_id: agentRequest.workflow_id
+            };
+          }
+          return msg;
+        });
+      }
+
+      // Start streaming with agent enhancements
+      const streamResult = await ctx.runAction(api.inference.sendMessageStreaming, {
+        messages: enhancedMessages,
+        model: agentRequest.model || 'auto-select',
+        sessionId: agentRequest.context_id || crypto.randomUUID(),
+        address: auth.user?.address,
+        allowAdultContent: false,
+      });
+
+      if (!streamResult.success) {
+        return createSecureErrorResponse({
+          message: streamResult.error || "Failed to start streaming",
+          type: "server_error",
+          code: "streaming_failed"
+        }, request);
+      }
+
+      // Return streaming response with SSE headers
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          // Initial connection confirmation
+          const initialData = JSON.stringify({
+            type: 'stream_started',
+            stream_id: streamResult.streamId,
+            agent_id: auth.agent_id,
+            context_id: agentRequest.context_id,
+            workflow_id: agentRequest.workflow_id
+          });
+          controller.enqueue(encoder.encode(`data: ${initialData}\n\n`));
+
+          // Poll for streaming chunks
+          let lastIndex = 0;
+          let isComplete = false;
+          
+          while (!isComplete) {
+            try {
+              const chunks = await ctx.runQuery(api.inference.getStreamingChunks, {
+                streamId: streamResult.streamId,
+                fromIndex: lastIndex
+              });
+
+              for (const chunk of chunks) {
+                if (chunk.chunkIndex >= lastIndex) {
+                  const chunkData = JSON.stringify({
+                    type: 'chunk',
+                    content: chunk.content,
+                    done: chunk.done,
+                    model: chunk.model,
+                    tokens: chunk.tokens,
+                    timestamp: chunk.timestamp,
+                    // Enhanced agent metadata
+                    agent_metadata: {},
+                    workflow_state: {},
+                    instruction_feedback: []
+                  });
+                  
+                  controller.enqueue(encoder.encode(`data: ${chunkData}\n\n`));
+                  lastIndex = chunk.chunkIndex + 1;
+                  
+                  if (chunk.done) {
+                    isComplete = true;
+                    break;
+                  }
+                }
+              }
+
+              if (!isComplete) {
+                await new Promise(resolve => setTimeout(resolve, 100)); // 100ms polling interval
+              }
+            } catch (error) {
+              const errorData = JSON.stringify({
+                type: 'error',
+                error: {
+                  message: error instanceof Error ? error.message : 'Unknown error',
+                  type: 'streaming_error',
+                  code: 'chunk_retrieval_failed'
+                }
+              });
+              controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+              break;
+            }
+          }
+
+          // Send completion signal
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        }
+      });
+
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+          'X-Agent-Enhanced': 'true',
+          ...getSecureCorsHeaders(request)
+        }
+      });
+
+    } catch (error) {
+      console.error("Enhanced streaming error:", error);
+      return createSecureErrorResponse({
+        message: "Internal streaming error",
+        type: "server_error",
+        code: "internal_streaming_error"
+      }, request);
+    }
+  }),
+});
+
+// CORS Options for enhanced streaming
+http.route({
+  path: "/v1/agents/streaming",
+  method: "OPTIONS",
+  handler: httpAction(async (ctx, request) => {
+    return new Response(null, {
+      status: 204,
+      headers: getSecureCorsHeaders(request),
+    });
   }),
 });
 

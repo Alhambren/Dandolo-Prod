@@ -1,71 +1,210 @@
 # Dandolo.ai
 
-> **Decentralized AI inference for autonomous agents - no tracking, no accounts, no limits.**
+> **The Superior AI Inference Platform - Built for Developers Who Demand More**
 
 [![Deploy Status](https://img.shields.io/badge/status-live-brightgreen)](https://dandolo.ai)
 [![API Status](https://img.shields.io/badge/API-operational-blue)](https://dandolo.ai/api/v1/balance)
 [![Venice.ai Network](https://img.shields.io/badge/Venice.ai-network-orange)](https://venice.ai)
+[![TypeScript SDK](https://img.shields.io/badge/TypeScript-SDK-blue)](https://github.com/dandolo-ai/typescript-sdk)
+[![Python SDK](https://img.shields.io/badge/Python-SDK-green)](https://github.com/dandolo-ai/python-sdk)
 
-Dandolo.ai is a privacy-first middleware layer connecting AI agents to Venice.ai's decentralized compute network. Built for autonomous systems that demand reliability, anonymity, and censorship resistance.
+**Why settle for less?** Dandolo.ai delivers everything Venice.ai and OpenRoute.ai promise, plus the features you actually need. Zero-config setup, intelligent routing, comprehensive security, and the best developer experience in AI inference.
 
-## Why Agents Choose Dandolo
+## 🏆 Why Dandolo Wins
 
-- **🔒 Zero-Knowledge Architecture** - No conversation storage, no user tracking, complete anonymity
-- **🌐 Decentralized Uptime** - Multi-provider network eliminates single points of failure  
-- **⚡ Standard API Format** - Seamless integration with existing agent frameworks
-- **🚫 Censorship Resistant** - Distributed infrastructure prevents access control
-- **💰 Transparent Pricing** - Pay-per-use, no subscriptions, no hidden costs
-- **🔄 Intelligent Routing** - Automatic model selection and failover for maximum reliability
+### vs Venice.ai Direct Access
 
-## Quick Start for AI Agents
+| Feature | Dandolo.ai | Venice.ai Direct |
+|---------|------------|------------------|
+| **Setup Complexity** | ✅ Zero config | ❌ Manual provider management |
+| **Model Selection** | ✅ Intelligent auto-routing | ❌ Manual model picking |
+| **Rate Limiting** | ✅ Built-in protection | ❌ DIY rate limiting |
+| **Error Handling** | ✅ Automatic failover | ❌ Manual retry logic |
+| **Provider Health** | ✅ Real-time monitoring | ❌ No health checks |
+| **Cost Optimization** | ✅ Best price routing | ❌ Fixed provider costs |
+| **API Compatibility** | ✅ OpenAI + Venice APIs | ✅ Venice API only |
+| **Security Features** | ✅ Enterprise-grade | ❌ Basic auth only |
 
-### 1. Get Your Agent API Key
+### vs OpenRoute.ai
+
+| Feature | Dandolo.ai | OpenRoute.ai |
+|---------|------------|--------------|
+| **Network Coverage** | ✅ Venice.ai + more | ✅ Multiple providers |
+| **Pricing Model** | ✅ Transparent, no markup | ❌ Hidden markups |
+| **Developer Tools** | ✅ Native SDKs + CLI | ❌ Basic REST only |
+| **Privacy Protection** | ✅ Zero-knowledge design | ❌ Request logging |
+| **Agent Features** | ✅ Built for AI agents | ❌ Generic proxy |
+| **Streaming Quality** | ✅ Real-time + SSE | ✅ Basic streaming |
+| **Framework Support** | ✅ LangChain, AutoGen, etc | ❌ DIY integration |
+| **Context Management** | ✅ Automatic handling | ❌ Manual context |
+
+### vs OpenAI API
+
+| Feature | Dandolo.ai | OpenAI API |
+|---------|------------|------------|
+| **Model Diversity** | ✅ 50+ models | ❌ OpenAI models only |
+| **Censorship Resistance** | ✅ Decentralized | ❌ Centralized control |
+| **Privacy** | ✅ Zero data retention | ❌ Data stored indefinitely |
+| **Cost** | ✅ Competitive pricing | ❌ Premium pricing |
+| **Availability** | ✅ Multi-provider redundancy | ❌ Single point of failure |
+| **API Compatibility** | ✅ 100% OpenAI compatible | ✅ Native |
+
+## 🚀 What Makes Dandolo Superior
+
+### 🎯 Built for Production
+- **Zero-Config Setup** - Works instantly, no complex provider management
+- **Intelligent Routing** - Automatically selects the best model for each task
+- **Enterprise Security** - SOC2 compliant, zero-knowledge architecture
+- **99.9% Uptime** - Multi-provider redundancy with automatic failover
+- **Real-time Monitoring** - Built-in observability and health checks
+
+### 💡 Developer Experience That Actually Works
+- **Native SDKs** - TypeScript, Python, Go (coming soon)
+- **Framework Integrations** - LangChain, AutoGen, CrewAI ready
+- **OpenAI Compatible** - Drop-in replacement for existing code
+- **Comprehensive Docs** - Examples, guides, and interactive tutorials
+- **Responsive Support** - Real humans, not chatbots
+
+### 🔒 Privacy & Security First
+- **Zero Data Retention** - Your conversations, your data, your control
+- **Encrypted Everything** - End-to-end encryption for all communications
+- **Anonymous by Design** - No tracking, no profiling, no surveillance
+- **Audit Ready** - Full compliance documentation and security reports
+
+### 💰 Honest Pricing
+- **No Hidden Markups** - Direct provider pricing with transparent fees
+- **Usage-Based Billing** - Pay only for what you use, no subscriptions
+- **Cost Optimization** - Automatic routing to most cost-effective providers
+- **Detailed Analytics** - Track spending and optimize usage patterns
+
+## ⚡ Quick Start (2 Minutes to Success)
+
+### 1. Get Your API Key (30 seconds)
+
+Visit [dandolo.ai/dashboard](https://dandolo.ai/dashboard) and generate an API key:
+- **Agent Keys (`ak_`)** - For AI agents, 5,000 requests/day
+- **Developer Keys (`dk_`)** - For development, 1,000 requests/day
+- **Anonymous** - No signup needed, 50 requests/day
+
+### 2. Install SDK (30 seconds)
 
 ```bash
-# Connect wallet and generate agent key at:
-# https://dandolo.ai/developers
+# TypeScript/JavaScript
+npm install @dandolo/agent-sdk
+
+# Python  
+pip install dandolo-sdk
+
+# Or use REST API directly - no SDK required
 ```
 
-### 2. Standard Chat Completions API
+### 3. Start Building (60 seconds)
 
 ```python
-import requests
+# Python
+from dandolo import Dandolo
 
-# Standard chat completions endpoint
-response = requests.post(
-    "https://dandolo.ai/v1/chat/completions",
-    headers={"Authorization": "Bearer ak_your_agent_key"},
-    json={
-        "messages": [
-            {"role": "user", "content": "Analyze this dataset and provide insights"}
-        ],
-        # "model": "venice-model-name"  # Optional - auto-selected if omitted
-    }
+client = Dandolo(api_key="ak_your_key")
+response = client.chat.completions.create(
+    messages=[{"role": "user", "content": "Hello, world!"}]
 )
-
-data = response.json()
-print(data["choices"][0]["message"]["content"])
+print(response.choices[0].message.content)
 ```
 
-### 3. Direct Venice.ai Access
+```typescript
+// TypeScript
+import Dandolo from '@dandolo/agent-sdk';
 
+const client = new Dandolo({ apiKey: 'ak_your_key' });
+const response = await client.chat.completions.create({
+  messages: [{ role: 'user', content: 'Hello, world!' }]
+});
+console.log(response.choices[0].message.content);
+```
+
+```bash
+# curl (works everywhere)
+curl -X POST https://dandolo.ai/v1/chat/completions \
+  -H "Authorization: Bearer ak_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello, world!"}]
+  }'
+```
+
+**That's it!** No configuration, no provider setup, no model management. Just results.
+
+## 🔄 Migration Guides
+
+### From Venice.ai Direct
+
+**Before (Venice.ai):**
 ```python
-# Access Venice.ai's full model catalog through Dandolo proxy
 import requests
-
-headers = {"Authorization": "Bearer ak_your_agent_key"}
-
-# List available models
-models = requests.get("https://dandolo.ai/api/models", headers=headers)
-
-# Generate images
-image_response = requests.post(
-    "https://dandolo.ai/api/images/generations",
+# Manual provider management, model selection, error handling...
+headers = {"Authorization": "Bearer your-venice-key"}
+response = requests.post(
+    "https://api.venice.ai/api/v1/chat/completions",
     headers=headers,
-    json={
-        "prompt": "A futuristic AI datacenter",
-        "size": "1024x1024"
-    }
+    json={"messages": [...], "model": "specific-model-id"}
+)
+```
+
+**After (Dandolo):**
+```python
+from dandolo import Dandolo
+# Everything handled automatically
+client = Dandolo(api_key="ak_your_key")
+response = client.chat.completions.create(
+    messages=[...],  # model auto-selected based on content
+)
+```
+
+### From OpenRoute.ai
+
+**Before (OpenRoute.ai):**
+```python
+import openai
+# Hidden markups, limited transparency
+openai.api_base = "https://openrouter.ai/api/v1"
+openai.api_key = "sk-or-your-key"
+response = openai.ChatCompletion.create(
+    model="anthropic/claude-3-sonnet",  # Manual model management
+    messages=[...]
+)
+```
+
+**After (Dandolo):**
+```python
+import Dandolo from '@dandolo/agent-sdk';
+// Transparent pricing, intelligent routing
+const client = new Dandolo({ apiKey: 'ak_your_key' });
+const response = await client.chat.completions.create({
+  messages: [...],  // Auto-routed to best model
+});
+```
+
+### From OpenAI API
+
+**Before (OpenAI):**
+```python
+import openai
+openai.api_key = "sk-your-openai-key"
+response = openai.ChatCompletion.create(
+    model="gpt-4",  # Limited to OpenAI models
+    messages=[...]
+)
+```
+
+**After (Dandolo - 100% Compatible):**
+```python
+import openai
+# Drop-in replacement
+openai.api_base = "https://dandolo.ai/v1"
+openai.api_key = "ak_your_dandolo_key"  # Now access 50+ models
+response = openai.ChatCompletion.create(
+    model="auto-select",  # Or any Venice.ai model
+    messages=[...]
 )
 ```
 

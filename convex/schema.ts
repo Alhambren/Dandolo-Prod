@@ -349,5 +349,389 @@ export default defineSchema({
   })
     .index("by_session", ["sessionId"])
     .index("by_provider", ["providerId"]),
+
+  // AGENT PROFILES: Agent registration and capabilities
+  agentProfiles: defineTable({
+    address: v.string(),                // Owner wallet address
+    agentId: v.string(),               // Unique agent identifier (ag_xxxxx)
+    name: v.string(),                  // Agent display name
+    description: v.optional(v.string()), // Agent description/purpose
+    capabilities: v.array(v.union(      // What the agent can do
+      v.literal("text_generation"),
+      v.literal("code_generation"),
+      v.literal("data_analysis"), 
+      v.literal("image_analysis"),
+      v.literal("workflow_orchestration"),
+      v.literal("api_integration"),
+      v.literal("file_processing")
+    )),
+    preferredModels: v.optional(v.object({ // Model preferences by task type
+      text: v.optional(v.string()),
+      code: v.optional(v.string()),
+      analysis: v.optional(v.string()),
+      multimodal: v.optional(v.string()),
+    })),
+    systemPrompt: v.optional(v.string()), // Default system instructions
+    maxTokens: v.optional(v.number()),   // Token limit per request
+    temperature: v.optional(v.number()), // Default creativity setting
+    isActive: v.boolean(),              // Agent availability status
+    createdAt: v.number(),              // Registration timestamp
+    lastUsed: v.optional(v.number()),   // Last activity timestamp
+    totalSessions: v.number(),          // Lifetime session count
+    totalTokensProcessed: v.number(),   // Lifetime token usage
+    avgResponseTime: v.optional(v.number()), // Performance metric
+    // Security and audit fields
+    lastModified: v.number(),           // Configuration change timestamp
+    version: v.number(),                // Agent version for updates
+    securityLevel: v.union(             // Access control level
+      v.literal("standard"),
+      v.literal("restricted"), 
+      v.literal("privileged")
+    ),
+  })
+    .index("by_address", ["address"])
+    .index("by_agent_id", ["agentId"])
+    .index("by_active", ["isActive"])
+    .index("by_last_used", ["lastUsed"]),
+
+  // WORKFLOW STATES: Multi-step workflow execution tracking
+  workflowStates: defineTable({
+    workflowId: v.string(),             // Unique workflow identifier
+    agentId: v.string(),               // Agent executing workflow
+    sessionId: v.optional(v.string()), // Associated session if applicable
+    address: v.string(),               // User/owner address
+    name: v.string(),                  // Workflow name/type
+    status: v.union(                   // Current execution status
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("cancelled")
+    ),
+    currentStep: v.number(),           // Current step index
+    totalSteps: v.number(),            // Total workflow steps
+    steps: v.array(v.object({          // Workflow step definitions
+      stepId: v.string(),
+      name: v.string(),
+      type: v.union(
+        v.literal("llm_call"),
+        v.literal("api_request"),
+        v.literal("data_processing"),
+        v.literal("user_input"),
+        v.literal("condition"),
+        v.literal("loop")
+      ),
+      config: v.any(),                 // Step-specific configuration
+      status: v.union(
+        v.literal("pending"),
+        v.literal("running"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("skipped")
+      ),
+      result: v.optional(v.any()),     // Step execution result
+      error: v.optional(v.string()),   // Error message if failed
+      startedAt: v.optional(v.number()),
+      completedAt: v.optional(v.number()),
+      tokensUsed: v.optional(v.number()),
+    })),
+    metadata: v.optional(v.object({    // Workflow metadata
+      priority: v.optional(v.number()),
+      tags: v.optional(v.array(v.string())),
+      parentWorkflowId: v.optional(v.string()),
+      triggerEvent: v.optional(v.string()),
+      estimatedDuration: v.optional(v.number()),
+    })),
+    variables: v.optional(v.any()),    // Workflow state variables
+    createdAt: v.number(),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    totalTokensUsed: v.number(),
+    totalCost: v.number(),             // VCU cost
+    expiresAt: v.number(),             // Auto-cleanup timestamp
+  })
+    .index("by_workflow_id", ["workflowId"])
+    .index("by_agent", ["agentId"])
+    .index("by_session", ["sessionId"])
+    .index("by_address", ["address"])
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"])
+    .index("by_expires", ["expiresAt"]),
+
+  // SECURITY EVENTS: Comprehensive security audit trail
+  securityEvents: defineTable({
+    eventId: v.string(),              // Unique event identifier
+    eventType: v.union(
+      v.literal("agent_registration"),
+      v.literal("agent_authentication"),
+      v.literal("api_key_generation"),
+      v.literal("api_key_rotation"),
+      v.literal("api_key_revocation"),
+      v.literal("security_violation"),
+      v.literal("prompt_injection_detected"),
+      v.literal("rate_limit_exceeded"),
+      v.literal("suspicious_activity"),
+      v.literal("wallet_verification"),
+      v.literal("permission_escalation"),
+      v.literal("unauthorized_access_attempt"),
+      v.literal("agent_config_change"),
+      v.literal("workflow_execution"),
+      v.literal("admin_override")
+    ),
+    address: v.string(),              // Address involved in the event
+    agentId: v.optional(v.string()),  // Agent ID if applicable
+    riskLevel: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+    description: v.string(),          // Human-readable description
+    metadata: v.any(),                // Additional event data
+    sessionId: v.optional(v.string()), // Session context
+    signature: v.string(),            // Tamper-proof signature
+    timestamp: v.number(),            // Event timestamp
+    acknowledged: v.boolean(),        // Admin acknowledgment
+  })
+    .index("by_event_id", ["eventId"])
+    .index("by_address", ["address"])
+    .index("by_agent", ["agentId"])
+    .index("by_risk_level", ["riskLevel"])
+    .index("by_event_type", ["eventType"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_acknowledged", ["acknowledged"]),
+
+  // AGENT SESSIONS: Enhanced session management with agent context
+  agentSessions: defineTable({
+    sessionId: v.string(),             // Unique session identifier
+    agentId: v.string(),              // Associated agent
+    address: v.string(),              // User/owner address
+    apiKeyId: v.optional(v.id("apiKeys")), // API key if used
+    providerId: v.optional(v.id("providers")), // Currently assigned provider
+    sessionType: v.union(             // Session interaction type
+      v.literal("interactive_chat"),
+      v.literal("workflow_execution"),
+      v.literal("api_automation"),
+      v.literal("batch_processing")
+    ),
+    context: v.optional(v.object({    // Session context and history
+      conversationHistory: v.optional(v.array(v.object({
+        role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
+        content: v.string(),
+        timestamp: v.number(),
+        tokenCount: v.optional(v.number()),
+      }))),
+      workflowId: v.optional(v.string()),
+      customInstructions: v.optional(v.string()),
+      activeTools: v.optional(v.array(v.string())),
+    })),
+    settings: v.optional(v.object({   // Session-specific settings
+      maxTokens: v.optional(v.number()),
+      temperature: v.optional(v.number()),
+      streamResponse: v.optional(v.boolean()),
+      saveHistory: v.optional(v.boolean()),
+    })),
+    metrics: v.object({               // Session performance metrics
+      totalMessages: v.number(),
+      totalTokens: v.number(),
+      totalCost: v.number(),
+      avgResponseTime: v.optional(v.number()),
+      errorCount: v.number(),
+    }),
+    status: v.union(                  // Session status
+      v.literal("active"),
+      v.literal("idle"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("expired")
+    ),
+    createdAt: v.number(),
+    lastActivity: v.number(),
+    expiresAt: v.number(),            // Session expiration
+  })
+    .index("by_session_id", ["sessionId"])
+    .index("by_agent", ["agentId"])
+    .index("by_address", ["address"])
+    .index("by_status", ["status"])
+    .index("by_last_activity", ["lastActivity"])
+    .index("by_expires", ["expiresAt"]),
+
+  // INSTRUCTION TEMPLATES: Reusable agent instructions and prompts
+  instructionTemplates: defineTable({
+    templateId: v.string(),           // Unique template identifier
+    address: v.string(),             // Owner address
+    name: v.string(),                // Template name
+    description: v.optional(v.string()), // Template description
+    category: v.union(               // Template category
+      v.literal("system_prompt"),
+      v.literal("user_prompt"),
+      v.literal("workflow_step"),
+      v.literal("error_handling"),
+      v.literal("output_format")
+    ),
+    content: v.string(),             // Template content with variables
+    variables: v.optional(v.array(v.object({ // Template variables
+      name: v.string(),
+      type: v.union(v.literal("string"), v.literal("number"), v.literal("boolean"), v.literal("array")),
+      required: v.boolean(),
+      defaultValue: v.optional(v.any()),
+      description: v.optional(v.string()),
+    }))),
+    tags: v.optional(v.array(v.string())), // Searchable tags
+    isPublic: v.boolean(),           // Available to other users
+    isSystem: v.boolean(),           // System/built-in template
+    usageCount: v.number(),          // Times template has been used
+    rating: v.optional(v.number()),  // User rating (1-5)
+    createdAt: v.number(),
+    lastModified: v.number(),
+    lastUsed: v.optional(v.number()),
+  })
+    .index("by_template_id", ["templateId"])
+    .index("by_address", ["address"])
+    .index("by_category", ["category"])
+    .index("by_public", ["isPublic"])
+    .index("by_system", ["isSystem"])
+    .index("by_usage", ["usageCount"]),
+
+  // AGENT METRICS: Performance tracking and analytics
+  agentMetrics: defineTable({
+    agentId: v.string(),             // Agent identifier
+    address: v.string(),             // Owner address
+    period: v.union(                 // Metrics time period
+      v.literal("hourly"),
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly")
+    ),
+    periodStart: v.number(),         // Period start timestamp
+    periodEnd: v.number(),           // Period end timestamp
+    metrics: v.object({              // Detailed metrics
+      totalSessions: v.number(),
+      activeSessions: v.number(),
+      completedSessions: v.number(),
+      failedSessions: v.number(),
+      totalMessages: v.number(),
+      totalTokensUsed: v.number(),
+      totalCost: v.number(),
+      avgResponseTime: v.number(),
+      maxResponseTime: v.number(),
+      minResponseTime: v.number(),
+      successRate: v.number(),
+      errorRate: v.number(),
+      popularModels: v.array(v.object({
+        model: v.string(),
+        usage: v.number(),
+      })),
+      topIntents: v.array(v.object({
+        intent: v.string(),
+        count: v.number(),
+      })),
+      workflowExecutions: v.number(),
+      completedWorkflows: v.number(),
+      failedWorkflows: v.number(),
+    }),
+    computedAt: v.number(),          // When metrics were calculated
+  })
+    .index("by_agent", ["agentId"])
+    .index("by_address", ["address"])
+    .index("by_period", ["period", "periodStart"])
+    .index("by_computed", ["computedAt"]),
+
+  // AGENT TOOLS: External tools and integrations available to agents
+  agentTools: defineTable({
+    toolId: v.string(),              // Unique tool identifier
+    address: v.string(),             // Owner address
+    name: v.string(),                // Tool name
+    description: v.string(),         // Tool description
+    category: v.union(               // Tool category
+      v.literal("api_integration"),
+      v.literal("data_processing"),
+      v.literal("file_operations"),
+      v.literal("web_scraping"),
+      v.literal("database_query"),
+      v.literal("notification"),
+      v.literal("custom")
+    ),
+    config: v.object({               // Tool configuration
+      endpoint: v.optional(v.string()),
+      apiKey: v.optional(v.string()), // Encrypted API key
+      headers: v.optional(v.any()),
+      method: v.optional(v.string()),
+      parameters: v.optional(v.any()),
+      authentication: v.optional(v.object({
+        type: v.union(v.literal("none"), v.literal("api_key"), v.literal("oauth"), v.literal("basic")),
+        config: v.any(),
+      })),
+    }),
+    schema: v.optional(v.object({     // Input/output schema
+      input: v.any(),
+      output: v.any(),
+    })),
+    isActive: v.boolean(),
+    isPublic: v.boolean(),           // Available to other users
+    usageCount: v.number(),
+    successRate: v.number(),
+    avgExecutionTime: v.optional(v.number()),
+    createdAt: v.number(),
+    lastModified: v.number(),
+    lastUsed: v.optional(v.number()),
+  })
+    .index("by_tool_id", ["toolId"])
+    .index("by_address", ["address"])
+    .index("by_category", ["category"])
+    .index("by_public", ["isPublic"])
+    .index("by_active", ["isActive"]),
+
+  // AGENT EXECUTIONS: Detailed log of agent task executions
+  agentExecutions: defineTable({
+    executionId: v.string(),         // Unique execution identifier
+    agentId: v.string(),            // Executing agent
+    sessionId: v.optional(v.string()), // Associated session
+    workflowId: v.optional(v.string()), // Associated workflow
+    address: v.string(),            // User address
+    taskType: v.union(              // Type of task executed
+      v.literal("chat_completion"),
+      v.literal("workflow_step"),
+      v.literal("tool_execution"),
+      v.literal("data_analysis"),
+      v.literal("batch_processing")
+    ),
+    input: v.object({               // Execution input
+      prompt: v.optional(v.string()),
+      parameters: v.optional(v.any()),
+      context: v.optional(v.any()),
+    }),
+    output: v.optional(v.object({   // Execution output
+      result: v.any(),
+      metadata: v.optional(v.any()),
+      warnings: v.optional(v.array(v.string())),
+    })),
+    status: v.union(                // Execution status
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("timeout")
+    ),
+    providerId: v.optional(v.id("providers")), // Provider used
+    model: v.optional(v.string()),   // Model used
+    tokensUsed: v.number(),         // Tokens consumed
+    cost: v.number(),               // VCU cost
+    executionTime: v.optional(v.number()), // Execution duration (ms)
+    error: v.optional(v.string()),   // Error message if failed
+    createdAt: v.number(),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    expiresAt: v.number(),          // Auto-cleanup timestamp
+  })
+    .index("by_execution_id", ["executionId"])
+    .index("by_agent", ["agentId"])
+    .index("by_session", ["sessionId"])
+    .index("by_workflow", ["workflowId"])
+    .index("by_address", ["address"])
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"])
+    .index("by_expires", ["expiresAt"]),
 });
 
