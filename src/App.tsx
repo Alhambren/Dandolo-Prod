@@ -57,6 +57,12 @@ export default function App() {
                 Chat
               </button>
               <button
+                onClick={() => navigateTo('models')}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'models' ? 'text-white font-medium' : ''}`}
+              >
+                Models
+              </button>
+              <button
                 onClick={() => navigateTo('providers')}
                 className={`text-white/70 hover:text-white transition-colors ${currentPage === 'providers' ? 'text-white font-medium' : ''}`}
               >
@@ -73,12 +79,6 @@ export default function App() {
                 className={`text-white/70 hover:text-white transition-colors ${currentPage === 'developers' ? 'text-white font-medium' : ''}`}
               >
                 Developers
-              </button>
-              <button
-                onClick={() => navigateTo('models')}
-                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'models' ? 'text-white font-medium' : ''}`}
-              >
-                Models
               </button>
               {/* Admin tab only visible to authorized admin wallet */}
               {isAdmin && (
@@ -123,6 +123,16 @@ export default function App() {
                 Chat
               </button>
               <button
+                onClick={() => navigateTo('models')}
+                className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+                  currentPage === 'models' 
+                    ? 'bg-white/10 text-white font-medium' 
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                Models
+              </button>
+              <button
                 onClick={() => navigateTo('providers')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
                   currentPage === 'providers' 
@@ -151,16 +161,6 @@ export default function App() {
                 }`}
               >
                 Developers
-              </button>
-              <button
-                onClick={() => navigateTo('models')}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  currentPage === 'models' 
-                    ? 'bg-white/10 text-white font-medium' 
-                    : 'text-white/70 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                Models
               </button>
               {/* Admin tab only visible to authorized admin wallet */}
               {isAdmin && (
