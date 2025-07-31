@@ -43,7 +43,6 @@ export function DeveloperPortal() {
   const generateKey = useAction(api.apiKeys.createApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
   const deleteKey = useMutation(api.developers.deleteApiKey);
-  const revokeAllUserKeys = useMutation(api.developers.revokeAllUserKeys);
   const networkStats = useQuery(api.stats.getNetworkStats);
   
   // Get availability for new key creation
@@ -137,24 +136,6 @@ export function DeveloperPortal() {
     }
   };
   
-  const handleCleanupBrokenKeys = async () => {
-    if (!confirm('This will revoke all existing keys. You can then generate new ones. Continue?')) {
-      return;
-    }
-    
-    try {
-      if (!sessionToken) {
-        toast.error('Please authenticate first');
-        return;
-      }
-      const result = await revokeAllUserKeys({ sessionToken });
-      toast.success(`Revoked ${result.revokedCount} keys. You can now generate new ones.`);
-      // Force refresh of API keys list
-      window.location.reload();
-    } catch (error) {
-      toast.error('Failed to cleanup keys');
-    }
-  };
   
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -315,18 +296,6 @@ export function DeveloperPortal() {
           </div>
         )}
         
-        {/* Temporary cleanup for broken keys */}
-        {apiKeys && apiKeys.length > 0 && apiKeys.every(k => k.isActive) && (
-          <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500 rounded-lg">
-            <p className="text-sm mb-2">⚠️ It looks like your keys were auto-generated and can't be accessed.</p>
-            <button
-              onClick={handleCleanupBrokenKeys}
-              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg font-medium"
-            >
-              Clean Up and Start Fresh
-            </button>
-          </div>
-        )}
         
         {/* Keys List */}
         <div className="space-y-3">
