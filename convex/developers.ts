@@ -103,6 +103,44 @@ export const revokeApiKey = mutation({
   },
 });
 
+// Delete revoked API key permanently
+export const deleteApiKey = mutation({
+  args: { 
+    keyId: v.id("apiKeys"),
+    sessionToken: v.string(), // SECURITY: Require authenticated session
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    // SECURITY: Verify session and get authenticated address
+    const session = await ctx.db
+      .query("authSessions")
+      .withIndex("by_token", q => q.eq("sessionToken", args.sessionToken))
+      .first();
+
+    if (!session) {
+      throw new Error("Authentication required: Invalid session token");
+    }
+
+    if (session.expires < Date.now()) {
+      throw new Error("Authentication required: Session expired");
+    }
+
+    // SECURITY: Verify key ownership and ensure it's revoked
+    const key = await ctx.db.get(args.keyId);
+    if (!key || key.address !== session.address) {
+      throw new Error("Key not found or unauthorized access denied");
+    }
+    
+    // SECURITY: Only allow deletion of revoked keys
+    if (key.isActive) {
+      throw new Error("Cannot delete active API key. Revoke it first.");
+    }
+    
+    await ctx.db.delete(args.keyId);
+    return true;
+  },
+});
+
 // Validate API key and check rate limits
 export const validateApiKey = query({
   args: { key: v.string() },

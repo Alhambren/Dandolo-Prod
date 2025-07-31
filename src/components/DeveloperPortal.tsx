@@ -42,6 +42,7 @@ export function DeveloperPortal() {
   );
   const generateKey = useAction(api.apiKeys.createApiKey);
   const revokeKey = useMutation(api.developers.revokeApiKey);
+  const deleteKey = useMutation(api.developers.deleteApiKey);
   const revokeAllUserKeys = useMutation(api.developers.revokeAllUserKeys);
   const networkStats = useQuery(api.stats.getNetworkStats);
   
@@ -375,7 +376,7 @@ export function DeveloperPortal() {
                     <span className="text-xs text-gray-500 block">today</span>
                   </p>
                   
-                  {key.isActive && (
+                  {key.isActive ? (
                     <button
                       onClick={() => {
                         if (confirm(`Revoke "${key.name}"? This cannot be undone and you won't be able to create another ${key.keyType} key.`)) {
@@ -386,9 +387,24 @@ export function DeveloperPortal() {
                           }
                         }
                       }}
-                      className="text-red-400 hover:text-red-300 text-sm transition-colors"
+                      className="px-3 py-1 bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 text-sm rounded transition-colors border border-red-500/30"
                     >
                       Revoke
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Permanently delete "${key.name}"? This cannot be undone.`)) {
+                          if (sessionToken) {
+                            deleteKey({ keyId: key._id, sessionToken });
+                          } else {
+                            toast.error('Please authenticate first');
+                          }
+                        }
+                      }}
+                      className="px-3 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-red-300 text-sm rounded transition-colors border border-red-600/30"
+                    >
+                      Delete
                     </button>
                   )}
                 </div>
