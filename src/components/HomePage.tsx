@@ -285,7 +285,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               <h3 className="text-xl font-semibold">Get your API key</h3>
             </div>
             <p className="text-white/60 mb-6">
-              Create an API key and start making requests. <span className="text-brand-400">Fully OpenAI compatible.</span>
+              Create an API key and start making requests. <span className="text-brand-400">Fully Venice.ai compatible.</span>
             </p>
             <div className="bg-gray-900/50 rounded-lg p-4">
               <div className="flex items-center gap-3">
@@ -338,8 +338,8 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               <div className="flex items-start gap-3">
                 <span className="text-green-500 mt-1">✓</span>
                 <div>
-                  <p className="font-medium">OpenAI Compatible API</p>
-                  <p className="text-white/60 text-sm">Drop-in replacement for existing apps</p>
+                  <p className="font-medium">Venice.ai Compatible API</p>
+                  <p className="text-white/60 text-sm">Drop-in replacement with Venice.ai models</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
