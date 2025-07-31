@@ -43,37 +43,40 @@ export default function ModelsPage() {
           </div>
         </GlassCard>
       ) : (
-        <div className="space-y-6">
-          {/* Model Categories */}
-          {Object.entries(availableModels).map(([category, models]) => (
-            <GlassCard key={category} className="p-6">
-              <h2 className="text-xl font-semibold mb-4 capitalize text-blue-400">
-                {category.replace(/([A-Z])/g, ' $1').trim()} Models
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {models.map((model: any) => (
-                  <div
-                    key={model.id}
-                    onClick={() => setSelectedModelId(model.id)}
-                    className="p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer border border-gray-700 hover:border-blue-500"
-                  >
-                    <div className="flex flex-col space-y-2">
-                      <code className="text-sm text-blue-400 font-medium">{model.id}</code>
-                      {model.name && model.name !== model.id && (
-                        <span className="text-gray-300 text-sm">{model.name}</span>
-                      )}
-                      {model.contextLength && (
-                        <span className="text-gray-400 text-xs">
-                          Context: {model.contextLength.toLocaleString()} tokens
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+        <GlassCard className="p-6">
+          <h2 className="text-xl font-semibold mb-4">
+            Available Models ({availableModels.length})
+          </h2>
+          <p className="text-gray-400 text-sm mb-4">
+            Click on any model to view detailed API documentation and examples.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {availableModels.map((model: any) => (
+              <div
+                key={model.id}
+                onClick={() => setSelectedModelId(model.id)}
+                className="p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer border border-gray-700 hover:border-blue-500"
+              >
+                <div className="flex flex-col space-y-2">
+                  <code className="text-sm text-blue-400 font-medium">{model.id}</code>
+                  {model.name && model.name !== model.id && (
+                    <span className="text-gray-300 text-sm">{model.name}</span>
+                  )}
+                  {model.type && (
+                    <span className="px-2 py-1 bg-gray-700 text-xs rounded-full w-fit">
+                      {model.type}
+                    </span>
+                  )}
+                  {model.contextLength && (
+                    <span className="text-gray-400 text-xs">
+                      Context: {model.contextLength.toLocaleString()} tokens
+                    </span>
+                  )}
+                </div>
               </div>
-            </GlassCard>
-          ))}
-        </div>
+            ))}
+          </div>
+        </GlassCard>
       )}
     </div>
   );
