@@ -12,6 +12,58 @@ const GlassCard: React.FC<{ children: React.ReactNode; className?: string }> = (
   );
 };
 
+// Models List Component - copied from working DeveloperDocs
+const ModelsList: React.FC = () => {
+  const availableModels = useQuery(api.models.getAvailableModels);
+  
+  if (availableModels === undefined) {
+    return (
+      <GlassCard className="p-6">
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mr-3"></div>
+          <span>Loading models from Venice.ai...</span>
+        </div>
+      </GlassCard>
+    );
+  }
+  
+  if (!availableModels || availableModels.length === 0) {
+    return (
+      <GlassCard className="p-6">
+        <div className="text-center py-8">
+          <p className="text-red-400 mb-4">No models available</p>
+          <p className="text-gray-400 text-sm">
+            Models are dynamically fetched from Venice.ai providers. Please check back later or ensure providers are active.
+          </p>
+        </div>
+      </GlassCard>
+    );
+  }
+  
+  return (
+    <GlassCard className="p-4">
+      <h2 className="text-lg font-semibold mb-3">
+        Models ({availableModels.length})
+      </h2>
+      <div className="space-y-2">
+        {availableModels.map((model: any) => (
+          <div key={model.id} className="p-2 bg-white/5 rounded text-xs">
+            <code className="text-blue-400 block truncate">{model.id}</code>
+            {model.type && (
+              <span className="inline-block mt-1 px-1 py-0.5 bg-gray-700 text-xs rounded">
+                {model.type}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 mt-3">
+        Updated hourly from Venice.ai
+      </p>
+    </GlassCard>
+  );
+};
+
 // Mobile-optimized provider card
 const ProviderCard: React.FC<{ provider: any; rank: number }> = ({ provider, rank }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -222,6 +274,12 @@ const ProvidersPage: React.FC = () => {
     );
   }
 
+  // Add debug logging
+  console.log("🔍 ProvidersPage Debug Data:");
+  console.log("- allProviders:", allProviders?.length || 0);
+  console.log("- providersWithPoints:", providersWithPoints?.length || 0);
+  console.log("- filteredProviders:", filteredProviders?.length || 0);
+
   const hasPointsError = providerLeaderboard === null;
   const pointsLoading = providerLeaderboard === undefined;
   const networkStatsError = networkStats === null;
@@ -237,13 +295,14 @@ const ProvidersPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
-      <div className="max-w-md mx-auto lg:max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Header */}
-        <div className="mb-6 sm:mb-8 text-center lg:text-left">
+        <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">Network Providers</h1>
           <p className="text-gray-400 text-sm sm:text-base">
-            Active providers powering the Dandolo.ai network
+            Active providers and available models powering the Dandolo.ai network
           </p>
+          
           {hasPointsError && (
             <div className="mt-3 text-sm text-orange-400 bg-orange-900/20 border border-orange-800/50 rounded-lg px-3 py-2">
               ⚠️ Points data temporarily unavailable due to high load
@@ -251,8 +310,17 @@ const ProvidersPage: React.FC = () => {
           )}
         </div>
 
-        {/* Stats Overview - Responsive Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        {/* Sidebar Layout */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left Sidebar - Models */}
+          <div className="lg:w-80 flex-shrink-0">
+            <ModelsList />
+          </div>
+
+          {/* Main Content - Providers */}
+          <div className="flex-1">
+            {/* Stats Overview - Responsive Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <GlassCard className="p-4 sm:p-6">
             <div className="text-xs sm:text-sm font-medium text-gray-400">Total Providers</div>
             <div className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold">
@@ -340,7 +408,11 @@ const ProvidersPage: React.FC = () => {
               <div className="text-center text-gray-400">
                 <div className="text-4xl mb-4">🔍</div>
                 <h3 className="text-lg font-medium mb-2">No providers found</h3>
-                <p className="text-sm">Try adjusting your search or filter criteria</p>
+                {totalProviders === 0 ? (
+                  <p className="text-sm">No providers have been registered yet. Be the first to join the network!</p>
+                ) : (
+                  <p className="text-sm">Try adjusting your search or filter criteria</p>
+                )}
               </div>
             </GlassCard>
           )}
@@ -442,18 +514,27 @@ const ProvidersPage: React.FC = () => {
               
               {filteredProviders.length === 0 && (
                 <div className="text-center py-8 text-gray-400">
-                  No providers found matching your criteria
+                  {totalProviders === 0 ? (
+                    <div>
+                      <div className="text-4xl mb-4">🌐</div>
+                      <div>No providers have been registered yet. Be the first to join the network!</div>
+                    </div>
+                  ) : (
+                    "No providers found matching your criteria"
+                  )}
                 </div>
               )}
             </div>
           </GlassCard>
         </div>
 
-        {/* Footer */}
-        <div className="mt-6 text-center lg:hidden">
-          <p className="text-xs text-gray-500">
-            Showing {filteredProviders.length} of {totalProviders} providers
-          </p>
+            {/* Footer */}
+            <div className="mt-6 text-center lg:hidden">
+              <p className="text-xs text-gray-500">
+                Showing {filteredProviders.length} of {totalProviders} providers
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
