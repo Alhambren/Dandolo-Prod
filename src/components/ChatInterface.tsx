@@ -420,8 +420,34 @@ export const ChatInterface: React.FC = () => {
   };
 
   const generateTitle = (content: string) => {
-    const cleaned = content.replace(/\\n/g, ' ').trim();
-    return cleaned.length > 40 ? `${cleaned.substring(0, 40)}...` : cleaned;
+    const cleaned = content.replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Extract key words/phrases for better titles
+    const words = cleaned.split(' ');
+    
+    // Remove common question words and filler
+    const stopWords = ['what', 'how', 'why', 'when', 'where', 'who', 'which', 'can', 'could', 'would', 'should', 'will', 'do', 'does', 'did', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'please', 'help', 'me'];
+    
+    // Keep important words and first few words for context
+    const importantWords = words.filter((word, index) => {
+      const lowerWord = word.toLowerCase();
+      // Always keep first 2 words for context, then filter stop words
+      return index < 2 || (!stopWords.includes(lowerWord) && word.length > 2);
+    }).slice(0, 6); // Limit to 6 words max
+    
+    let title = importantWords.join(' ');
+    
+    // If title is too short, use first part of original
+    if (title.length < 15 && cleaned.length > title.length) {
+      title = cleaned.length > 35 ? `${cleaned.substring(0, 35)}...` : cleaned;
+    }
+    
+    // Ensure we don't exceed reasonable length
+    if (title.length > 35) {
+      title = `${title.substring(0, 35)}...`;
+    }
+    
+    return title || 'New Chat';
   };
 
   // Auto-compact chat to manage context length
