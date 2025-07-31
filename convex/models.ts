@@ -442,6 +442,131 @@ export const getModelCacheHealth = query({
 });
 
 
+// Get individual model details from cached data
+export const getModelDetails = query({
+  args: { modelId: v.string() },
+  handler: async (ctx, args) => {
+    const cached = await ctx.db.query("modelCache").first();
+    
+    if (!cached || !cached.models) {
+      return null;
+    }
+
+    const models = cached.models;
+    let foundModel = null;
+    let modelType = null;
+
+    // Search through all model categories
+    if (Array.isArray(models)) {
+      // Legacy format
+      foundModel = models.find((m: any) => m.id === args.modelId);
+      modelType = foundModel?.type || "text";
+    } else {
+      // New categorized format
+      const categories = ['text', 'code', 'image', 'multimodal', 'audio'];
+      for (const category of categories) {
+        const categoryModels = models[category] || [];
+        const model = categoryModels.find((m: any) => m.id === args.modelId);
+        if (model) {
+          foundModel = model;
+          modelType = category;
+          break;
+        }
+      }
+    }
+
+    if (!foundModel) {
+      return null;
+    }
+
+    // Get provider availability for this model
+    const providers = await ctx.db.query("providers").collect();
+    const activeProviders = providers.filter(p => p.isActive);
+    
+    return {
+      id: foundModel.id,
+      name: foundModel.name || foundModel.id,
+      type: modelType,
+      contextLength: foundModel.contextLength,
+      available: activeProviders.length > 0,
+      providerCount: activeProviders.length,
+      lastUpdated: cached.lastUpdated,
+      capabilities: getModelCapabilities(foundModel.id, modelType),
+    };
+  },
+});
+
+// Get model availability status across providers
+export const getModelAvailability = query({
+  args: { modelId: v.string() },
+  handler: async (ctx, args) => {
+    const providers = await ctx.db.query("providers").collect();
+    const activeProviders = providers.filter(p => p.isActive);
+    
+    // Check if model exists in cache
+    const modelExists = await ctx.runQuery(api.models.getModelDetails, { modelId: args.modelId });
+    
+    if (!modelExists) {
+      return {
+        status: "unavailable",
+        message: "Model not found in Venice.ai network",
+        activeProviders: 0,
+        totalProviders: providers.length,
+      };
+    }
+
+    const activeCount = activeProviders.length;
+    
+    if (activeCount === 0) {
+      return {
+        status: "unavailable",
+        message: "No active providers available",
+        activeProviders: 0,
+        totalProviders: providers.length,
+      };
+    } else if (activeCount === 1) {
+      return {
+        status: "limited",
+        message: "Limited availability (1 provider active)",
+        activeProviders: activeCount,
+        totalProviders: providers.length,
+      };
+    } else {
+      return {
+        status: "available",
+        message: `Fully available (${activeCount} providers active)`,
+        activeProviders: activeCount,
+        totalProviders: providers.length,
+      };
+    }
+  },
+});
+
+// Helper function to determine model capabilities based on ID and type
+function getModelCapabilities(modelId: string, type: string) {
+  const capabilities = {
+    supportsStreaming: true,
+    supportsSystemMessage: true,
+    supportsTemperature: true,
+    supportsMaxTokens: true,
+    supportsTools: type === 'text' || type === 'code',
+    supportsVision: type === 'multimodal',
+    supportsImageGeneration: type === 'image',
+    supportsAudio: type === 'audio',
+  };
+
+  // Model-specific overrides based on ID patterns
+  if (modelId.includes('gpt') || modelId.includes('claude')) {
+    capabilities.supportsTools = true;
+  }
+  
+  if (modelId.includes('vision') || modelId.includes('multimodal')) {
+    capabilities.supportsVision = true;
+  }
+
+  return capabilities;
+}
+
 // Test function to verify Venice API
 export const testVeniceAPI = internalAction({
   args: {},

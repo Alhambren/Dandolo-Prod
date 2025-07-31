@@ -8,7 +8,11 @@ const getApiBaseUrl = () => {
   return 'https://api.dandolo.ai';
 };
 
-export function DeveloperDocs() {
+interface DeveloperDocsProps {
+  onModelSelect?: (modelId: string) => void;
+}
+
+export function DeveloperDocs({ onModelSelect }: DeveloperDocsProps) {
   const [activeTab, setActiveTab] = useState('quickstart');
   const apiBaseUrl = getApiBaseUrl();
   
@@ -483,13 +487,13 @@ node test-dandolo-integration.js --api-key dk_your_key --advanced`}
       )}
       
       {/* Models */}
-      {activeTab === 'models' && <ModelsList />}
+      {activeTab === 'models' && <ModelsList onModelSelect={onModelSelect} />}
     </div>
   );
 }
 
-// Dynamic models list
-function ModelsList() {
+// Dynamic models list with clickable models
+function ModelsList({ onModelSelect }: { onModelSelect?: (modelId: string) => void }) {
   const availableModels = useQuery(api.models.getAvailableModels);
   
   if (availableModels === undefined) {
@@ -521,15 +525,25 @@ function ModelsList() {
       <h2 className="text-xl font-semibold mb-4">
         Available Models ({availableModels.length})
       </h2>
+      <p className="text-gray-400 text-sm mb-4">
+        Click on any model to view detailed API documentation and examples.
+      </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {availableModels.map((model: any) => (
-          <div key={model.id} className="p-3 bg-white/5 rounded-lg">
-            <code className="text-sm text-blue-400">{model.id}</code>
-            {model.type && (
-              <span className="ml-2 px-2 py-1 bg-gray-700 text-xs rounded">
-                {model.type}
-              </span>
-            )}
+          <div 
+            key={model.id} 
+            onClick={() => onModelSelect?.(model.id)}
+            className="p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-blue-500/30"
+          >
+            <code className="text-sm text-blue-400 font-medium">{model.id}</code>
+            <div className="flex items-center mt-2">
+              {model.type && (
+                <span className="px-2 py-1 bg-gray-700 text-xs rounded mr-2">
+                  {model.type}
+                </span>
+              )}
+              <span className="text-xs text-green-400">Click for details →</span>
+            </div>
             <p className="text-xs text-gray-400 mt-1">
               Live from Venice.ai • Updated dynamically
             </p>
@@ -537,7 +551,7 @@ function ModelsList() {
         ))}
       </div>
       <p className="text-sm text-gray-400 mt-4">
-        * Models are continuously updated in our inference pool
+        * Models are continuously updated in our inference pool. Click any model for comprehensive API documentation.
       </p>
     </GlassCard>
   );
