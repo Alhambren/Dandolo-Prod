@@ -20,7 +20,7 @@ export function DeveloperDocs({ onModelSelect }: DeveloperDocsProps) {
     <div className="max-w-6xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-8">Developer Documentation</h1>
       
-      {/* Tab Navigation */}
+      {/* Tab Navigation - Includes Models tab for Venice.ai integration */}
       <div className="flex gap-4 mb-8 border-b border-gray-700">
         {['quickstart', 'endpoints', 'examples', 'agents', 'testing', 'models'].map(tab => (
           <button
