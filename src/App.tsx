@@ -14,6 +14,7 @@ import { Logo } from './components/Logo';
 // Admin address from environment variable (fallback to original for backward compatibility)
 const ADMIN_ADDRESS = import.meta.env.VITE_ADMIN_ADDRESS || "0xC07481520d98c32987cA83B30EAABdA673cDbe8c";
 
+// Updated: Individual model pages with dynamic Venice.ai integration
 export default function App() {
   const { address, isConnected } = useAccount();
   const [currentPage, setCurrentPage] = useState<
