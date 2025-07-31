@@ -7,6 +7,7 @@ import { ChatInterface } from './components/ChatInterface';
 import ProvidersPage from './components/ProvidersPage';
 import DevelopersPage from './components/DevelopersPage';
 import DashboardPage from './components/DashboardPage';
+import ModelsPage from './components/ModelsPage';
 import { AdminDashboardPage } from './components/AdminDashboard';
 import { WalletConnectButton } from './components/WalletConnectButton';
 import { Logo } from './components/Logo';
@@ -18,7 +19,7 @@ const ADMIN_ADDRESS = import.meta.env.VITE_ADMIN_ADDRESS || "0xC07481520d98c3298
 export default function App() {
   const { address, isConnected } = useAccount();
   const [currentPage, setCurrentPage] = useState<
-    'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'admin'
+    'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'models' | 'admin'
   >('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -72,6 +73,12 @@ export default function App() {
                 className={`text-white/70 hover:text-white transition-colors ${currentPage === 'developers' ? 'text-white font-medium' : ''}`}
               >
                 Developers
+              </button>
+              <button
+                onClick={() => navigateTo('models')}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'models' ? 'text-white font-medium' : ''}`}
+              >
+                Models
               </button>
               {/* Admin tab only visible to authorized admin wallet */}
               {isAdmin && (
@@ -145,6 +152,16 @@ export default function App() {
               >
                 Developers
               </button>
+              <button
+                onClick={() => navigateTo('models')}
+                className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+                  currentPage === 'models' 
+                    ? 'bg-white/10 text-white font-medium' 
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                Models
+              </button>
               {/* Admin tab only visible to authorized admin wallet */}
               {isAdmin && (
                 <button
@@ -186,6 +203,11 @@ export default function App() {
           {currentPage === 'developers' && (
             <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
               <DevelopersPage />
+            </div>
+          )}
+          {currentPage === 'models' && (
+            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+              <ModelsPage />
             </div>
           )}
         </main>
