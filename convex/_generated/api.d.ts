@@ -27,6 +27,7 @@ import type * as developers from "../developers.js";
 import type * as http from "../http.js";
 import type * as inference from "../inference.js";
 import type * as legacyMigration from "../legacyMigration.js";
+import type * as loadBalancer from "../loadBalancer.js";
 import type * as migration from "../migration.js";
 import type * as migrations_migrateVCUPoints from "../migrations/migrateVCUPoints.js";
 import type * as migrations from "../migrations.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   inference: typeof inference;
   legacyMigration: typeof legacyMigration;
+  loadBalancer: typeof loadBalancer;
   migration: typeof migration;
   "migrations/migrateVCUPoints": typeof migrations_migrateVCUPoints;
   migrations: typeof migrations;

@@ -83,6 +83,14 @@ crons.interval(
   {}
 );
 
+// PHASE 2: Session rebalancing every 15 minutes
+crons.interval(
+  "session-rebalancing",
+  { minutes: 15 },
+  internal.sessionProviders.runSessionRebalancing,
+  {}
+);
+
 // Clean up expired auth sessions and challenges every hour
 crons.interval(
   "cleanup-auth-sessions",
