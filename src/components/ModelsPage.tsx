@@ -7,6 +7,26 @@ import { ModelDetailPage } from './ModelDetailPage';
 export default function ModelsPage() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const availableModels = useQuery(api.models.getAvailableModels);
+  // Use the correct analytics function that actually exists
+  const usageMetrics = useQuery(api.analytics.getModelUsageStats);
+
+  // Enhanced debug logging to trace the issue
+  console.log('🔍 ModelsPage Debug - Full Data Trace:', {
+    modelsCount: availableModels?.length,
+    usageMetricsLoaded: !!usageMetrics,
+    usageMetricsType: typeof usageMetrics,
+    usageMetricsKeys: usageMetrics ? Object.keys(usageMetrics) : null,
+    modelUsageExists: !!usageMetrics?.modelUsage,
+    modelUsageType: typeof usageMetrics?.modelUsage,
+    modelUsageCount: usageMetrics?.modelUsage ? Object.keys(usageMetrics.modelUsage).length : 0,
+    modelUsageData: usageMetrics?.modelUsage,
+    sampleModel: availableModels?.[0]?.id,
+    sampleUsage: availableModels?.[0]?.id ? (usageMetrics?.modelUsage?.[availableModels[0].id] || 0) : 'N/A',
+    allModels: availableModels?.map(m => m.id).slice(0, 5), // First 5 model IDs
+    totalInferences: usageMetrics?.totalInferences,
+    topModels: usageMetrics?.topModels,
+    timestamp: new Date().toISOString()
+  });
 
   // If a model is selected, show the detail page
   if (selectedModelId) {
@@ -72,6 +92,14 @@ export default function ModelsPage() {
                       Context: {model.contextLength.toLocaleString()} tokens
                     </span>
                   )}
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-gray-400 text-xs">
+                      Used: {usageMetrics?.modelUsage?.[model.id] || 0} times
+                    </span>
+                    {(usageMetrics?.modelUsage?.[model.id] || 0) > 0 && (
+                      <span className="text-green-400 text-xs">●</span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

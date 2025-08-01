@@ -67,31 +67,80 @@ interface Provider {
   isActive: boolean;
 }
 
-// Preferred image model order (safe models)
-const PREFERRED_IMAGE_MODELS = [
-  "venice-sd35",
-  "stable-diffusion-3.5",
-  "flux-dev",
-  "hidream"
-];
+/**
+ * Dynamically rank image models based on their characteristics from Venice.ai API
+ * This ensures we always use the best available models without hardcoding
+ */
+function rankImageModelsByQuality(imageModels: any[], allowAdultContent: boolean = false): string[] {
+  if (imageModels.length === 0) return [];
+  
+  // Score models based on various quality indicators
+  const scoredModels = imageModels.map(model => {
+    let score = 0;
+    const modelId = model.id.toLowerCase();
+    const capabilities = model.capabilities || {};
+    
+    // Base scoring on model ID patterns (higher = better)
+    if (modelId.includes('flux')) score += 100; // FLUX models generally high quality
+    if (modelId.includes('stable-diffusion')) score += 80; // SD models are solid
+    if (modelId.includes('venice')) score += 70; // Venice optimized models
+    if (modelId.includes('xl') || modelId.includes('sdxl')) score += 60; // XL variants
+    if (modelId.includes('pro') || modelId.includes('plus')) score += 50; // Pro versions
+    if (modelId.includes('3.5') || modelId.includes('v2')) score += 40; // Newer versions
+    
+    // Bonus for specific quality indicators
+    if (capabilities.highQuality) score += 30;
+    if (capabilities.photorealistic) score += 25;
+    if (model.contextLength && model.contextLength > 1000) score += 20;
+    
+    // Handle adult content preferences
+    const isUncensored = modelId.includes('uncensored') || 
+                        modelId.includes('nsfw') || 
+                        capabilities.uncensored ||
+                        capabilities.most_uncensored;
+    
+    if (allowAdultContent && isUncensored) {
+      score += 200; // Strong preference for uncensored when adult content allowed
+    } else if (!allowAdultContent && isUncensored) {
+      score -= 50; // Slight penalty for uncensored when not needed
+    }
+    
+    // Penalize models that might be lower quality
+    if (modelId.includes('mini') || modelId.includes('lite')) score -= 30;
+    if (modelId.includes('fast') && !modelId.includes('flux')) score -= 20;
+    
+    return { model, score };
+  });
+  
+  // Sort by score (highest first) and return model IDs
+  return scoredModels
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.model.id);
+}
 
-// Preferred uncensored image models for adult content (based on live Venice.ai data)
-const PREFERRED_UNCENSORED_IMAGE_MODELS = [
-  "pony-realism",        // Has "most_uncensored" trait
-  "lustify-sdxl",        // Specifically for adult content  
-  "flux-dev-uncensored", // Uncensored FLUX variant
-  "hidream",             // Known for adult content
-  "flux-dev",            // Standard FLUX (high quality)
-  "flux-realism",        // If available
-  "flux-1.1-pro"         // If available
-];
-
-// Models with strong internal filters that may need special handling
-const MODELS_WITH_INTERNAL_FILTERS = [
-  "venice-sd35",
-  "stable-diffusion-3.5", 
-  "fluently-xl"
-];
+/**
+ * Dynamically check if a model has strong internal filters based on model characteristics
+ */
+function hasStrongInternalFilters(modelId: string, modelInfo?: any): boolean {
+  const id = modelId.toLowerCase();
+  const capabilities = modelInfo?.capabilities || {};
+  
+  // Models known to have strong filters based on naming patterns
+  if (id.includes('venice') && !id.includes('uncensored')) return true;
+  if (id.includes('stable-diffusion') && !id.includes('uncensored')) return true;
+  if (id.includes('safe') || id.includes('filtered')) return true;
+  
+  // Check capabilities flags
+  if (capabilities.strongFilters || capabilities.familyFriendly) return true;
+  if (capabilities.censored === true) return true;
+  
+  // Conservative approach: if we don't know, assume it has filters unless explicitly uncensored
+  if (!id.includes('uncensored') && !id.includes('nsfw') && !capabilities.uncensored) {
+    return true;
+  }
+  
+  return false;
+}
 
 /**
  * Fetch available models from live Venice.ai API (same as frontend)
@@ -124,27 +173,15 @@ async function fetchAvailableModelsFromAPI(ctx: any): Promise<any[]> {
 function selectBestImageModel(models: any[], allowAdultContent?: boolean): string | undefined {
   const imageModels = models.filter((m) => m.type === "image");
   
-  // If adult content is allowed, prefer uncensored models
-  if (allowAdultContent) {
-    for (const preferred of PREFERRED_UNCENSORED_IMAGE_MODELS) {
-      const found = imageModels.find((m) => m.id === preferred);
-      if (found) {
-        return found.id;
-      }
-    }
+  if (imageModels.length === 0) {
+    return undefined;
   }
   
-  // Otherwise use regular preferred models
-  for (const preferred of PREFERRED_IMAGE_MODELS) {
-    const found = imageModels.find((m) => m.id === preferred);
-    if (found) {
-      return found.id;
-    }
-  }
+  // Use dynamic ranking to select the best model
+  const rankedModelIds = rankImageModelsByQuality(imageModels, allowAdultContent || false);
   
-  // Fallback: return first available image model
-  const fallback = imageModels[0]?.id;
-  return fallback;
+  // Return the highest-ranked available model
+  return rankedModelIds[0] || imageModels[0]?.id;
 }
 
 /**
@@ -245,21 +282,47 @@ async function selectModelForIntent(
     return filteredModels[0].id;
   }
 
-  const preferences = {
-    chat: ["venice", "balanced", "general"],
-    code: ["code", "coder", "programming"],
-    analysis: ["analysis", "large", "context"],
-  } as const;
+  // Instead of hardcoded preferences, use dynamic scoring based on model characteristics
+  const getTextModelScore = (model: any, intentType: string): number => {
+    let score = 0;
+    const modelId = model.id.toLowerCase();
+    const capabilities = model.capabilities || {};
+    
+    // Base scoring for different intents
+    if (intentType === "chat") {
+      if (modelId.includes("chat") || modelId.includes("assistant")) score += 50;
+      if (modelId.includes("balanced") || modelId.includes("general")) score += 30;
+      if (capabilities.conversational) score += 40;
+    } else if (intentType === "code") {
+      if (modelId.includes("code") || modelId.includes("coder") || modelId.includes("programming")) score += 100;
+      if (modelId.includes("llama") && modelId.includes("code")) score += 80;
+      if (capabilities.optimizedForCode) score += 60;
+    } else if (intentType === "analysis") {
+      if (modelId.includes("analysis") || modelId.includes("reasoning")) score += 60;
+      if (modelId.includes("large") || modelId.includes("xl")) score += 40;
+      if (model.contextLength && model.contextLength > 100000) score += 50;
+    }
+    
+    // General quality indicators
+    if (modelId.includes("pro") || modelId.includes("plus")) score += 20;
+    if (modelId.includes("v3") || modelId.includes("3.5")) score += 15;
+    if (capabilities.highQuality) score += 25;
+    
+    return score;
+  };
 
-  const intendedModels = preferences[intent];
-
-  for (const preferred of intendedModels) {
-    const model = filteredModels.find(
-      (m) =>
-        m.id.toLowerCase().includes(preferred.toLowerCase()) ||
-        m.name.toLowerCase().includes(preferred.toLowerCase())
-    );
-    if (model) return model.id;
+  // Score and rank all available text models for this intent
+  const scoredModels = filteredModels.map(model => ({
+    model,
+    score: getTextModelScore(model, intent)
+  }));
+  
+  // Sort by score (highest first)
+  scoredModels.sort((a, b) => b.score - a.score);
+  
+  // Return the highest-scored model
+  if (scoredModels[0]?.model) {
+    return scoredModels[0].model.id;
   }
 
   return filteredModels[0].id;
@@ -269,7 +332,7 @@ async function selectModelForIntent(
  * Calculate the approximate Diem cost for a request based on tokens used and
  * the model name. Image models count images instead of tokens.
  */
-function calculateDiemCost(tokens: number, model: string): number {
+function calculateDiemCost(tokens: number, model: string, modelType?: string): number {
   const rates: Record<string, number> = {
     "small": 0.06,
     "medium": 0.15,
@@ -279,15 +342,27 @@ function calculateDiemCost(tokens: number, model: string): number {
   };
 
   let rate = 0.1;
+  
+  // Check if this is an image model (either by type or model name indicators)
+  const isImageModel = modelType === "image" || 
+                      model.toLowerCase().includes("image") ||
+                      model.toLowerCase().includes("diffusion") ||
+                      model.toLowerCase().includes("flux") ||
+                      model.toLowerCase().includes("sd") ||
+                      model.toLowerCase().includes("dall");
+  
+  // For image models, use image rate
+  if (isImageModel) {
+    rate = rates.image;
+    return tokens * rate;
+  }
+  
+  // For text models, check size indicators
   for (const [key, value] of Object.entries(rates)) {
-    if (model.toLowerCase().includes(key)) {
+    if (key !== "image" && model.toLowerCase().includes(key)) {
       rate = value;
       break;
     }
-  }
-
-  if (model.includes("flux") || model.includes("image")) {
-    return tokens * rate;
   }
 
   return (tokens / 1_000_000) * rate;
@@ -309,9 +384,7 @@ async function* callVeniceAIStreaming(
   let promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
   
   // For models with strong internal filters, try prompt modifications when adult content is enabled
-  if (allowAdultContent && intentType === "image" && MODELS_WITH_INTERNAL_FILTERS.some(filtered => 
-    (model || "").toLowerCase().includes(filtered.toLowerCase())
-  )) {
+  if (allowAdultContent && intentType === "image" && model && hasStrongInternalFilters(model)) {
     // Add uncensoring prefixes that some models respond to
     promptText = `uncensored, unfiltered, ${promptText}`;
   }
@@ -371,7 +444,7 @@ async function* callVeniceAIStreaming(
       if (imageModels.length > 0) {
         selectedModel = imageModels[0].id;
       } else {
-        selectedModel = "venice-sd35";
+        throw new Error("No image models available for generation");
       }
     } else {
       const textModels = availableModels.filter(m => m.type === "text");
@@ -408,19 +481,34 @@ async function* callVeniceAIStreaming(
         );
         
         if (uncensoredImageModels.length > 0) {
-          const fluxRealism = uncensoredImageModels.find(m => m.id.includes("flux-realism"));
-          const fluxDev = uncensoredImageModels.find(m => m.id.includes("flux-dev"));
-          const hiDreamModel = uncensoredImageModels.find(m => m.id.includes("hidream"));
-          const anyFlux = uncensoredImageModels.find(m => m.id.includes("flux"));
-          
-          imageModel = fluxRealism?.id || fluxDev?.id || hiDreamModel?.id || anyFlux?.id || uncensoredImageModels[0].id;
+          // Use dynamic ranking to select the best uncensored model
+          const rankedUncensored = rankImageModelsByQuality(uncensoredImageModels, true);
+          imageModel = rankedUncensored[0] || uncensoredImageModels[0].id;
         } else {
-          imageModel = selectBestImageModel(availableModels, allowAdultContent) || "venice-sd35";
+          imageModel = selectBestImageModel(availableModels, allowAdultContent);
         }
       } else {
-        imageModel = selectBestImageModel(availableModels, allowAdultContent) || "venice-sd35";
+        imageModel = selectBestImageModel(availableModels, allowAdultContent);
       }
     }
+
+    // Debug: Log image generation request - Updated with Venice.ai 2025 recommendations
+    const imageRequestBody = {
+      model: model || imageModel,
+      prompt: promptText,
+      width: 1024,
+      height: 1024,
+      steps: 30, // Venice.ai recommends ~30 steps for most generations
+      cfg_scale: 7.5, // Good balance between creativity and adherence
+      return_binary: false,
+      safe_mode: allowAdultContent ? false : true,
+      format: "webp", // Explicitly set format to match Venice.ai docs
+      seed: Math.floor(Math.random() * 1000000000), // Add random seed to prevent caching
+    };
+    
+    console.log(`🎨 [IMAGE_DEBUG] Generating image with model: ${imageRequestBody.model}`);
+    console.log(`🎨 [IMAGE_DEBUG] Prompt: "${promptText}"`);
+    console.log(`🎨 [IMAGE_DEBUG] Request body:`, JSON.stringify(imageRequestBody, null, 2));
 
     const imageResponse = await fetch(
       "https://api.venice.ai/api/v1/image/generate",
@@ -430,38 +518,43 @@ async function* callVeniceAIStreaming(
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey.trim()}`,
         },
-        body: JSON.stringify({
-          model: model || imageModel,
-          prompt: promptText,
-          width: 1024,
-          height: 1024,
-          steps: 20,
-          cfg_scale: 7.5,
-          return_binary: false,
-          safe_mode: allowAdultContent ? false : true,
-        }),
+        body: JSON.stringify(imageRequestBody),
       }
     );
 
+    console.log(`🎨 [IMAGE_DEBUG] Response status: ${imageResponse.status}`);
+    console.log(`🎨 [IMAGE_DEBUG] Response headers:`, Object.fromEntries(imageResponse.headers.entries()));
+
     if (imageResponse.ok) {
       const imageData = (await imageResponse.json()) as VeniceImageResponse;
+      console.log(`🎨 [IMAGE_DEBUG] Response data keys:`, Object.keys(imageData));
+      console.log(`🎨 [IMAGE_DEBUG] Images array length:`, imageData.images?.length || 0);
       
       if (imageData.images && imageData.images.length > 0) {
         const base64Image = imageData.images[0];
+        console.log(`🎨 [IMAGE_DEBUG] Base64 image length:`, base64Image.length);
+        console.log(`🎨 [IMAGE_DEBUG] Base64 preview:`, base64Image.substring(0, 100) + "...");
+        
+        // Add debugging to check if the base64 is valid
+        const isValidBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(base64Image);
+        console.log(`🎨 [IMAGE_DEBUG] Base64 format valid:`, isValidBase64);
+        
         const imageDataUrl = `data:image/webp;base64,${base64Image}`;
         
         yield {
-          content: `![Generated Image](${imageDataUrl})\n\n*"${promptText}"*`,
+          content: `![Generated Image](${imageDataUrl})\n\n*"${promptText}"*\n\n*Debug: Model=${imageRequestBody.model}, Base64Length=${base64Image.length}*`,
           done: true,
-          model: imageModel || "venice-sd35",
+          model: imageModel || "unknown-image-model",
           tokens: 100
         };
         return;
       } else {
+        console.log(`🎨 [IMAGE_DEBUG] No images in response:`, imageData);
         throw new Error("No images returned from Venice.ai");
       }
     } else {
       const errorText = await imageResponse.text();
+      console.log(`🎨 [IMAGE_DEBUG] Error response:`, errorText);
       throw new Error("Image generation failed: " + errorText);
     }
   }
@@ -615,9 +708,7 @@ async function callVeniceAI(
   let promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
   
   // For models with strong internal filters, try prompt modifications when adult content is enabled
-  if (allowAdultContent && intentType === "image" && MODELS_WITH_INTERNAL_FILTERS.some(filtered => 
-    (model || "").toLowerCase().includes(filtered.toLowerCase())
-  )) {
+  if (allowAdultContent && intentType === "image" && model && hasStrongInternalFilters(model)) {
     // Add uncensoring prefixes that some models respond to
     promptText = `uncensored, unfiltered, ${promptText}`;
   }
@@ -680,8 +771,7 @@ async function callVeniceAI(
       if (imageModels.length > 0) {
         selectedModel = imageModels[0].id;
       } else {
-        // Hardcoded fallback for image generation
-        selectedModel = "venice-sd35";
+        throw new Error("No image models available for generation");
       }
     } else {
       const textModels = availableModels.filter(m => m.type === "text");
@@ -732,24 +822,37 @@ async function callVeniceAI(
         );
         
         if (uncensoredImageModels.length > 0) {
-          // Prefer specific uncensored models in order of preference
-          const fluxRealism = uncensoredImageModels.find(m => m.id.includes("flux-realism"));
-          const fluxDev = uncensoredImageModels.find(m => m.id.includes("flux-dev"));
-          const hiDreamModel = uncensoredImageModels.find(m => m.id.includes("hidream"));
-          const anyFlux = uncensoredImageModels.find(m => m.id.includes("flux"));
-          
-          imageModel = fluxRealism?.id || fluxDev?.id || hiDreamModel?.id || anyFlux?.id || uncensoredImageModels[0].id;
+          // Use dynamic ranking to select the best uncensored model
+          const rankedUncensored = rankImageModelsByQuality(uncensoredImageModels, true);
+          imageModel = rankedUncensored[0] || uncensoredImageModels[0].id;
         } else {
           // No explicitly uncensored models found, use best available
-          imageModel = selectBestImageModel(availableModels, allowAdultContent) || "venice-sd35";
+          imageModel = selectBestImageModel(availableModels, allowAdultContent);
         }
       } else {
-        imageModel = selectBestImageModel(availableModels, allowAdultContent) || "venice-sd35";
+        imageModel = selectBestImageModel(availableModels, allowAdultContent);
       }
     }
     
     // Debug what model will actually be sent to Venice API
     const finalModelToSend = model || imageModel;
+    
+    // Enhanced debug: Log image generation request - Updated with Venice.ai 2025 recommendations
+    const imageRequestBody = {
+      model: model || imageModel,
+      prompt: promptText,
+      width: 1024,
+      height: 1024,
+      steps: 30, // Venice.ai recommends ~30 steps for most generations
+      cfg_scale: 7.5, // Good balance between creativity and adherence
+      return_binary: false,
+      safe_mode: allowAdultContent ? false : true,
+      format: "webp", // Explicitly set format to match Venice.ai docs
+      seed: Math.floor(Math.random() * 1000000000), // Add random seed to prevent caching
+    };
+    
+    console.log(`🎨 [IMAGE_DEBUG_HTTP] Generating image via HTTP with model: ${imageRequestBody.model}`);
+    console.log(`🎨 [IMAGE_DEBUG_HTTP] Prompt: "${promptText}"`);
 
     const imageResponse = await fetch(
       "https://api.venice.ai/api/v1/image/generate",
@@ -759,31 +862,29 @@ async function callVeniceAI(
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey.trim()}`,
         },
-        body: JSON.stringify({
-          model: model || imageModel,
-          prompt: promptText,
-          width: 1024,
-          height: 1024,
-          steps: 20,
-          cfg_scale: 7.5,
-          return_binary: false,
-          safe_mode: allowAdultContent ? false : true,
-        }),
+        body: JSON.stringify(imageRequestBody),
       }
     );
 
+    console.log(`🎨 [IMAGE_DEBUG_HTTP] Response status: ${imageResponse.status}`);
+
     if (imageResponse.ok) {
       const imageData = (await imageResponse.json()) as VeniceImageResponse;
+      console.log(`🎨 [IMAGE_DEBUG_HTTP] Response data keys:`, Object.keys(imageData));
+      console.log(`🎨 [IMAGE_DEBUG_HTTP] Images array length:`, imageData.images?.length || 0);
       
       if (imageData.images && imageData.images.length > 0) {
         // Convert base64 image to data URL
         const base64Image = imageData.images[0];
+        console.log(`🎨 [IMAGE_DEBUG_HTTP] Base64 image length:`, base64Image.length);
+        console.log(`🎨 [IMAGE_DEBUG_HTTP] Base64 preview:`, base64Image.substring(0, 100) + "...");
+        
         const imageDataUrl = `data:image/webp;base64,${base64Image}`;
-        const vcuCost = calculateDiemCost(100, imageModel || "venice-sd35");
+        const vcuCost = calculateDiemCost(100, imageModel || "image-model");
         
         return {
-          response: `![Generated Image](${imageDataUrl})\n\n*\"${promptText}\"*`,
-          model: imageModel || "venice-sd35",
+          response: `![Generated Image](${imageDataUrl})\n\n*\"${promptText}\"*\n\n*Debug: Model=${imageRequestBody.model}, Base64Length=${base64Image.length}*`,
+          model: imageModel || "unknown-image-model",
           tokens: 100,
           cost: vcuCost,
           responseTime: Date.now() - startTime,
@@ -1539,6 +1640,13 @@ export const route = action({
         throw new Error(`Session provider ${sessionProvider.name} API key not available`);
       }
 
+      // Handle special model selection cases
+      let modelToUse = args.model;
+      if (args.model === "image" && args.intent === "image") {
+        // When model="image" and intent="image", auto-select best image model
+        modelToUse = undefined; // Let the system auto-select
+      }
+
       const { response, model: usedModel, tokens, responseTime } =
         await callVeniceAI(
           ctx,
@@ -1546,7 +1654,7 @@ export const route = action({
           args.messages,
           args.intent,
           args.messages[0]?.content,
-          args.model,
+          modelToUse,
           args.allowAdultContent
         );
 
