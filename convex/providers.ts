@@ -1657,6 +1657,10 @@ export const updateEnhancedProviderStatus = internalMutation({
     const currentFailures = provider.consecutiveFailures || 0;
     const currentInferenceFailures = provider.inferenceFailureStreak || 0;
     
+    // CRITICAL: Check VCU balance - providers with zero balance cannot process requests
+    const vcuBalance = provider.vcuBalance || 0;
+    const hasInsufficientBalance = vcuBalance <= 0;
+    
     if (args.healthCheckPassed) {
       // Basic health check passed
       let updates: any = {
@@ -1664,7 +1668,16 @@ export const updateEnhancedProviderStatus = internalMutation({
         lastHealthCheck: Date.now(),
       };
       
-      // Consider inference capability for activation
+      // CRITICAL FIX: Force deactivation if VCU balance is zero or negative
+      if (hasInsufficientBalance) {
+        console.log(`🚨 Provider ${provider.name} has insufficient VCU balance (${vcuBalance}) - marking as inactive`);
+        updates.isActive = false;
+        updates.markedInactiveAt = Date.now();
+        await ctx.db.patch(args.providerId, updates);
+        return;
+      }
+      
+      // Consider inference capability for activation (only if VCU balance is sufficient)
       if (args.inferenceTestPassed !== undefined) {
         if (args.inferenceTestPassed) {
           // Full inference capability confirmed - activate
@@ -1683,7 +1696,7 @@ export const updateEnhancedProviderStatus = internalMutation({
           }
         }
       } else {
-        // Only connectivity tested - activate if no recent inference failures
+        // Only connectivity tested - activate if no recent inference failures and sufficient VCU
         if (currentInferenceFailures < 3) {
           updates.isActive = true;
           updates.markedInactiveAt = undefined;
@@ -1720,6 +1733,55 @@ export const updateProviderStatus = internalMutation({
       providerId: args.providerId,
       healthCheckPassed: args.healthCheckPassed,
     });
+  },
+});
+
+// EMERGENCY FIX: Deactivate all providers with zero VCU balance
+export const deactivateZeroVCUProviders = internalAction({
+  args: {},
+  returns: v.object({
+    deactivatedProviders: v.array(v.object({
+      name: v.string(),
+      address: v.string(),
+      vcuBalance: v.number(),
+    })),
+    totalDeactivated: v.number(),
+  }),
+  handler: async (ctx) => {
+    console.log('🚨 Emergency: Deactivating providers with zero VCU balance...');
+    
+    // Get all active providers
+    const allProviders = await ctx.runQuery(internal.providers.getAllProviders);
+    const activeProviders = allProviders.filter(p => p.isActive);
+    
+    const deactivatedProviders: any[] = [];
+    
+    for (const provider of activeProviders) {
+      const vcuBalance = provider.vcuBalance || 0;
+      
+      if (vcuBalance <= 0) {
+        console.log(`🚨 Deactivating ${provider.name} (${provider.address}) - VCU balance: ${vcuBalance}`);
+        
+        // Force update provider status with VCU balance check
+        await ctx.runMutation(internal.providers.updateEnhancedProviderStatus, {
+          providerId: provider._id,
+          healthCheckPassed: false, // Force re-evaluation
+        });
+        
+        deactivatedProviders.push({
+          name: provider.name,
+          address: provider.address,
+          vcuBalance: vcuBalance,
+        });
+      }
+    }
+    
+    console.log(`✅ Emergency fix completed: ${deactivatedProviders.length} providers deactivated`);
+    
+    return {
+      deactivatedProviders,
+      totalDeactivated: deactivatedProviders.length,
+    };
   },
 });
 
