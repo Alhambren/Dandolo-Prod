@@ -28,6 +28,11 @@ export default defineSchema({
     consecutiveFailures: v.optional(v.number()), // For health tracking
     uptime: v.optional(v.number()),
     markedInactiveAt: v.optional(v.number()),
+    // Enhanced inference capability tracking
+    inferenceCapabilityScore: v.optional(v.number()), // 0-100 based on actual inference performance
+    lastInferenceTest: v.optional(v.number()), // When last inference test was performed
+    inferenceFailureStreak: v.optional(v.number()), // Consecutive inference failures
+    lastInferenceSuccess: v.optional(v.number()), // Last successful inference timestamp
     keyRotatedAt: v.optional(v.number()),
     // Anti-gaming fingerprinting fields
     fingerprint: v.optional(v.string()),    // Composite fingerprint for gaming detection
@@ -167,6 +172,13 @@ export default defineSchema({
     responseTime: v.number(),       // Response time in ms
     timestamp: v.number(),          // Check timestamp
     error: v.optional(v.string()),  // Error message if failed
+    // Enhanced inference testing
+    inferenceTestPassed: v.optional(v.boolean()), // Did actual inference test pass
+    inferenceResponseTime: v.optional(v.number()), // Inference response time
+    inferenceTokens: v.optional(v.number()), // Tokens returned in test
+    testPrompt: v.optional(v.string()), // Test prompt used
+    testResponse: v.optional(v.string()), // Test response received
+    healthCheckType: v.optional(v.union(v.literal("connectivity"), v.literal("inference"))), // Type of check performed
   })
     .index("by_provider", ["providerId"])
     .index("by_timestamp", ["timestamp"]),

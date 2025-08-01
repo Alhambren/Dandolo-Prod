@@ -1270,7 +1270,34 @@ export const updateVCUBalance = internalMutation({
 });
 
 // Single health check implementation
-async function runSingleHealthCheck(provider: any): Promise<{
+// Enhanced health check with actual inference testing
+async function runEnhancedHealthCheck(provider: any): Promise<{
+  status: boolean;
+  responseTime: number;
+  error?: string;
+  inferenceTestPassed?: boolean;
+  inferenceResponseTime?: number;
+  inferenceTokens?: number;
+  testPrompt?: string;
+  testResponse?: string;
+  healthCheckType: 'connectivity' | 'inference';
+}> {
+  // First run basic connectivity check
+  const connectivityResult = await runBasicConnectivityCheck(provider);
+  
+  if (!connectivityResult.status) {
+    return {
+      ...connectivityResult,
+      healthCheckType: 'connectivity',
+    };
+  }
+  
+  // If connectivity passes, test actual inference capability
+  return await runInferenceCapabilityTest(provider);
+}
+
+// Basic connectivity check (existing logic)
+async function runBasicConnectivityCheck(provider: any): Promise<{
   status: boolean;
   responseTime: number;
   error?: string;
@@ -1278,7 +1305,7 @@ async function runSingleHealthCheck(provider: any): Promise<{
   const start = Date.now();
   
   try {
-    // Use Venice.ai /models endpoint for lightweight health checks (as per MVP spec)
+    // Use Venice.ai /models endpoint for lightweight health checks
     const response = await fetch('https://api.venice.ai/api/v1/models', {
       method: 'GET',
       headers: {
@@ -1302,44 +1329,159 @@ async function runSingleHealthCheck(provider: any): Promise<{
     }
   } catch (error) {
     const responseTime = Date.now() - start;
-    return {
-      status: false,
+    return { 
+      status: false, 
       responseTime,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : "Network error"
     };
   }
 }
 
-// Comprehensive health check system
-export const runHealthChecks = internalAction({
-  args: {},
-  handler: async (ctx) => {
+// Test actual inference capability
+async function runInferenceCapabilityTest(provider: any): Promise<{
+  status: boolean;
+  responseTime: number;
+  error?: string;
+  inferenceTestPassed: boolean;
+  inferenceResponseTime: number;
+  inferenceTokens?: number;
+  testPrompt: string;
+  testResponse?: string;
+  healthCheckType: 'inference';
+}> {
+  const testPrompt = "Hello! Please respond with exactly 'Health check successful' to confirm inference capability.";
+  const inferenceStart = Date.now();
+  
+  try {
+    const response = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${provider.veniceApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'auto', // Use auto-select to test default model
+        messages: [
+          { role: 'user', content: testPrompt }
+        ],
+        max_tokens: 50,
+        temperature: 0.1 // Low temperature for consistent responses
+      }),
+      signal: AbortSignal.timeout(45000) // Longer timeout for inference
+    });
+    
+    const inferenceResponseTime = Date.now() - inferenceStart;
+    
+    if (!response.ok) {
+      return {
+        status: false,
+        responseTime: inferenceResponseTime,
+        error: `Inference HTTP ${response.status}: ${response.statusText}`,
+        inferenceTestPassed: false,
+        inferenceResponseTime,
+        testPrompt,
+        healthCheckType: 'inference'
+      };
+    }
+    
+    const result = await response.json();
+    const testResponse = result.choices?.[0]?.message?.content || '';
+    const inferenceTokens = result.usage?.total_tokens || 0;
+    
+    // Check if response is valid and reasonable
+    const isValidResponse = testResponse.length > 0 && testResponse.length < 200;
+    const inferenceTestPassed = isValidResponse;
+    
+    return {
+      status: inferenceTestPassed,
+      responseTime: inferenceResponseTime,
+      inferenceTestPassed,
+      inferenceResponseTime,
+      inferenceTokens,
+      testPrompt,
+      testResponse: testResponse.substring(0, 100), // Truncate for storage
+      healthCheckType: 'inference'
+    };
+    
+  } catch (error) {
+    const inferenceResponseTime = Date.now() - inferenceStart;
+    return {
+      status: false,
+      responseTime: inferenceResponseTime,
+      error: `Inference test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      inferenceTestPassed: false,
+      inferenceResponseTime,
+      testPrompt,
+      healthCheckType: 'inference'
+    };
+  }
+}
+
+// Legacy compatibility - uses basic connectivity check
+async function runSingleHealthCheck(provider: any): Promise<{
+  status: boolean;
+  responseTime: number;
+  error?: string;
+}> {
+  return await runBasicConnectivityCheck(provider);
+}
+
+// Enhanced comprehensive health check system with inference testing
+export const runEnhancedHealthChecks = internalAction({
+  args: {
+    testInference: v.optional(v.boolean()), // Whether to test actual inference capability
+  },
+  handler: async (ctx, args) => {
     // Get all providers (including inactive ones to potentially reactivate)
     const allProviders = await ctx.runQuery(internal.providers.getAllProviders);
+    const testInference = args.testInference !== false; // Default to true
     
     let healthyCount = 0;
     let unhealthyCount = 0;
+    let inferenceCapableCount = 0;
     
     for (const provider of allProviders) {
       try {
-        const result = await runSingleHealthCheck(provider);
+        const result = testInference 
+          ? await runEnhancedHealthCheck(provider)
+          : await runBasicConnectivityCheck(provider);
         
-        // Record health check result
-        await ctx.runMutation(internal.providers.recordHealthCheckResult, {
-          providerId: provider._id,
-          status: result.status,
-          responseTime: result.responseTime,
-          error: result.error,
-        });
+        // Record enhanced health check result
+        if ('healthCheckType' in result) {
+          await ctx.runMutation(internal.providers.recordEnhancedHealthCheckResult, {
+            providerId: provider._id,
+            status: result.status,
+            responseTime: result.responseTime,
+            error: result.error,
+            inferenceTestPassed: result.inferenceTestPassed,
+            inferenceResponseTime: result.inferenceResponseTime,
+            inferenceTokens: result.inferenceTokens,
+            testPrompt: result.testPrompt,
+            testResponse: result.testResponse,
+            healthCheckType: result.healthCheckType,
+          });
+        } else {
+          // Fallback to basic recording
+          await ctx.runMutation(internal.providers.recordHealthCheckResult, {
+            providerId: provider._id,
+            status: result.status,
+            responseTime: result.responseTime,
+            error: result.error,
+          });
+        }
         
-        // Update provider status based on consecutive failures
-        await ctx.runMutation(internal.providers.updateProviderStatus, {
+        // Update provider status based on enhanced criteria
+        await ctx.runMutation(internal.providers.updateEnhancedProviderStatus, {
           providerId: provider._id,
           healthCheckPassed: result.status,
+          inferenceTestPassed: 'inferenceTestPassed' in result ? result.inferenceTestPassed : undefined,
         });
         
         if (result.status) {
           healthyCount++;
+          if ('inferenceTestPassed' in result && result.inferenceTestPassed) {
+            inferenceCapableCount++;
+          }
         } else {
           unhealthyCount++;
         }
@@ -1348,16 +1490,35 @@ export const runHealthChecks = internalAction({
         unhealthyCount++;
         
         // Record failed health check
-        await ctx.runMutation(internal.providers.recordHealthCheckResult, {
+        await ctx.runMutation(internal.providers.recordEnhancedHealthCheckResult, {
           providerId: provider._id,
           status: false,
           responseTime: 0,
           error: error instanceof Error ? error.message : "Unknown error",
+          healthCheckType: 'connectivity' as const,
         });
       }
     }
     
-    return { healthy: healthyCount, unhealthy: unhealthyCount };
+    return { 
+      healthy: healthyCount, 
+      unhealthy: unhealthyCount,
+      inferenceCapable: inferenceCapableCount,
+      total: allProviders.length 
+    };
+  },
+});
+
+// Legacy health check system (for backward compatibility)
+export const runHealthChecks = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    // Use enhanced health checks but only test connectivity for compatibility
+    const result = await ctx.runAction(internal.providers.runEnhancedHealthChecks, {
+      testInference: false,
+    });
+    
+    return { healthy: result.healthy, unhealthy: result.unhealthy };
   },
 });
 
@@ -1398,13 +1559,19 @@ export const debugVCUValidation = action({
 });
 
 
-// Record health check result with detailed tracking
-export const recordHealthCheckResult = internalMutation({
+// Record enhanced health check result with detailed tracking
+export const recordEnhancedHealthCheckResult = internalMutation({
   args: {
     providerId: v.id("providers"),
     status: v.boolean(),
     responseTime: v.number(),
     error: v.optional(v.string()),
+    inferenceTestPassed: v.optional(v.boolean()),
+    inferenceResponseTime: v.optional(v.number()),
+    inferenceTokens: v.optional(v.number()),
+    testPrompt: v.optional(v.string()),
+    testResponse: v.optional(v.string()),
+    healthCheckType: v.union(v.literal("connectivity"), v.literal("inference")),
   },
   handler: async (ctx, args) => {
     // Record in health tracking table
@@ -1414,48 +1581,145 @@ export const recordHealthCheckResult = internalMutation({
       responseTime: args.responseTime,
       timestamp: Date.now(),
       error: args.error,
+      inferenceTestPassed: args.inferenceTestPassed,
+      inferenceResponseTime: args.inferenceResponseTime,
+      inferenceTokens: args.inferenceTokens,
+      testPrompt: args.testPrompt,
+      testResponse: args.testResponse,
+      healthCheckType: args.healthCheckType,
     });
-    
-    // Update provider's last health check
-    await ctx.db.patch(args.providerId, {
-      lastHealthCheck: Date.now(),
+
+    // Update provider's inference capability metrics
+    const provider = await ctx.db.get(args.providerId);
+    if (provider) {
+      const now = Date.now();
+      let updates: any = {
+        lastHealthCheck: now,
+        lastInferenceTest: now,
+      };
+
+      if (args.inferenceTestPassed) {
+        // Successful inference test
+        updates.lastInferenceSuccess = now;
+        updates.inferenceFailureStreak = 0;
+        
+        // Calculate new capability score (rolling average)
+        const currentScore = provider.inferenceCapabilityScore || 50;
+        const newScore = Math.min(100, currentScore + 10); // Increase by 10, max 100
+        updates.inferenceCapabilityScore = newScore;
+      } else if (args.healthCheckType === 'inference') {
+        // Failed inference test (but connectivity might be fine)
+        const currentStreak = provider.inferenceFailureStreak || 0;
+        updates.inferenceFailureStreak = currentStreak + 1;
+        
+        // Decrease capability score
+        const currentScore = provider.inferenceCapabilityScore || 50;
+        const newScore = Math.max(0, currentScore - 15); // Decrease by 15, min 0
+        updates.inferenceCapabilityScore = newScore;
+      }
+
+      await ctx.db.patch(args.providerId, updates);
+    }
+  },
+});
+
+// Legacy record health check result (for backward compatibility)
+export const recordHealthCheckResult = internalMutation({
+  args: {
+    providerId: v.id("providers"),
+    status: v.boolean(),
+    responseTime: v.number(),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Use enhanced recording with connectivity type
+    await ctx.runMutation(internal.providers.recordEnhancedHealthCheckResult, {
+      providerId: args.providerId,
+      status: args.status,
+      responseTime: args.responseTime,
+      error: args.error,
+      healthCheckType: 'connectivity' as const,
     });
   },
 });
 
-// Update provider status based on health check results
-export const updateProviderStatus = internalMutation({
+// Enhanced provider status update with inference capability consideration
+export const updateEnhancedProviderStatus = internalMutation({
   args: {
     providerId: v.id("providers"),
     healthCheckPassed: v.boolean(),
+    inferenceTestPassed: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const provider = await ctx.db.get(args.providerId);
     if (!provider) return;
     
     const currentFailures = provider.consecutiveFailures || 0;
+    const currentInferenceFailures = provider.inferenceFailureStreak || 0;
     
     if (args.healthCheckPassed) {
-      // Health check passed - reset failures and activate
-      await ctx.db.patch(args.providerId, {
+      // Basic health check passed
+      let updates: any = {
         consecutiveFailures: 0,
-        isActive: true,
-        markedInactiveAt: undefined,
-      });
+        lastHealthCheck: Date.now(),
+      };
+      
+      // Consider inference capability for activation
+      if (args.inferenceTestPassed !== undefined) {
+        if (args.inferenceTestPassed) {
+          // Full inference capability confirmed - activate
+          updates.isActive = true;
+          updates.markedInactiveAt = undefined;
+          updates.inferenceFailureStreak = 0;
+        } else {
+          // Connectivity OK but inference fails
+          const newInferenceFailures = currentInferenceFailures + 1;
+          updates.inferenceFailureStreak = newInferenceFailures;
+          
+          // Deactivate after 3 consecutive inference failures even with good connectivity
+          if (newInferenceFailures >= 3) {
+            updates.isActive = false;
+            updates.markedInactiveAt = Date.now();
+          }
+        }
+      } else {
+        // Only connectivity tested - activate if no recent inference failures
+        if (currentInferenceFailures < 3) {
+          updates.isActive = true;
+          updates.markedInactiveAt = undefined;
+        }
+      }
+      
+      await ctx.db.patch(args.providerId, updates);
     } else {
-      // Health check failed - increment failures
+      // Health check failed (connectivity issue)
       const newFailures = currentFailures + 1;
       
-      // Mark inactive after 2 consecutive failures
+      // Mark inactive after 2 consecutive connectivity failures
       const shouldMarkInactive = newFailures >= 2 && provider.isActive;
       
       await ctx.db.patch(args.providerId, {
         consecutiveFailures: newFailures,
         isActive: shouldMarkInactive ? false : provider.isActive,
         markedInactiveAt: shouldMarkInactive ? Date.now() : provider.markedInactiveAt,
+        lastHealthCheck: Date.now(),
       });
-      
     }
+  },
+});
+
+// Legacy provider status update (for backward compatibility) 
+export const updateProviderStatus = internalMutation({
+  args: {
+    providerId: v.id("providers"),
+    healthCheckPassed: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    // Use enhanced status update without inference testing
+    await ctx.runMutation(internal.providers.updateEnhancedProviderStatus, {
+      providerId: args.providerId,
+      healthCheckPassed: args.healthCheckPassed,
+    });
   },
 });
 
