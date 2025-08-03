@@ -1,6 +1,7 @@
 ---
 description: Guidelines and best practices for building Convex projects, including database schema design, queries, mutations, and real-world examples
 globs: **/*.ts,**/*.tsx,**/*.js,**/*.jsx
+alwaysApply: false
 ---
 
 # Convex guidelines
@@ -332,7 +333,7 @@ The backend should provide APIs for:
 1. User management (creation)
 2. Channel management (creation)
 3. Message operations (sending, listing)
-4. AI response generation using OpenAI's GPT-4
+4. AI response generation using Venice.ai
 
 Messages should be stored with their channel, author, and content. The system should maintain message order
 and limit history display to the 10 most recent messages per channel.
@@ -476,7 +477,6 @@ import {
   internalAction,
 } from "./_generated/server";
 import { v } from "convex/values";
-import OpenAI from "openai";
 import { internal } from "./_generated/api";
 
 /**
