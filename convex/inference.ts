@@ -379,6 +379,15 @@ async function* callVeniceAIStreaming(
   prompt?: string,
   model?: string,
   allowAdultContent?: boolean,
+  venice_parameters?: {
+    character_slug?: string;
+    strip_thinking_response?: boolean;
+    disable_thinking?: boolean;
+    enable_web_search?: "auto" | "off" | "on";
+    enable_web_citations?: boolean;
+    include_search_results_in_stream?: boolean;
+    include_venice_system_prompt?: boolean;
+  },
 ): AsyncGenerator<{ content: string; done: boolean; model?: string; tokens?: number }, void, unknown> {
   const startTime = Date.now();
   let promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
@@ -591,7 +600,8 @@ async function* callVeniceAIStreaming(
           stream: true, // Enable streaming
           stream_options: {
             include_usage: true // Include token usage in stream
-          }
+          },
+          ...(venice_parameters && { venice_parameters })
         }),
       }
     );
@@ -703,6 +713,15 @@ async function callVeniceAI(
   prompt?: string,
   model?: string,
   allowAdultContent?: boolean,
+  venice_parameters?: {
+    character_slug?: string;
+    strip_thinking_response?: boolean;
+    disable_thinking?: boolean;
+    enable_web_search?: "auto" | "off" | "on";
+    enable_web_citations?: boolean;
+    include_search_results_in_stream?: boolean;
+    include_venice_system_prompt?: boolean;
+  },
 ) {
   const startTime = Date.now();
   let promptText = prompt || (messages && messages.length > 0 ? messages[0].content : "");
@@ -924,6 +943,7 @@ async function callVeniceAI(
           temperature: intentType === "code" ? 0.3 : 0.7,
           max_tokens: 2000,
           stream: false,
+          ...(venice_parameters && { venice_parameters })
         }),
       }
     );
@@ -1172,6 +1192,15 @@ export const sendMessage = action({
     sessionId: v.string(), // Accept sessionId from frontend for provider persistence
     address: v.optional(v.string()), // Wallet address of the user
     allowAdultContent: v.optional(v.boolean()), // Add for consistency with other actions
+    venice_parameters: v.optional(v.object({
+      character_slug: v.optional(v.string()),
+      strip_thinking_response: v.optional(v.boolean()),
+      disable_thinking: v.optional(v.boolean()),
+      enable_web_search: v.optional(v.union(v.literal("auto"), v.literal("off"), v.literal("on"))),
+      enable_web_citations: v.optional(v.boolean()),
+      include_search_results_in_stream: v.optional(v.boolean()),
+      include_venice_system_prompt: v.optional(v.boolean()),
+    })),
   },
   returns: v.object({
     response: v.string(),
@@ -1200,6 +1229,7 @@ export const sendMessage = action({
       model: args.model,
       address: args.address,
       allowAdultContent: args.allowAdultContent || false,
+      ...(args.venice_parameters && { venice_parameters: args.venice_parameters }),
     });
 
     return {
@@ -1228,6 +1258,15 @@ export const sendMessageStreaming = action({
     sessionId: v.string(), // Use session ID for consistent provider assignment
     address: v.optional(v.string()), // Wallet address of the user
     allowAdultContent: v.optional(v.boolean()),
+    venice_parameters: v.optional(v.object({
+      character_slug: v.optional(v.string()),
+      strip_thinking_response: v.optional(v.boolean()),
+      disable_thinking: v.optional(v.boolean()),
+      enable_web_search: v.optional(v.union(v.literal("auto"), v.literal("off"), v.literal("on"))),
+      enable_web_citations: v.optional(v.boolean()),
+      include_search_results_in_stream: v.optional(v.boolean()),
+      include_venice_system_prompt: v.optional(v.boolean()),
+    })),
   },
   returns: v.object({
     streamId: v.string(),
@@ -1338,7 +1377,8 @@ export const sendMessageStreaming = action({
             "chat",
             args.messages[args.messages.length - 1]?.content,
             args.model,
-            args.allowAdultContent
+            args.allowAdultContent,
+            args.venice_parameters
           )) {
             console.log(`[STREAMING] Received chunk ${chunkIndex}: done=${chunk.done}, content length=${chunk.content?.length || 0}`);
             
@@ -1525,6 +1565,15 @@ export const route = action({
     model: v.optional(v.string()),
     allowAdultContent: v.optional(v.boolean()),
     apiKey: v.optional(v.string()),
+    venice_parameters: v.optional(v.object({
+      character_slug: v.optional(v.string()),
+      strip_thinking_response: v.optional(v.boolean()),
+      disable_thinking: v.optional(v.boolean()),
+      enable_web_search: v.optional(v.union(v.literal("auto"), v.literal("off"), v.literal("on"))),
+      enable_web_citations: v.optional(v.boolean()),
+      include_search_results_in_stream: v.optional(v.boolean()),
+      include_venice_system_prompt: v.optional(v.boolean()),
+    })),
   },
   returns: v.object({
     response: v.string(),
@@ -1655,7 +1704,8 @@ export const route = action({
           args.intent,
           args.messages[0]?.content,
           modelToUse,
-          args.allowAdultContent
+          args.allowAdultContent,
+          args.venice_parameters
         );
 
       const vcuCost = calculateDiemCost(tokens, usedModel);

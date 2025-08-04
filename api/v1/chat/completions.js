@@ -80,7 +80,8 @@ export default async (req, res) => {
       address: validation.address,
       model: modelName,
       apiKey: apiKey,
-      allowAdultContent: false
+      allowAdultContent: false,
+      ...(body.venice_parameters && { venice_parameters: body.venice_parameters })
     });
 
     // Record API usage
