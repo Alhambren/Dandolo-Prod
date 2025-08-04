@@ -14,7 +14,7 @@ Visit [https://dandolo.ai/developers](https://dandolo.ai/developers) and choose:
 ### 2. Test Connection
 ```bash
 # Test your key immediately
-curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \
+curl https://dandolo-prod.vercel.app/api/api/v1/chat/completions \
   -H "Authorization: Bearer dk_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -70,12 +70,12 @@ Authorization: Bearer ak_your_agent_key
 
 ### Base URL
 ```
-https://judicious-hornet-148.convex.cloud
+https://dandolo-prod.vercel.app
 ```
 
 ### 1. Chat Completions (Primary Endpoint)
 ```http
-POST /v1/chat/completions
+POST /api/api/v1/chat/completions
 ```
 
 **Standard OpenAI-compatible format:**
@@ -94,7 +94,7 @@ POST /v1/chat/completions
 
 ### 2. Available Models
 ```http
-GET /v1/models
+GET /api/api/v1/models
 Authorization: Bearer your_key
 ```
 
@@ -153,7 +153,7 @@ import requests
 
 def dandolo_chat(messages, api_key):
     response = requests.post(
-        "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+        "https://dandolo-prod.vercel.app/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={
             "model": "auto-select",
@@ -178,7 +178,7 @@ import openai
 
 client = openai.OpenAI(
     api_key="dk_your_dandolo_key",
-    base_url="https://judicious-hornet-148.convex.cloud/v1"
+    base_url="https://dandolo-prod.vercel.app/v1"
 )
 
 response = client.chat.completions.create(
@@ -193,7 +193,7 @@ print(response.choices[0].message.content)
 ```javascript
 const DANDOLO_CONFIG = {
   apiKey: 'ak_your_agent_key',
-  baseURL: 'https://judicious-hornet-148.convex.cloud/v1'
+  baseURL: 'https://dandolo-prod.vercel.app/v1'
 };
 
 async function callDandolo(messages) {
@@ -221,7 +221,7 @@ const result = await callDandolo([
 ### cURL Examples
 ```bash
 # Basic chat
-curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \
+curl https://dandolo-prod.vercel.app/api/v1/chat/completions \
   -H "Authorization: Bearer dk_your_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -230,11 +230,11 @@ curl https://judicious-hornet-148.convex.cloud/v1/chat/completions \
   }'
 
 # Check balance
-curl https://judicious-hornet-148.convex.cloud/api/v1/balance \
+curl https://dandolo-prod.vercel.app/api/v1/balance \
   -H "Authorization: Bearer dk_your_key"
 
 # List models
-curl https://judicious-hornet-148.convex.cloud/v1/models \
+curl https://dandolo-prod.vercel.app/api/v1/models \
   -H "Authorization: Bearer dk_your_key"
 ```
 
@@ -250,7 +250,7 @@ import requests
 
 class DandoloLLM(LLM):
     api_key: str
-    base_url: str = "https://judicious-hornet-148.convex.cloud/v1"
+    base_url: str = "https://dandolo-prod.vercel.app/v1"
     
     @property
     def _llm_type(self) -> str:
@@ -279,7 +279,7 @@ import autogen
 config_list = [{
     "model": "auto-select",
     "api_key": "ak_your_agent_key",
-    "base_url": "https://judicious-hornet-148.convex.cloud/v1"
+    "base_url": "https://dandolo-prod.vercel.app/v1"
 }]
 
 assistant = autogen.AssistantAgent(
@@ -304,7 +304,7 @@ from langchain.llms import OpenAI
 # Configure Dandolo as OpenAI-compatible
 dandolo_llm = OpenAI(
     api_key="ak_your_agent_key",
-    base_url="https://judicious-hornet-148.convex.cloud/v1",
+    base_url="https://dandolo-prod.vercel.app/v1",
     model="auto-select"
 )
 
@@ -339,7 +339,7 @@ def test_dandolo_connection(api_key):
     # Test 1: Basic chat
     try:
         response = requests.post(
-            "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+            "https://dandolo-prod.vercel.app/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
                 "model": "auto-select",
@@ -362,7 +362,7 @@ def test_dandolo_connection(api_key):
     # Test 2: Balance check
     try:
         balance_response = requests.get(
-            "https://judicious-hornet-148.convex.cloud/api/v1/balance",
+            "https://dandolo-prod.vercel.app/api/v1/balance",
             headers={"Authorization": f"Bearer {api_key}"}
         )
         
@@ -378,7 +378,7 @@ def test_dandolo_connection(api_key):
     # Test 3: Models list
     try:
         models_response = requests.get(
-            "https://judicious-hornet-148.convex.cloud/v1/models",
+            "https://dandolo-prod.vercel.app/api/v1/models",
             headers={"Authorization": f"Bearer {api_key}"}
         )
         
@@ -414,7 +414,7 @@ def performance_test(api_key, num_requests=5):
         start = time.time()
         
         response = requests.post(
-            "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+            "https://dandolo-prod.vercel.app/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={
                 "model": "auto-select",
@@ -487,7 +487,7 @@ def dandolo_with_retry(api_key, messages, max_retries=3):
     for attempt in range(max_retries):
         try:
             response = requests.post(
-                "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+                "https://dandolo-prod.vercel.app/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={"model": "auto-select", "messages": messages},
                 timeout=30
@@ -559,7 +559,7 @@ async def batch_dandolo_requests(api_key, request_batches):
 
 async def dandolo_async_request(session, api_key, messages):
     async with session.post(
-        "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+        "https://dandolo-prod.vercel.app/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={"model": "auto-select", "messages": messages}
     ) as response:
@@ -579,7 +579,7 @@ class DandoloUsageTracker:
     async def track_usage(self):
         # Check current usage
         response = requests.get(
-            "https://judicious-hornet-148.convex.cloud/api/v1/balance",
+            "https://dandolo-prod.vercel.app/api/v1/balance",
             headers={"Authorization": f"Bearer {self.api_key}"}
         )
         
@@ -619,7 +619,7 @@ def debug_dandolo_request(api_key, messages, debug=True):
     start_time = time.time()
     
     response = requests.post(
-        "https://judicious-hornet-148.convex.cloud/v1/chat/completions",
+        "https://dandolo-prod.vercel.app/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={"model": "auto-select", "messages": messages}
     )
@@ -654,7 +654,7 @@ def agent_health_check(api_key):
     # Check API connection
     try:
         response = requests.get(
-            "https://judicious-hornet-148.convex.cloud/health",
+            "https://dandolo-prod.vercel.app/health",
             timeout=10
         )
         checks["api_connection"] = response.status_code == 200
@@ -664,7 +664,7 @@ def agent_health_check(api_key):
     # Check balance
     try:
         balance_response = requests.get(
-            "https://judicious-hornet-148.convex.cloud/api/v1/balance",
+            "https://dandolo-prod.vercel.app/api/v1/balance",
             headers={"Authorization": f"Bearer {api_key}"}
         )
         
@@ -677,7 +677,7 @@ def agent_health_check(api_key):
     # Check models
     try:
         models_response = requests.get(
-            "https://judicious-hornet-148.convex.cloud/v1/models",
+            "https://dandolo-prod.vercel.app/api/v1/models",
             headers={"Authorization": f"Bearer {api_key}"}
         )
         checks["models_available"] = models_response.status_code == 200
@@ -699,9 +699,9 @@ def agent_health_check(api_key):
 ## 📋 Quick Reference
 
 ### Essential URLs
-- **Base URL**: `https://judicious-hornet-148.convex.cloud`
-- **Chat**: `POST /v1/chat/completions`
-- **Models**: `GET /v1/models`
+- **Base URL**: `https://dandolo-prod.vercel.app`
+- **Chat**: `POST /api/v1/chat/completions`
+- **Models**: `GET /api/v1/models`
 - **Balance**: `GET /api/v1/balance`
 - **Images**: `POST /v1/images/generations`
 - **Embeddings**: `POST /v1/embeddings`

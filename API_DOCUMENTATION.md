@@ -46,17 +46,17 @@ GET /v1/models?api_key=ak_your_api_key_here
 
 ### Primary API Base
 ```
-https://dandolo.ai
+https://dandolo-prod.vercel.app
 ```
 
 ### OpenAI Compatible Base
 ```
-https://dandolo.ai/v1
+https://dandolo-prod.vercel.app/v1
 ```
 
 ### Venice.ai Proxy Base
 ```
-https://dandolo.ai/api
+https://dandolo-prod.vercel.app/api
 ```
 
 ## Rate Limits
@@ -460,7 +460,7 @@ import Dandolo from '@dandolo/agent-sdk';
 
 const client = new Dandolo({
   apiKey: 'ak_your_key',
-  baseURL: 'https://dandolo.ai' // optional
+  baseURL: 'https://dandolo-prod.vercel.app' // optional
 });
 ```
 
@@ -475,7 +475,7 @@ from dandolo import Dandolo
 
 client = Dandolo(
     api_key="ak_your_key",
-    base_url="https://dandolo.ai"  # optional
+    base_url="https://dandolo-prod.vercel.app"  # optional
 )
 ```
 
