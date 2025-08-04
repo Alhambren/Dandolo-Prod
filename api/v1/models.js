@@ -1,7 +1,7 @@
 // Vercel serverless function to proxy to Convex
-const { ConvexHttpClient } = require("convex/browser");
+import { ConvexHttpClient } from "convex/browser";
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
