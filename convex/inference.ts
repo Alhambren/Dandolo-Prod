@@ -601,7 +601,7 @@ async function* callVeniceAIStreaming(
           stream_options: {
             include_usage: true // Include token usage in stream
           },
-          ...(venice_parameters && { venice_parameters })
+          ...(venice_parameters || {}),
         }),
       }
     );
@@ -943,7 +943,7 @@ async function callVeniceAI(
           temperature: intentType === "code" ? 0.3 : 0.7,
           max_tokens: 2000,
           stream: false,
-          ...(venice_parameters && { venice_parameters })
+          ...(venice_parameters || {}),
         }),
       }
     );
@@ -1545,6 +1545,28 @@ export const routeSimple = action({
  * Main inference routing action. Selects a provider, forwards the request to
  * Venice.ai and records usage. Returns the generated text or image URL.
  */
+export const testVeniceParameters = action({
+  args: {
+    messages: v.array(
+      v.object({
+        role: v.union(v.literal("system"), v.literal("user"), v.literal("assistant")),
+        content: v.string(),
+      })
+    ),
+    venice_parameters: v.optional(v.any()),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    return {
+      success: true,
+      message: `Venice parameters received: ${JSON.stringify(args.venice_parameters)}`
+    };
+  },
+});
+
 export const route = action({
   args: {
     messages: v.array(
