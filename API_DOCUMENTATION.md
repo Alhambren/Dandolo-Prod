@@ -183,6 +183,23 @@ X-RateLimit-Retry-After: 3600
 }
 ```
 
+#### Venice.ai Character Connection
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! Can you give me advice about horses?"
+    }
+  ],
+  "model": "llama-3.3-70b",
+  "venice_parameters": {
+    "character_slug": "my-horse-advisor"
+  }
+}
+```
+
 #### Parameters
 
 | Parameter | Type | Required | Description |
@@ -197,6 +214,15 @@ X-RateLimit-Retry-After: 3600
 | `presence_penalty` | Float | ❌ | Presence penalty -2.0 to 2.0 |
 | `frequency_penalty` | Float | ❌ | Frequency penalty -2.0 to 2.0 |
 | `user` | String | ❌ | User identifier for tracking |
+| `venice_parameters` | Object | ❌ | Venice.ai-specific parameters (character connections, etc.) |
+
+#### Venice.ai Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `venice_parameters.character_slug` | String | Connect to a specific Venice.ai character |
+| `venice_parameters.system_prompt` | String | Override system prompt |
+| `venice_parameters.custom_parameters` | Object | Additional Venice.ai parameters |
 
 #### Agent-Enhanced Parameters (Agent Keys Only)
 
@@ -502,6 +528,61 @@ response = client.chat.completions.create(
     ]
 )
 print(response.choices[0].message.content)
+```
+
+### Venice.ai Character Connection
+
+```python
+# Connect to a specific Venice.ai character
+response = client.chat.completions.create(
+    messages=[
+        {"role": "user", "content": "Hello! Can you give me advice about horses?"}
+    ],
+    model="llama-3.3-70b",
+    venice_parameters={
+        "character_slug": "my-horse-advisor"
+    }
+)
+print(response.choices[0].message.content)
+```
+
+```javascript
+// JavaScript/Node.js example
+const response = await fetch('https://dandolo-prod.vercel.app/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ak_your_api_key',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: 'user', content: 'Hello! Can you give me advice about horses?' }
+    ],
+    model: 'llama-3.3-70b',
+    venice_parameters: {
+      character_slug: 'my-horse-advisor'
+    }
+  })
+});
+
+const result = await response.json();
+console.log(result.choices[0].message.content);
+```
+
+```bash
+# cURL example
+curl -X POST https://dandolo-prod.vercel.app/v1/chat/completions \
+  -H "Authorization: Bearer ak_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "Hello! Can you give me advice about horses?"}
+    ],
+    "model": "llama-3.3-70b",
+    "venice_parameters": {
+      "character_slug": "my-horse-advisor"
+    }
+  }'
 ```
 
 ### Streaming Response

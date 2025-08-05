@@ -92,6 +92,19 @@ POST /api/api/v1/chat/completions
 }
 ```
 
+**Venice.ai Character Connection:**
+```json
+{
+  "model": "llama-3.3-70b",
+  "messages": [
+    {"role": "user", "content": "Hello! Can you give me advice about horses?"}
+  ],
+  "venice_parameters": {
+    "character_slug": "my-horse-advisor"
+  }
+}
+```
+
 ### 2. Available Models
 ```http
 GET /api/api/v1/models
@@ -151,24 +164,38 @@ POST /v1/embeddings
 ```python
 import requests
 
-def dandolo_chat(messages, api_key):
+def dandolo_chat(messages, api_key, venice_parameters=None):
+    payload = {
+        "model": "auto-select",
+        "messages": messages,
+        "temperature": 0.7
+    }
+    
+    # Add Venice.ai parameters if provided
+    if venice_parameters:
+        payload["venice_parameters"] = venice_parameters
+    
     response = requests.post(
         "https://dandolo-prod.vercel.app/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
-        json={
-            "model": "auto-select",
-            "messages": messages,
-            "temperature": 0.7
-        }
+        json=payload
     )
     return response.json()
 
-# Usage
+# Standard usage
 result = dandolo_chat([
     {"role": "user", "content": "Hello!"}
 ], "dk_your_key")
 
+# Character connection usage
+horse_result = dandolo_chat([
+    {"role": "user", "content": "Hello! Can you give me advice about horses?"}
+], "dk_your_key", venice_parameters={
+    "character_slug": "my-horse-advisor"
+})
+
 print(result['choices'][0]['message']['content'])
+print(horse_result['choices'][0]['message']['content'])
 ```
 
 ### Python (OpenAI SDK Compatible)
@@ -196,26 +223,40 @@ const DANDOLO_CONFIG = {
   baseURL: 'https://dandolo-prod.vercel.app/v1'
 };
 
-async function callDandolo(messages) {
+async function callDandolo(messages, venice_parameters = null) {
+  const payload = {
+    model: 'auto-select',
+    messages: messages
+  };
+  
+  // Add Venice.ai parameters if provided
+  if (venice_parameters) {
+    payload.venice_parameters = venice_parameters;
+  }
+  
   const response = await fetch(`${DANDOLO_CONFIG.baseURL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${DANDOLO_CONFIG.apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model: 'auto-select',
-      messages: messages
-    })
+    body: JSON.stringify(payload)
   });
   
   return await response.json();
 }
 
-// Usage
+// Standard usage
 const result = await callDandolo([
   { role: 'user', content: 'Hello from my agent!' }
 ]);
+
+// Character connection usage
+const horseResult = await callDandolo([
+  { role: 'user', content: 'Hello! Can you give me advice about horses?' }
+], {
+  character_slug: 'my-horse-advisor'
+});
 ```
 
 ### cURL Examples
@@ -227,6 +268,18 @@ curl https://dandolo-prod.vercel.app/api/v1/chat/completions \
   -d '{
     "model": "auto-select",
     "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# Venice.ai character connection
+curl https://dandolo-prod.vercel.app/api/v1/chat/completions \
+  -H "Authorization: Bearer dk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama-3.3-70b",
+    "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
+    "venice_parameters": {
+      "character_slug": "my-horse-advisor"
+    }
   }'
 
 # Check balance

@@ -23,6 +23,7 @@
 | **Provider Health** | ✅ Real-time monitoring | ❌ No health checks |
 | **Cost Optimization** | ✅ Best price routing | ❌ Fixed provider costs |
 | **API Compatibility** | ✅ OpenAI + Venice APIs | ✅ Venice API only |
+| **Character Support** | ✅ Venice.ai characters | ✅ Venice.ai characters |
 | **Security Features** | ✅ Enterprise-grade | ❌ Basic auth only |
 
 ### vs OpenRoute.ai
@@ -129,6 +130,34 @@ curl -X POST https://dandolo.ai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [{"role": "user", "content": "Hello, world!"}]
+  }'
+```
+
+### 4. Connect to Venice.ai Characters (Bonus)
+
+```python
+# Connect to specialized Venice.ai characters
+response = client.chat.completions.create(
+    messages=[{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
+    model="llama-3.3-70b",
+    venice_parameters={
+        "character_slug": "my-horse-advisor"
+    }
+)
+print(response.choices[0].message.content)
+```
+
+```bash
+# Character connection via curl
+curl -X POST https://dandolo.ai/v1/chat/completions \
+  -H "Authorization: Bearer ak_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
+    "model": "llama-3.3-70b",
+    "venice_parameters": {
+      "character_slug": "my-horse-advisor"
+    }
   }'
 ```
 
@@ -326,8 +355,26 @@ Dandolo automatically selects optimal Venice.ai models based on your request:
 - **Analysis** → Venice.ai analysis-optimized models 
 - **General Chat** → Venice.ai conversational models
 - **Image Generation** → Venice.ai image generation models
+- **Character Connections** → Venice.ai specialized characters
 
 Override with explicit `model` parameter or let Dandolo optimize for you.
+
+### Venice.ai Character Support
+
+Connect to specialized Venice.ai characters for domain-specific expertise:
+
+```python
+# Example: Horse advisor character
+response = client.chat.completions.create(
+    messages=[{"role": "user", "content": "What's the best horse breed for beginners?"}],
+    model="llama-3.3-70b",
+    venice_parameters={
+        "character_slug": "my-horse-advisor"
+    }
+)
+```
+
+All Venice.ai characters are supported through the `venice_parameters.character_slug` field.
 
 ## Usage Monitoring
 
