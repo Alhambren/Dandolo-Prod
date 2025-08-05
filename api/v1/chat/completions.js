@@ -31,6 +31,16 @@ export default async (req, res) => {
     const apiKey = authHeader.substring(7);
     const body = req.body;
     
+    // Debug logging for character connections
+    if (body.venice_parameters?.character_slug) {
+      console.log(`[API_DEBUG] Character request received:`, {
+        character_slug: body.venice_parameters.character_slug,
+        apiKeyPrefix: apiKey.substring(0, 20) + "...",
+        model: body.model,
+        venice_parameters: body.venice_parameters
+      });
+    }
+    
     // Validate required fields
     if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
       return res.status(400).json({
@@ -42,8 +52,8 @@ export default async (req, res) => {
       });
     }
 
-    // Connect to Convex
-    const client = new ConvexHttpClient(process.env.VITE_CONVEX_URL || "https://judicious-hornet-148.convex.cloud");
+    // Connect to Convex (hardcoded for Vercel serverless)
+    const client = new ConvexHttpClient("https://judicious-hornet-148.convex.cloud");
     
     // Validate API key
     const validation = await client.query("apiKeys:validateKey", { key: apiKey });

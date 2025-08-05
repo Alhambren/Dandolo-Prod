@@ -584,6 +584,28 @@ async function* callVeniceAIStreaming(
 
     console.log(`[VENICE_STREAMING] Sending request to Venice.ai with ${finalMessages.length} messages`);
     
+    const streamRequestBody = {
+      model: model || selectedModel,
+      messages: finalMessages,
+      temperature: intentType === "code" ? 0.3 : 0.7,
+      max_tokens: 2000,
+      stream: true, // Enable streaming
+      stream_options: {
+        include_usage: true // Include token usage in stream
+      },
+      ...(venice_parameters || {}),
+    };
+    
+    // Debug logging for character connections in streaming
+    if (venice_parameters?.character_slug) {
+      console.log(`[VENICE_DEBUG_STREAM] Sending character request:`, {
+        character_slug: venice_parameters.character_slug,
+        model: streamRequestBody.model,
+        apiKeyPrefix: apiKey.substring(0, 20) + "...",
+        fullRequest: streamRequestBody
+      });
+    }
+
     const response = await fetch(
       "https://api.venice.ai/api/v1/chat/completions",
       {
@@ -592,17 +614,7 @@ async function* callVeniceAIStreaming(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: model || selectedModel,
-          messages: finalMessages,
-          temperature: intentType === "code" ? 0.3 : 0.7,
-          max_tokens: 2000,
-          stream: true, // Enable streaming
-          stream_options: {
-            include_usage: true // Include token usage in stream
-          },
-          ...(venice_parameters || {}),
-        }),
+        body: JSON.stringify(streamRequestBody),
       }
     );
 
@@ -929,6 +941,25 @@ async function callVeniceAI(
       finalMessages = [systemMessage, ...messages];
     }
 
+    const requestBody = {
+      model: model || selectedModel,
+      messages: finalMessages,
+      temperature: intentType === "code" ? 0.3 : 0.7,
+      max_tokens: 2000,
+      stream: false,
+      ...(venice_parameters || {}),
+    };
+    
+    // Debug logging for character connections
+    if (venice_parameters?.character_slug) {
+      console.log(`[VENICE_DEBUG] Sending character request:`, {
+        character_slug: venice_parameters.character_slug,
+        model: requestBody.model,
+        apiKeyPrefix: apiKey.substring(0, 20) + "...",
+        fullRequest: requestBody
+      });
+    }
+
     const response = await fetch(
       "https://api.venice.ai/api/v1/chat/completions",
       {
@@ -937,14 +968,7 @@ async function callVeniceAI(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: model || selectedModel,
-          messages: finalMessages,
-          temperature: intentType === "code" ? 0.3 : 0.7,
-          max_tokens: 2000,
-          stream: false,
-          ...(venice_parameters || {}),
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 

@@ -144,29 +144,75 @@ export const validateKey = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const keyRecord = await ctx.db
-      .query("apiKeys")
-      .withIndex("by_key", (q) => q.eq("key", args.key))
-      .first();
-
-    if (!keyRecord || !keyRecord.isActive) {
+    console.log("🔍 Validating API key:", args.key.substring(0, 10) + "...");
+    
+    try {
+      // Primary method: Query with index
+      const keyRecord = await ctx.db
+        .query("apiKeys")
+        .withIndex("by_key", (q) => q.eq("key", args.key))
+        .first();
+      
+      console.log("🔍 Index query result:", keyRecord ? "Found" : "Not found");
+      
+      if (!keyRecord) {
+        // Fallback method: Full table scan (for debugging)
+        console.log("🔍 Trying fallback search...");
+        const allKeys = await ctx.db.query("apiKeys").collect();
+        console.log("🔍 Total keys in database:", allKeys.length);
+        
+        const foundKey = allKeys.find(k => k.key === args.key);
+        console.log("🔍 Fallback search result:", foundKey ? "Found" : "Not found");
+        
+        if (foundKey) {
+          console.log("⚠️ Key found via fallback but not index - possible index issue");
+          if (!foundKey.isActive) {
+            console.log("🔍 Key found but inactive");
+            return null;
+          }
+          
+          const keyType = getApiKeyType(args.key);
+          const config = keyType !== "user" ? API_KEY_TYPES[keyType] : { dailyLimit: 100, pointsPerPrompt: 1 };
+          return {
+            _id: foundKey._id,
+            address: foundKey.address,
+            name: foundKey.name,
+            isActive: foundKey.isActive,
+            keyType: foundKey.keyType,
+            dailyUsage: foundKey.dailyUsage || 0,
+            totalUsage: foundKey.totalUsage || 0,
+            dailyLimit: config.dailyLimit,
+            pointsPerPrompt: config.pointsPerPrompt,
+          };
+        }
+        
+        console.log("🔍 Key not found in database");
+        return null;
+      }
+      
+      if (!keyRecord.isActive) {
+        console.log("🔍 Key found but inactive");
+        return null;
+      }
+      
+      console.log("✅ Key validation successful");
+      const keyType = getApiKeyType(args.key);
+      const config = keyType !== "user" ? API_KEY_TYPES[keyType] : { dailyLimit: 100, pointsPerPrompt: 1 };
+      return {
+        _id: keyRecord._id,
+        address: keyRecord.address,
+        name: keyRecord.name,
+        isActive: keyRecord.isActive,
+        keyType: keyRecord.keyType,
+        dailyUsage: keyRecord.dailyUsage || 0,
+        totalUsage: keyRecord.totalUsage || 0,
+        dailyLimit: config.dailyLimit,
+        pointsPerPrompt: config.pointsPerPrompt,
+      };
+    } catch (error) {
+      console.error("❌ API key validation error:", error);
       return null;
     }
-    
-    const keyType = getApiKeyType(args.key);
-    const config = keyType !== "user" ? API_KEY_TYPES[keyType] : { dailyLimit: 100, pointsPerPrompt: 1 };
-
-    return {
-      _id: keyRecord._id,
-      address: keyRecord.address,
-      name: keyRecord.name,
-      isActive: keyRecord.isActive,
-      keyType: keyRecord.keyType,
-      dailyUsage: keyRecord.dailyUsage || 0,
-      totalUsage: keyRecord.totalUsage || 0,
-      dailyLimit: config.dailyLimit,
-      pointsPerPrompt: config.pointsPerPrompt,
-    };
   },
 });
 
