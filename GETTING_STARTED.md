@@ -172,6 +172,36 @@ curl -X POST https://dandolo.ai/v1/chat/completions \
   }'
 ```
 
+### Character Connection Example
+
+Connect to specialized Venice.ai characters for domain-specific expertise:
+
+```python
+# Connect to a specialized character
+response = client.chat.completions.create(
+    messages=[
+        {"role": "user", "content": "Hello! Can you give me advice about horses?"}
+    ],
+    venice_parameters={
+        "character_slug": "my-horse-advisor"
+    }
+)
+print(response.choices[0].message.content)
+```
+
+```bash
+# Character connection via cURL
+curl -X POST https://dandolo.ai/v1/chat/completions \
+  -H "Authorization: Bearer ak_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
+    "venice_parameters": {
+      "character_slug": "my-horse-advisor"
+    }
+  }'
+```
+
 ---
 
 ## 🎯 Common Use Cases

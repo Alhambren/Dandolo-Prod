@@ -88,6 +88,8 @@ export const myFunction = query({
 - Provider validation scripts: `debug-providers.js`, `validate-venice-key.js`
 - Model cache refresh: `print-venice-models.js`
 - All Venice.ai calls go through the inference routing system
+- **Character Connections**: Supported via `venice_parameters.character_slug` in API requests
+- Character connections work with all provider keys and pass through existing routing
 
 ### Testing Strategy
 - E2E tests in `/cypress/e2e/` cover API endpoints and main user flows
