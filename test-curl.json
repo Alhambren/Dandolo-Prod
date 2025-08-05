@@ -1,0 +1,12 @@
+{
+  "model": "llama-3.3-70b",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! Can you give me advice about horses?"
+    }
+  ],
+  "venice_parameters": {
+    "character_slug": "my-horse-advisor"
+  }
+}
