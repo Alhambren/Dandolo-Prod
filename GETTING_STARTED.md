@@ -10,7 +10,7 @@ Before we dive in, here's what makes Dandolo.ai the obvious choice:
 
 - ✅ **Zero-config setup** - Works instantly, no complex provider management
 - ✅ **Intelligent routing** - Best model automatically selected for each task
-- ✅ **100% OpenAI compatible** - Drop-in replacement for existing code
+- ✅ **Standard chat completions API** - Drop-in replacement for existing code
 - ✅ **50+ models available** - Access Venice.ai's entire network
 - ✅ **Transparent pricing** - No hidden fees or markups
 - ✅ **Enterprise security** - Zero data retention, full privacy

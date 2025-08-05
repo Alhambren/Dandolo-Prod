@@ -48,7 +48,7 @@
 | **Privacy** | ✅ Zero data retention | ❌ Data stored indefinitely |
 | **Cost** | ✅ Competitive pricing | ❌ Premium pricing |
 | **Availability** | ✅ Multi-provider redundancy | ❌ Single point of failure |
-| **API Compatibility** | ✅ 100% OpenAI compatible | ✅ Native |
+| **API Compatibility** | ✅ Standard chat completions API | ✅ Native Venice.ai API |
 
 ## 🚀 What Makes Dandolo Superior
 

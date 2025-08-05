@@ -136,7 +136,7 @@ X-RateLimit-Retry-After: 3600
 
 **Endpoint:** `POST /v1/chat/completions`
 
-**OpenAI Compatible:** ✅ 100% compatible with OpenAI ChatCompletion API
+**Standard API:** ✅ Compatible with standard chat completions format
 
 #### Basic Request
 
