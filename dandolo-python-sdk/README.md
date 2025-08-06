@@ -313,7 +313,6 @@ def process_batch(prompts, api_key, max_workers=5):
 - **Documentation**: [dandolo.ai](https://dandolo.ai)
 - **API Reference**: [dandolo.ai](https://dandolo.ai)
 - **GitHub Issues**: Report bugs and feature requests in this repository
-- **Discord Community**: [discord.gg/dandolo](https://discord.gg/dandolo)
 
 ## License
 

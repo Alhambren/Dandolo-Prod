@@ -310,7 +310,7 @@ main() {
         echo
         print_status "error" "❌ Integration test failed. Please check your API key and try again."
         echo
-        print_status "info" "💡 Need help? Visit https://dandolo.ai/developers or check AGENT_INTEGRATION_GUIDE.md"
+        print_status "info" "💡 Need help? Visit https://dandolo.ai or check AGENT_INTEGRATION_GUIDE.md"
         exit 1
     fi
 }

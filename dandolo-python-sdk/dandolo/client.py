@@ -126,7 +126,7 @@ class Dandolo:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.dandolo.ai",
+        base_url: str = "https://dandolo.ai/api",
         timeout: int = 60,
         max_retries: int = 3,
         retry_delay: float = 1.0

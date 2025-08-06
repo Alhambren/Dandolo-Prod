@@ -15,11 +15,11 @@ setup(
     description="Python SDK for Dandolo decentralized AI network",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/dandolo-ai/python-sdk",
+    url="https://github.com/Alhambren/Dandolo-Prod",
     project_urls={
-        "Documentation": "https://docs.dandolo.ai",
-        "API Reference": "https://api.dandolo.ai/docs",
-        "Bug Tracker": "https://github.com/dandolo-ai/python-sdk/issues",
+        "Documentation": "https://dandolo.ai",
+        "API Reference": "https://dandolo.ai",
+        "Bug Tracker": "https://github.com/Alhambren/Dandolo-Prod/issues",
     },
     classifiers=[
         "Development Status :: 5 - Production/Stable",

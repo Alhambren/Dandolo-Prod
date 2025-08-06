@@ -58,7 +58,7 @@ const ApiExample: React.FC<{ modelId: string; type: string }> = ({ modelId, type
         return {
           title: 'Image Generation',
           endpoint: '/v1/images/generations',
-          code: `curl https://api.dandolo.ai/v1/images/generations \\
+          code: `curl https://dandolo.ai/api/v1/images/generations \\
   -H "Authorization: Bearer dk_your_developer_key" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -73,7 +73,7 @@ const ApiExample: React.FC<{ modelId: string; type: string }> = ({ modelId, type
         return {
           title: 'Text-to-Speech',
           endpoint: '/v1/audio/speech',
-          code: `curl https://api.dandolo.ai/v1/audio/speech \\
+          code: `curl https://dandolo.ai/api/v1/audio/speech \\
   -H "Authorization: Bearer dk_your_developer_key" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -86,7 +86,7 @@ const ApiExample: React.FC<{ modelId: string; type: string }> = ({ modelId, type
         return {
           title: 'Chat Completion',
           endpoint: '/v1/chat/completions',
-          code: `curl https://api.dandolo.ai/v1/chat/completions \\
+          code: `curl https://dandolo.ai/api/v1/chat/completions \\
   -H "Authorization: Bearer dk_your_developer_key" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -126,7 +126,7 @@ const PythonExample: React.FC<{ modelId: string; type: string }> = ({ modelId, t
         return `import requests
 
 response = requests.post(
-    "https://api.dandolo.ai/v1/images/generations",
+    "https://dandolo.ai/api/v1/images/generations",
     headers={"Authorization": "Bearer dk_your_developer_key"},
     json={
         "model": "${modelId}",
@@ -145,7 +145,7 @@ print(f"Generated image: {image_url}")`;
         return `import requests
 
 response = requests.post(
-    "https://api.dandolo.ai/v1/audio/speech",
+    "https://dandolo.ai/api/v1/audio/speech",
     headers={"Authorization": "Bearer dk_your_developer_key"},
     json={
         "model": "${modelId}",
@@ -162,7 +162,7 @@ with open("speech.mp3", "wb") as f:
         return `import requests
 
 response = requests.post(
-    "https://api.dandolo.ai/v1/chat/completions",
+    "https://dandolo.ai/api/v1/chat/completions",
     headers={"Authorization": "Bearer dk_your_developer_key"},
     json={
         "model": "${modelId}",
@@ -356,7 +356,7 @@ export const ModelDetailPage: React.FC<ModelDetailPageProps> = ({ modelId, onBac
         <GlassCard className="p-6">
           <h3 className="text-lg font-semibold mb-4">Streaming Example</h3>
           <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
-{`curl https://api.dandolo.ai/v1/chat/completions \\
+{`curl https://dandolo.ai/api/v1/chat/completions \\
   -H "Authorization: Bearer dk_your_developer_key" \\
   -H "Content-Type: application/json" \\
   -d '{
