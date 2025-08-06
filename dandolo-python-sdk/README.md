@@ -178,7 +178,7 @@ def dandolo_completion(messages, **kwargs):
 config_list = [{
     "model": "dandolo",
     "api_key": "ak_your_agent_key",
-    "base_url": "https://api.dandolo.ai/v1"
+    "base_url": "https://dandolo.ai/api/v1"
 }]
 
 assistant = autogen.AssistantAgent(
@@ -212,7 +212,7 @@ llm = DandoloCrewLLM(api_key="ak_your_agent_key")
 ```python
 client = dandolo.Dandolo(
     api_key="ak_your_agent_key",
-    base_url="https://api.dandolo.ai",  # Custom base URL
+    base_url="https://dandolo.ai/api",  # Custom base URL
     timeout=60,                         # Request timeout in seconds
     max_retries=3,                      # Maximum retry attempts
     retry_delay=1.0                     # Base delay between retries
@@ -310,9 +310,9 @@ def process_batch(prompts, api_key, max_workers=5):
 
 ## Support
 
-- **Documentation**: [docs.dandolo.ai](https://docs.dandolo.ai)
-- **API Reference**: [api.dandolo.ai/docs](https://api.dandolo.ai/docs)
-- **GitHub Issues**: [github.com/dandolo-ai/python-sdk/issues](https://github.com/dandolo-ai/python-sdk/issues)
+- **Documentation**: [dandolo.ai](https://dandolo.ai)
+- **API Reference**: [dandolo.ai](https://dandolo.ai)
+- **GitHub Issues**: Report bugs and feature requests in this repository
 - **Discord Community**: [discord.gg/dandolo](https://discord.gg/dandolo)
 
 ## License

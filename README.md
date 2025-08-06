@@ -3,7 +3,7 @@
 **Decentralized AI Inference Platform - Anonymous, Uncensored, Reliable**
 
 [![Deploy Status](https://img.shields.io/badge/status-live-brightgreen)](https://dandolo.ai)
-[![API Status](https://img.shields.io/badge/API-operational-blue)](https://dandolo.ai/developers)
+[![API Status](https://img.shields.io/badge/API-operational-blue)](https://dandolo.ai)
 [![Venice.ai Network](https://img.shields.io/badge/Venice.ai-powered-orange)](https://venice.ai)
 
 Dandolo.ai is a decentralized AI inference platform that provides anonymous access to Venice.ai's uncensored model network. Built for developers who value privacy, reliability, and openness.
@@ -29,7 +29,7 @@ Dandolo serves as a decentralized access layer for Venice.ai's model network, pr
 - **Standard API** - Compatible with chat completions format
 - **Framework Ready** - Works with LangChain, AutoGen, CrewAI, and custom agents
 - **Venice.ai Characters** - Full support for character connections
-- **Comprehensive Documentation** - Examples and guides at dandolo.ai/developers
+- **Comprehensive Documentation** - Examples and guides at dandolo.ai
 
 ### 🔒 Privacy-First Design
 - **Anonymous Access** - No signup required for basic usage
@@ -46,7 +46,7 @@ Dandolo serves as a decentralized access layer for Venice.ai's model network, pr
 
 ### 1. Get Your API Key (30 seconds)
 
-Visit [dandolo.ai/developers](https://dandolo.ai/developers) and generate an API key:
+Visit [dandolo.ai](https://dandolo.ai) and generate an API key:
 - **Agent Keys (`ak_`)** - For production use, 5,000 requests/day
 - **Developer Keys (`dk_`)** - For development, 500 requests/day
 - **Anonymous** - No signup needed, 50 requests/day
@@ -62,7 +62,7 @@ The Dandolo API is compatible with standard chat completions format. No special 
 import requests
 
 response = requests.post(
-    "https://dandolo.ai/v1/chat/completions",
+    "https://dandolo.ai/api/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={
         "messages": [{"role": "user", "content": "Hello, world!"}],
@@ -74,7 +74,7 @@ print(response.json()["choices"][0]["message"]["content"])
 
 ```javascript
 // JavaScript/Node.js
-const response = await fetch('https://dandolo.ai/v1/chat/completions', {
+const response = await fetch('https://dandolo.ai/api/v1/chat/completions', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ak_your_key',
@@ -91,7 +91,7 @@ console.log(data.choices[0].message.content);
 
 ```bash
 # curl - works everywhere
-curl -X POST https://dandolo.ai/v1/chat/completions \
+curl -X POST https://dandolo.ai/api/v1/chat/completions \
   -H "Authorization: Bearer ak_your_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -105,7 +105,7 @@ curl -X POST https://dandolo.ai/v1/chat/completions \
 ```python
 # Connect to specialized Venice.ai characters
 response = requests.post(
-    "https://dandolo.ai/v1/chat/completions",
+    "https://dandolo.ai/api/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={
         "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
@@ -120,7 +120,7 @@ print(response.json()["choices"][0]["message"]["content"])
 
 ```bash
 # Character connection via curl
-curl -X POST https://dandolo.ai/v1/chat/completions \
+curl -X POST https://dandolo.ai/api/v1/chat/completions \
   -H "Authorization: Bearer ak_your_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -155,7 +155,7 @@ response = requests.post(
 import requests
 # Simplified with automatic routing and failover
 response = requests.post(
-    "https://dandolo.ai/v1/chat/completions",
+    "https://dandolo.ai/api/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={"messages": [...], "model": "auto"}
 )
@@ -180,7 +180,7 @@ response = openai.ChatCompletion.create(
 import requests
 # Transparent access to Venice.ai models
 response = requests.post(
-    "https://dandolo.ai/v1/chat/completions",
+    "https://dandolo.ai/api/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={"messages": [...], "model": "auto"}
 )
@@ -203,7 +203,7 @@ response = openai.ChatCompletion.create(
 import requests
 # Access uncensored Venice.ai models
 response = requests.post(
-    "https://dandolo.ai/v1/chat/completions",
+    "https://dandolo.ai/api/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={"messages": [...], "model": "auto"}
 )
@@ -220,7 +220,7 @@ class DandoloLLM:
     def __init__(self, api_key, model="auto-select"):
         self.api_key = api_key
         self.model = model
-        self.base_url = "https://dandolo.ai"
+        self.base_url = "https://dandolo.ai/api"
     
     def __call__(self, prompt):
         response = requests.post(
@@ -251,7 +251,7 @@ import requests
 def dandolo_llm_config(api_key, model="auto-select"):
     def llm_call(messages, **kwargs):
         response = requests.post(
-            "https://dandolo.ai/v1/chat/completions",
+            "https://dandolo.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={"messages": messages, "model": model}
         )
@@ -276,7 +276,7 @@ class DandoloLLM(LLM):
     
     def _call(self, prompt: str, stop=None, **kwargs):
         response = requests.post(
-            "https://dandolo.ai/v1/chat/completions",
+            "https://dandolo.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "messages": [{"role": "user", "content": prompt}],
@@ -368,7 +368,7 @@ import requests
 
 def call_dandolo(messages, api_key):
     return requests.post(
-        "https://dandolo.ai/v1/chat/completions",
+        "https://dandolo.ai/api/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={"messages": messages, "model": "auto"}
     ).json()
@@ -376,7 +376,7 @@ def call_dandolo(messages, api_key):
 
 ## Getting Started
 
-1. **Visit** [dandolo.ai/developers](https://dandolo.ai/developers)
+1. **Visit** [dandolo.ai](https://dandolo.ai)
 2. **Connect** your Ethereum wallet (for API key generation)
 3. **Generate** an API key (`dk_` for dev, `ak_` for production)
 4. **Start building** with the examples above
@@ -384,7 +384,7 @@ def call_dandolo(messages, api_key):
 ## Links
 
 - **Platform**: [dandolo.ai](https://dandolo.ai)
-- **Documentation**: [dandolo.ai/developers](https://dandolo.ai/developers)
+- **Documentation**: [dandolo.ai](https://dandolo.ai)
 - **GitHub Issues**: Report bugs and feature requests here
 
 ---
