@@ -8,45 +8,14 @@
 
 Dandolo.ai is a decentralized AI inference platform that provides anonymous access to Venice.ai's uncensored model network. Built for developers who value privacy, reliability, and openness.
 
-## 🏆 Why Dandolo Wins
+## 🚀 What Dandolo Provides
 
-### vs Venice.ai Direct Access
+Dandolo serves as a decentralized access layer for Venice.ai's model network, providing:
 
-| Feature | Dandolo.ai | Venice.ai Direct |
-|---------|------------|------------------|
-| **Setup Complexity** | ✅ Zero config | ❌ Manual provider management |
-| **Model Selection** | ✅ Intelligent auto-routing | ❌ Manual model picking |
-| **Rate Limiting** | ✅ Built-in protection | ❌ DIY rate limiting |
-| **Error Handling** | ✅ Automatic failover | ❌ Manual retry logic |
-| **Provider Health** | ✅ Real-time monitoring | ❌ No health checks |
-| **Cost Optimization** | ✅ Best price routing | ❌ Fixed provider costs |
-| **API Compatibility** | ✅ OpenAI + Venice APIs | ✅ Venice API only |
-| **Character Support** | ✅ Venice.ai characters | ✅ Venice.ai characters |
-| **Security Features** | ✅ Enterprise-grade | ❌ Basic auth only |
-
-### vs OpenRoute.ai
-
-| Feature | Dandolo.ai | OpenRoute.ai |
-|---------|------------|--------------|
-| **Network Coverage** | ✅ Venice.ai + more | ✅ Multiple providers |
-| **Pricing Model** | ✅ Transparent, no markup | ❌ Hidden markups |
-| **Developer Tools** | ✅ Native SDKs + CLI | ❌ Basic REST only |
-| **Privacy Protection** | ✅ Zero-knowledge design | ❌ Request logging |
-| **Agent Features** | ✅ Built for AI agents | ❌ Generic proxy |
-| **Streaming Quality** | ✅ Real-time + SSE | ✅ Basic streaming |
-| **Framework Support** | ✅ LangChain, AutoGen, etc | ❌ DIY integration |
-| **Context Management** | ✅ Automatic handling | ❌ Manual context |
-
-### vs OpenAI API
-
-| Feature | Dandolo.ai | OpenAI API |
-|---------|------------|------------|
-| **Model Diversity** | ✅ Venice.ai models | ❌ OpenAI models only |
-| **Censorship Resistance** | ✅ Decentralized | ❌ Centralized control |
-| **Privacy** | ✅ Zero data retention | ❌ Data stored indefinitely |
-| **Cost** | ✅ Competitive pricing | ❌ Premium pricing |
-| **Availability** | ✅ Multi-provider redundancy | ❌ Single point of failure |
-| **API Compatibility** | ✅ Standard chat completions API | ✅ Native Venice.ai API |
+- **Simplified Access** - Standard chat completions API for Venice.ai models
+- **Provider Redundancy** - Multiple Venice.ai providers for reliability
+- **Anonymous Usage** - No signup required for basic access
+- **Developer Tools** - API keys and usage tracking
 
 ## 🚀 Key Features
 
