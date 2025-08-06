@@ -7,12 +7,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Editor directories
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,9 +24,30 @@ dist-ssr
 *.sln
 *.sw?
 
-# Ignored for the template, you probably want to remove it:
-package-lock.json
-.vercel
-
-*.zip
+# Environment
+.env
 .env.*
+
+# Build
+.vercel
+package-lock.json
+
+# Backups and temp files
+src_backup_*
+backups/
+*.zip
+*.bak
+*.tmp
+
+# Debug files
+debug-*.js
+validate-*.js
+print-*.js
+test-*.js
+verify-*.sh
+
+# Documentation drafts
+WORKING_STATES.md
+CLAUDE.md
+*-DEPLOYMENT.md
+venice-api-docs.txt

@@ -16,19 +16,6 @@ export function DeveloperPortal() {
     requireAuth 
   } = useWalletAuth();
   
-  // Debug logging
-  useEffect(() => {
-    console.log('=== DeveloperPortal Debug State ===');
-    console.log('isConnected:', isConnected);
-    console.log('address:', address);
-    console.log('sessionToken:', sessionToken ? `${sessionToken.substring(0, 20)}...` : null);
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('isAuthenticating:', isAuthenticating);
-    console.log('localStorage sessionToken:', localStorage.getItem('dandolo_wallet_session') ? 'EXISTS' : 'NOT_FOUND');
-    console.log('localStorage address:', localStorage.getItem('dandolo_wallet_address'));
-    console.log('localStorage expiry:', localStorage.getItem('dandolo_session_expiry'));
-    console.log('=== End Debug State ===');
-  }, [isConnected, address, sessionToken, isAuthenticated, isAuthenticating]);
   
   const [showGenerator, setShowGenerator] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
@@ -110,7 +97,6 @@ export function DeveloperPortal() {
     }
     
     try {
-      console.log('User confirmed key generation for:', { address, name: newKeyName, keyType });
       const result = await generateKey({
         address,
         name: newKeyName.trim(),
@@ -122,7 +108,6 @@ export function DeveloperPortal() {
         throw new Error('Key generation failed - no key returned');
       }
       
-      console.log('Key generated successfully, showing modal');
       setGeneratedKey(result.key);
       setShowKeyModal(true);  // This MUST be set to show the modal
       setKeyCopied(false);

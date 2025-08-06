@@ -159,6 +159,37 @@ curl https://api.dandolo.ai/v1/chat/completions \\
           </GlassCard>
           
           <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Venice.ai Character Connections</h3>
+            <div className="mb-3">
+              <code className="text-blue-400">POST /v1/chat/completions</code>
+            </div>
+            <p className="text-sm text-gray-400 mb-3">
+              Connect to specific Venice.ai characters using the <code>venice_parameters</code> field.
+            </p>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`{
+  "messages": [
+    {"role": "user", "content": "Hello! Can you give me advice about horses?"}
+  ],
+  "model": "llama-3.3-70b",
+  "venice_parameters": {
+    "character_slug": "my-horse-advisor"
+  }
+}`}
+            </pre>
+            <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded">
+              <p className="text-sm text-blue-300">
+                <strong>Character Parameters:</strong>
+              </p>
+              <ul className="text-xs text-blue-200 mt-1 space-y-1">
+                <li>• <code>character_slug</code> - Venice.ai character identifier</li>
+                <li>• <code>system_prompt</code> - Override character's system prompt</li>
+                <li>• <code>custom_parameters</code> - Additional Venice.ai parameters</li>
+              </ul>
+            </div>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
             <h3 className="text-lg font-semibold mb-4">Available Models</h3>
             <div className="mb-3">
               <code className="text-blue-400">GET /models</code>
@@ -284,6 +315,46 @@ curl https://api.dandolo.ai/v1/chat/completions \\
   }'`}
             </pre>
           </GlassCard>
+          
+          <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Venice.ai Character Connection</h3>
+            <p className="text-gray-300 mb-3">
+              Connect to specific Venice.ai characters for specialized responses:
+            </p>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`# Python example
+import requests
+
+response = requests.post(
+    "https://api.dandolo.ai/v1/chat/completions",
+    headers={"Authorization": "Bearer dk_your_key"},
+    json={
+        "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
+        "model": "llama-3.3-70b",
+        "venice_parameters": {
+            "character_slug": "my-horse-advisor"
+        }
+    }
+)
+
+# cURL example
+curl https://api.dandolo.ai/v1/chat/completions \\
+  -H "Authorization: Bearer dk_your_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
+    "model": "llama-3.3-70b",
+    "venice_parameters": {
+      "character_slug": "my-horse-advisor"
+    }
+  }'`}
+            </pre>
+            <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded">
+              <p className="text-sm text-green-300">
+                ✅ <strong>Works with all API keys:</strong> Character connections work with both developer keys (dk_) and agent keys (ak_).
+              </p>
+            </div>
+          </GlassCard>
         </div>
       )}
       
@@ -354,6 +425,33 @@ user.initiate_chat(assistant, message="Hello from AutoGen!")`}
           </GlassCard>
           
           <GlassCard className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Venice.ai Character Integration</h3>
+            <p className="text-gray-300 mb-4">
+              AI agents can connect to specific Venice.ai characters for specialized behavior:
+            </p>
+            <pre className="bg-black/50 p-4 rounded-lg text-sm overflow-x-auto">
+{`// Agent with character specialization
+const response = await fetch("https://api.dandolo.ai/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer ak_your_agent_key",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    messages: [
+      { role: "user", content: "Help me plan a training schedule" }
+    ],
+    model: "llama-3.3-70b",
+    venice_parameters: {
+      character_slug: "fitness-coach",
+      system_prompt: "You are a certified personal trainer"
+    }
+  })
+});`}
+            </pre>
+          </GlassCard>
+          
+          <GlassCard className="p-6">
             <h3 className="text-lg font-semibold mb-4">Agent Best Practices</h3>
             <div className="space-y-4">
               <div>
@@ -370,6 +468,7 @@ user.initiate_chat(assistant, message="Hello from AutoGen!")`}
                   <li>• Use <code className="text-blue-400">auto-select</code> model for intelligent routing</li>
                   <li>• Batch multiple requests when possible</li>
                   <li>• Manage conversation context to stay within token limits</li>
+                  <li>• Use Venice.ai character connections for specialized tasks</li>
                 </ul>
               </div>
               <div>
@@ -461,6 +560,21 @@ node test-dandolo-integration.js --api-key dk_your_key --advanced`}
                 <pre className="bg-black/50 p-3 rounded text-xs overflow-x-auto">
 {`curl https://api.dandolo.ai/v1/models \\
   -H "Authorization: Bearer dk_your_key"`}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Character Connection Test</h4>
+                <pre className="bg-black/50 p-3 rounded text-xs overflow-x-auto">
+{`curl https://api.dandolo.ai/v1/chat/completions \\
+  -H "Authorization: Bearer dk_your_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "messages": [{"role": "user", "content": "Hello! Can you help me?"}],
+    "model": "llama-3.3-70b",
+    "venice_parameters": {
+      "character_slug": "helpful-assistant"
+    }
+  }'`}
                 </pre>
               </div>
             </div>

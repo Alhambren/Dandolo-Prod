@@ -1,0 +1,9 @@
+{
+  "model": "llama-3.3-70b",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! Simple test without character."
+    }
+  ]
+}

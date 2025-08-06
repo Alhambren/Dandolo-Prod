@@ -177,13 +177,6 @@ const ProvidersPage: React.FC = () => {
     }));
   }, [allProviders, providerLeaderboard]);
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log("🔍 ProvidersPage Data Status:");
-    console.log("- Providers loaded:", allProviders?.length ?? 0);
-    console.log("- Points data:", providerLeaderboard !== undefined ? "loaded" : "loading");
-    console.log("- Network stats:", networkStats !== undefined ? "loaded" : "loading");
-  }, [allProviders, providerLeaderboard, networkStats]);
 
   // Filter and sort providers
   const filteredProviders = React.useMemo(() => {

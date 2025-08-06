@@ -329,7 +329,6 @@ export const ChatInterface: React.FC = () => {
     try {
       // First, remove the session from backend database
       await removeSession({ sessionId });
-      console.log(`🗑️ Removed backend session: ${sessionId.substring(0, 8)}...`);
     } catch (error) {
       console.warn('Failed to remove backend session:', error);
       // Continue anyway - frontend cleanup is still valuable
@@ -570,16 +569,10 @@ export const ChatInterface: React.FC = () => {
         const imageUrlMatch = response.response.match(/!\[.*?\]\((.*?)\)/);
         if (imageUrlMatch) {
           assistantMessage.imageUrl = imageUrlMatch[1];
-          // Debug log for image parsing
-          console.log('Image parsed from response:', {
-            isBase64: imageUrlMatch[1].startsWith('data:'),
-            urlLength: imageUrlMatch[1].length,
-            urlPreview: imageUrlMatch[1].substring(0, 50) + '...'
-          });
         } else {
           // Check if response contains image data that wasn't parsed
           if (response.response.includes('data:image/')) {
-            console.log('Base64 image data found but not parsed:', response.response.substring(0, 100));
+            console.warn('Base64 image data found but not parsed:', response.response.substring(0, 100));
           }
         }
       }

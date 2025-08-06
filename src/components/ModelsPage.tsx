@@ -10,24 +10,6 @@ export default function ModelsPage() {
   // Use the correct analytics function that actually exists
   const usageMetrics = useQuery(api.analytics.getModelUsageStats);
 
-  // Enhanced debug logging to trace the issue
-  console.log('🔍 ModelsPage Debug - Full Data Trace:', {
-    modelsCount: availableModels?.length,
-    usageMetricsLoaded: !!usageMetrics,
-    usageMetricsType: typeof usageMetrics,
-    usageMetricsKeys: usageMetrics ? Object.keys(usageMetrics) : null,
-    modelUsageExists: !!usageMetrics?.modelUsage,
-    modelUsageType: typeof usageMetrics?.modelUsage,
-    modelUsageCount: usageMetrics?.modelUsage ? Object.keys(usageMetrics.modelUsage).length : 0,
-    modelUsageData: usageMetrics?.modelUsage,
-    sampleModel: availableModels?.[0]?.id,
-    sampleUsage: availableModels?.[0]?.id ? (usageMetrics?.modelUsage?.[availableModels[0].id] || 0) : 'N/A',
-    allModels: availableModels?.map(m => m.id).slice(0, 5), // First 5 model IDs
-    totalInferences: usageMetrics?.totalInferences,
-    topModels: usageMetrics?.topModels,
-    timestamp: new Date().toISOString()
-  });
-
   // If a model is selected, show the detail page
   if (selectedModelId) {
     return (
