@@ -935,9 +935,6 @@ export const ChatInterface: React.FC = () => {
             ) : (
               /* Welcome State */
               <div className="text-center py-24">
-                <div className="w-20 h-20 mx-auto mb-6 bg-gray-800 rounded-2xl flex items-center justify-center p-3">
-                  <Logo variant="shield" className="h-full w-full" showText={false} />
-                </div>
                 <h1 className="text-3xl font-bold mb-2 text-white">Welcome to Dandolo.ai</h1>
                 <p className="text-gray-400 mb-8">Decentralized AI at your fingertips</p>
                 

@@ -199,7 +199,6 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onNavigate }) => {
       <div className="flex-grow overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-            <Logo variant="shield" showText={false} className="h-20 mb-4 opacity-30" />
             <h2 className="text-2xl font-bold text-white mb-2">Welcome to Dandolo.ai</h2>
             <p className="text-gray-400">Decentralized AI at your fingertips</p>
             
