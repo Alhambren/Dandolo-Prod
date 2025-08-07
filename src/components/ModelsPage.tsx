@@ -7,8 +7,6 @@ import { ModelDetailPage } from './ModelDetailPage';
 export default function ModelsPage() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const availableModels = useQuery(api.models.getAvailableModels);
-  // Use the correct analytics function that actually exists
-  const usageMetrics = useQuery(api.analytics.getModelUsageStats);
 
   // If a model is selected, show the detail page
   if (selectedModelId) {
@@ -74,14 +72,6 @@ export default function ModelsPage() {
                       Context: {model.contextLength.toLocaleString()} tokens
                     </span>
                   )}
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-gray-400 text-xs">
-                      Used: {usageMetrics?.modelUsage?.[model.id] || 0} times
-                    </span>
-                    {(usageMetrics?.modelUsage?.[model.id] || 0) > 0 && (
-                      <span className="text-green-400 text-xs">●</span>
-                    )}
-                  </div>
                 </div>
               </div>
             ))}
