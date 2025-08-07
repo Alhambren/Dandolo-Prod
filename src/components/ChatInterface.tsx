@@ -289,7 +289,16 @@ export const ChatInterface: React.FC = () => {
     
     if (savedChats) {
       const parsed = JSON.parse(savedChats) as Chat[];
-      setChats(parsed);
+      // Only load chats that have user messages
+      const chatsWithMessages = parsed.filter(chat => 
+        chat.messages.some(msg => msg.role === 'user')
+      );
+      setChats(chatsWithMessages);
+      
+      // Set active chat to the most recent one if available
+      if (chatsWithMessages.length > 0) {
+        setActiveChat(chatsWithMessages[0].id);
+      }
     }
     
     if (savedFolders) {
@@ -301,22 +310,15 @@ export const ChatInterface: React.FC = () => {
       setAllowAdultContent(JSON.parse(savedAdultContent));
     }
     
-    // Always create a new chat when platform loads - equivalent to clicking "New Chat"
-    const newChat: Chat = {
-      id: `chat_${Date.now()}`,
-      title: 'New Chat',
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      taskType: 'chat',
-    };
-    setChats(prev => [newChat, ...prev]);
-    setActiveChat(newChat.id);
+    // Don't automatically create a chat on load - let user start one when they send a message
   }, []);
 
-  // Save chats to localStorage
+  // Save chats to localStorage (only chats with user messages)
   useEffect(() => {
-    localStorage.setItem('dandolo_chats', JSON.stringify(chats));
+    const chatsWithMessages = chats.filter(chat => 
+      chat.messages.some(msg => msg.role === 'user')
+    );
+    localStorage.setItem('dandolo_chats', JSON.stringify(chatsWithMessages));
   }, [chats]);
 
   // Save folders to localStorage
@@ -348,6 +350,21 @@ export const ChatInterface: React.FC = () => {
 
   const getCurrentChat = () => chats.find(c => c.id === activeChat);
 
+  // Clean up empty chats when switching between chats
+  const cleanupEmptyChats = () => {
+    setChats(prevChats => 
+      prevChats.filter(chat => 
+        chat.messages.some(msg => msg.role === 'user')
+      )
+    );
+  };
+
+  // Switch to a chat and clean up empty chats
+  const switchToChat = (chatId: string) => {
+    cleanupEmptyChats();
+    setActiveChat(chatId);
+  };
+
   const createNewChat = async () => {
     try {
       // First, remove the session from backend database
@@ -357,9 +374,13 @@ export const ChatInterface: React.FC = () => {
       // Continue anyway - frontend cleanup is still valuable
     }
     
+    // Clean up any empty chats before creating a new one
+    cleanupEmptyChats();
+    
     // Then end the frontend session (clears localStorage and generates new session ID)
     endSession();
     
+    // Create a temporary new chat that won't be saved until user sends a message
     const newChat: Chat = {
       id: `chat_${Date.now()}`,
       title: 'New Chat',
@@ -368,7 +389,9 @@ export const ChatInterface: React.FC = () => {
       updatedAt: Date.now(),
       taskType,
     };
-    setChats([newChat, ...chats]);
+    setChats(prevChats => [newChat, ...prevChats.filter(chat => 
+      chat.messages.some(msg => msg.role === 'user')
+    )]);
     setActiveChat(newChat.id);
   };
 
@@ -438,7 +461,10 @@ export const ChatInterface: React.FC = () => {
   };
 
   const getChatsByFolder = (folderId?: string) => {
-    return chats.filter(chat => chat.folderId === folderId);
+    return chats.filter(chat => 
+      chat.folderId === folderId && 
+      chat.messages.some(msg => msg.role === 'user')
+    );
   };
 
   const generateTitle = (content: string) => {
@@ -762,7 +788,7 @@ export const ChatInterface: React.FC = () => {
                   {isSidebarExpanded && folderChats.map((chat) => (
                     <div key={chat.id} className="group/chat relative ml-4">
                       <button
-                        onClick={() => setActiveChat(chat.id)}
+                        onClick={() => switchToChat(chat.id)}
                         draggable
                         onDragStart={() => handleDragStart(chat.id)}
                         className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${
