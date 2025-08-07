@@ -208,8 +208,8 @@ const DashboardPage: React.FC = () => {
                 <div className="text-sm text-gray-400">Prompts Served</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-lg">
-                <div className={`text-2xl font-bold ${providerHealth?.uptimePercentage >= 95 ? 'text-green-400' : providerHealth?.uptimePercentage >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
-                  {providerHealth?.uptimePercentage?.toFixed(1) || '0.0'}%
+                <div className={`text-2xl font-bold ${(providerHealth?.uptime || 0) >= 95 ? 'text-green-400' : (providerHealth?.uptime || 0) >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {providerHealth?.uptime?.toFixed(1) || '0.0'}%
                 </div>
                 <div className="text-sm text-gray-400">24h Uptime</div>
                 <div className="text-xs text-gray-500 mt-1">
