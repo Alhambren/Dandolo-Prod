@@ -203,6 +203,8 @@ export const ChatInterface: React.FC = () => {
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [draggedChatId, setDraggedChatId] = useState<string | null>(null);
+  const [anonymousUsageCount, setAnonymousUsageCount] = useState(0);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -276,6 +278,22 @@ export const ChatInterface: React.FC = () => {
     
     if (savedAdultContent) {
       setAllowAdultContent(JSON.parse(savedAdultContent));
+    }
+
+    // Load anonymous usage tracking
+    if (!address) {
+      const today = new Date().toDateString();
+      const savedUsage = localStorage.getItem('dandolo_anonymous_usage');
+      const savedDate = localStorage.getItem('dandolo_anonymous_usage_date');
+      
+      if (savedUsage && savedDate === today) {
+        setAnonymousUsageCount(parseInt(savedUsage, 10));
+      } else {
+        // Reset counter for new day
+        setAnonymousUsageCount(0);
+        localStorage.setItem('dandolo_anonymous_usage', '0');
+        localStorage.setItem('dandolo_anonymous_usage_date', today);
+      }
     }
     
     // Always create a new chat when platform loads - equivalent to clicking "New Chat"
@@ -484,6 +502,12 @@ export const ChatInterface: React.FC = () => {
     e.preventDefault();
     if (!message.trim() || isLoading) return;
 
+    // Check anonymous user limits
+    if (!address && anonymousUsageCount >= 15) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
     let currentChat = getCurrentChat();
     if (!currentChat) {
       const newChat: Chat = {
@@ -581,6 +605,13 @@ export const ChatInterface: React.FC = () => {
       const finalChat = { ...updatedChat, messages: finalMessages };
       
       setChats(prevChats => prevChats.map(c => c.id === currentChat!.id ? finalChat : c));
+
+      // Increment anonymous usage counter
+      if (!address) {
+        const newCount = anonymousUsageCount + 1;
+        setAnonymousUsageCount(newCount);
+        localStorage.setItem('dandolo_anonymous_usage', newCount.toString());
+      }
     } catch (error) {
       const errorMessage: Message = {
         id: `msg_${Date.now()}_error`,
@@ -602,9 +633,12 @@ export const ChatInterface: React.FC = () => {
   };
 
   const currentChat = getCurrentChat();
-  const dailyLimit = 100;
-  const usageCount = userStats?.promptsToday || 0;
-  const remaining = userStats?.promptsRemaining || (dailyLimit - usageCount);
+  
+  // Different limits for authenticated vs anonymous users
+  const isAuthenticated = !!address;
+  const dailyLimit = isAuthenticated ? 100 : 15;
+  const usageCount = isAuthenticated ? (userStats?.promptsToday || 0) : anonymousUsageCount;
+  const remaining = isAuthenticated ? (userStats?.promptsRemaining || (dailyLimit - usageCount)) : Math.max(0, dailyLimit - anonymousUsageCount);
 
   const getTaskTypePromptPlaceholder = () => {
     switch (taskType) {
@@ -796,15 +830,24 @@ export const ChatInterface: React.FC = () => {
           <div className="text-center">
             <div className="text-2xl font-bold text-white">{usageCount}</div>
             <div className={`text-xs text-gray-500 ${isSidebarExpanded ? 'block' : 'hidden'}`}>
-              / {dailyLimit} daily
+              / {dailyLimit} {isAuthenticated ? 'daily' : 'free daily'}
             </div>
             {isSidebarExpanded && (
-              <div className="w-full bg-gray-800 rounded-full h-1 mt-2">
-                <div 
-                  className="bg-yellow-500 h-1 rounded-full transition-all"
-                  style={{ width: `${(usageCount / dailyLimit) * 100}%` }}
-                />
-              </div>
+              <>
+                <div className="w-full bg-gray-800 rounded-full h-1 mt-2">
+                  <div 
+                    className={`h-1 rounded-full transition-all ${
+                      usageCount >= dailyLimit ? 'bg-red-500' : 'bg-yellow-500'
+                    }`}
+                    style={{ width: `${Math.min((usageCount / dailyLimit) * 100, 100)}%` }}
+                  />
+                </div>
+                {!isAuthenticated && usageCount >= 12 && (
+                  <div className="text-xs text-orange-400 mt-1">
+                    {remaining} chats left
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1009,6 +1052,49 @@ export const ChatInterface: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Login Prompt Modal */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-2xl p-6 max-w-md w-full border border-gray-800">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-8 h-8 text-black" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                Daily Chat Limit Reached
+              </h3>
+              <p className="text-gray-300 mb-6">
+                You've used all 15 free chats today. Connect your wallet to get 100 daily chats and unlock all features.
+              </p>
+              
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowLoginPrompt(false);
+                    // Trigger wallet connection - you may need to add this function
+                    document.dispatchEvent(new CustomEvent('connectWallet'));
+                  }}
+                  className="w-full bg-yellow-400 text-black font-semibold py-3 px-4 rounded-lg hover:bg-yellow-300 transition-colors"
+                >
+                  Connect Wallet (100 chats/day)
+                </button>
+                
+                <button
+                  onClick={() => setShowLoginPrompt(false)}
+                  className="w-full bg-gray-800 text-gray-300 py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Maybe Later
+                </button>
+              </div>
+              
+              <p className="text-xs text-gray-500 mt-4">
+                Your limit resets at midnight UTC
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
