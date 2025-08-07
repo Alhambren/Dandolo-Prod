@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { WagmiProvider } from 'wagmi'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -20,12 +21,14 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 
 root.render(
   <React.StrictMode>
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <ConvexProvider client={convex}>
-          <App />
-        </ConvexProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <BrowserRouter>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <ConvexProvider client={convex}>
+            <App />
+          </ConvexProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

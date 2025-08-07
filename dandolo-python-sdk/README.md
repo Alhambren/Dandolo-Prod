@@ -40,7 +40,7 @@ Dandolo supports two types of API keys:
 - **Developer Keys (`dk_`)**: 500 requests/day - Perfect for development and testing
 - **Agent Keys (`ak_`)**: 5,000 requests/day - Ideal for production AI agents
 
-Get your API key at [dandolo.ai](https://dandolo.ai/#portal)
+Get your API key at [dandolo.ai/developers](https://dandolo.ai/developers)
 
 ## Examples
 
@@ -310,8 +310,11 @@ def process_batch(prompts, api_key, max_workers=5):
 
 ## Support
 
-- **Documentation**: [dandolo.ai](https://dandolo.ai)
-- **API Reference**: [dandolo.ai](https://dandolo.ai)
+- **Platform**: [dandolo.ai](https://dandolo.ai)
+- **API Documentation**: [dandolo.ai/developers](https://dandolo.ai/developers)  
+- **Chat Interface**: [dandolo.ai/chat](https://dandolo.ai/chat)
+- **Model Browser**: [dandolo.ai/models](https://dandolo.ai/models)
+- **Network Status**: [dandolo.ai/providers](https://dandolo.ai/providers)
 - **GitHub Issues**: Report bugs and feature requests in this repository
 
 ## License

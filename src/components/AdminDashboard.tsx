@@ -768,7 +768,7 @@ const InferenceAnalytics: React.FC = () => {
                   <tr className="border-b border-gray-700">
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Provider</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">VCU Balance</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Diem Balance</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Prompts</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Points</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Uptime</th>
@@ -817,12 +817,22 @@ const InferenceAnalytics: React.FC = () => {
 
 const NetworkTopology: React.FC = () => {
   const { address } = useAccount();
+  const [activeView, setActiveView] = useState<'overview' | 'providers' | 'users'>('overview');
+  
   const networkData = useQuery(
     api.admin.getNetworkTopology,
     address ? { adminAddress: address } : 'skip'
   );
+  const networkParticipants = useQuery(
+    api.admin.getAllNetworkParticipants,
+    address ? { adminAddress: address } : 'skip'
+  );
+  const userAnalytics = useQuery(
+    api.admin.getUserAnalytics,
+    address ? { adminAddress: address, timeRange: '7d' } : 'skip'
+  );
 
-  if (!networkData) {
+  if (!networkData || !networkParticipants || !userAnalytics) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full"></div>
@@ -831,101 +841,362 @@ const NetworkTopology: React.FC = () => {
     );
   }
 
+  const topologyTabs = [
+    { id: 'overview', name: 'Network Overview', icon: Activity },
+    { id: 'providers', name: 'Provider Details', icon: Server },
+    { id: 'users', name: 'User Activity', icon: Users },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Routing Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Server className="w-6 h-6 text-blue-500" />
-            <h3 className="text-sm font-medium text-gray-400">TOTAL ROUTES</h3>
-          </div>
-          <p className="text-3xl font-bold text-white">{networkData.routingStats.totalRoutes}</p>
-          <p className="text-sm text-gray-400">lifetime requests</p>
-        </div>
-        
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Clock className="w-6 h-6 text-green-500" />
-            <h3 className="text-sm font-medium text-gray-400">AVG LATENCY</h3>
-          </div>
-          <p className="text-3xl font-bold text-white">{networkData.routingStats.averageLatency}ms</p>
-          <p className="text-sm text-gray-400">response time</p>
-        </div>
-        
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
-            <h3 className="text-sm font-medium text-gray-400">FAILED ROUTES</h3>
-          </div>
-          <p className="text-3xl font-bold text-white">{networkData.routingStats.failedRoutes}</p>
-          <p className="text-sm text-gray-400">error rate</p>
-        </div>
+      {/* Navigation */}
+      <div className="flex space-x-1">
+        {topologyTabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveView(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                activeView === tab.id
+                  ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                  : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.name}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Provider Network Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Provider Network Status</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Provider</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Address</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Balance</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Prompts Served</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Health Score</th>
-                <th className="text-left py-3 px-4 text-gray-400 font-medium">Last Activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {networkData.providers.map((provider) => (
-                <tr key={provider.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-                  <td className="py-3 px-4">
-                    <div className="font-medium text-white">{provider.name}</div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="font-mono text-sm text-gray-400">
-                      {provider.address.substring(0, 8)}...{provider.address.substring(34)}
+      {/* Network Overview */}
+      {activeView === 'overview' && (
+        <div className="space-y-6">
+          {/* Network Statistics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Server className="w-6 h-6 text-blue-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOTAL ROUTES</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkData.routingStats.totalRoutes.toLocaleString()}</p>
+              <p className="text-sm text-gray-400">lifetime requests</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Users className="w-6 h-6 text-green-500" />
+                <h3 className="text-sm font-medium text-gray-400">USER PROMPTS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.usage.totalQueries.toLocaleString()}</p>
+              <p className="text-sm text-gray-400">last 7 days</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Zap className="w-6 h-6 text-purple-500" />
+                <h3 className="text-sm font-medium text-gray-400">API CALLS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.apiKeys.reduce((sum, key) => sum + key.dailyUsage, 0)}</p>
+              <p className="text-sm text-gray-400">today via API keys</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Clock className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-sm font-medium text-gray-400">AVG LATENCY</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkData.routingStats.averageLatency}ms</p>
+              <p className="text-sm text-gray-400">response time</p>
+            </div>
+          </div>
+
+          {/* Network Participants Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Active Providers */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Active Providers ({networkParticipants.summary.activeProviders})</h3>
+              <div className="space-y-3">
+                {networkParticipants.providers
+                  .filter(p => p.isActive)
+                  .slice(0, 5)
+                  .map((provider, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 bg-gray-800 rounded">
+                    <div>
+                      <div className="font-medium text-white">{provider.name}</div>
+                      <div className="text-xs text-gray-400">{provider.totalPrompts.toLocaleString()} prompts served</div>
                     </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      provider.isActive 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      {provider.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-white">
-                    ${(provider.vcuBalance * 0.10).toFixed(2)}
-                  </td>
-                  <td className="py-3 px-4 text-white">
-                    {provider.totalPrompts}
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        provider.healthScore > 80 ? 'bg-green-500' :
-                        provider.healthScore > 60 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}></div>
-                      <span className="text-white">{provider.healthScore}%</span>
+                    <div className="text-right">
+                      <div className="text-sm text-green-400">{provider.uptime.toFixed(1)}% uptime</div>
+                      <div className="text-xs text-gray-400">{provider.vcuBalance.toFixed(1)} Diem</div>
                     </div>
-                  </td>
-                  <td className="py-3 px-4 text-gray-400 text-sm">
-                    {provider.lastActivity 
-                      ? new Date(provider.lastActivity).toLocaleDateString()
-                      : 'Never'
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top Users */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Top Active Users</h3>
+              <div className="space-y-3">
+                {userAnalytics.topUsers
+                  .slice(0, 5)
+                  .map((user, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 bg-gray-800 rounded">
+                    <div>
+                      <div className="font-mono text-sm text-white">{user.address}</div>
+                      <div className="text-xs text-gray-400">{user.userType}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-blue-400">{user.totalQueries} queries</div>
+                      <div className="text-xs text-yellow-400">{user.totalPoints.toLocaleString()} points</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* API Keys Activity */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">API Key Usage Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-blue-400">
+                  {networkParticipants.apiKeys.filter(k => k.keyType === 'developer').length}
+                </div>
+                <div className="text-sm text-gray-400">Developer Keys</div>
+                <div className="text-xs text-blue-400">
+                  {networkParticipants.apiKeys.filter(k => k.keyType === 'developer').reduce((sum, k) => sum + k.dailyUsage, 0)} calls today
+                </div>
+              </div>
+              
+              <div className="text-center p-4 bg-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-purple-400">
+                  {networkParticipants.apiKeys.filter(k => k.keyType === 'agent').length}
+                </div>
+                <div className="text-sm text-gray-400">Agent Keys</div>
+                <div className="text-xs text-purple-400">
+                  {networkParticipants.apiKeys.filter(k => k.keyType === 'agent').reduce((sum, k) => sum + k.dailyUsage, 0)} calls today
+                </div>
+              </div>
+              
+              <div className="text-center p-4 bg-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-gray-400">
+                  {networkParticipants.apiKeys.filter(k => k.keyType === 'standard').length}
+                </div>
+                <div className="text-sm text-gray-400">Standard Keys</div>
+                <div className="text-xs text-gray-400">
+                  {networkParticipants.apiKeys.filter(k => k.keyType === 'standard').reduce((sum, k) => sum + k.dailyUsage, 0)} calls today
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Provider Details */}
+      {activeView === 'providers' && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-xl font-bold text-white mb-4">Provider Network Status</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Provider</th>
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Address</th>
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Balance</th>
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Prompts Served</th>
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Health Score</th>
+                  <th className="text-left py-3 px-4 text-gray-400 font-medium">Last Activity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {networkData.providers.map((provider) => (
+                  <tr key={provider.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-white">{provider.name}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-mono text-sm text-gray-400">
+                        {provider.address.substring(0, 8)}...{provider.address.substring(34)}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        provider.isActive 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {provider.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-white">
+                      ${(provider.vcuBalance * 0.10).toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-white">
+                      {provider.totalPrompts.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          provider.healthScore > 80 ? 'bg-green-500' :
+                          provider.healthScore > 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-white">{provider.healthScore}%</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-gray-400 text-sm">
+                      {provider.lastActivity 
+                        ? new Date(provider.lastActivity).toLocaleDateString()
+                        : 'Never'
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* User Activity */}
+      {activeView === 'users' && (
+        <div className="space-y-6">
+          {/* User Activity Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Users className="w-6 h-6 text-blue-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOTAL USERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.totalUsers}</p>
+              <p className="text-sm text-gray-400">all accounts</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Activity className="w-6 h-6 text-green-500" />
+                <h3 className="text-sm font-medium text-gray-400">ACTIVE USERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.activeUsers}</p>
+              <p className="text-sm text-gray-400">last 7 days</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Zap className="w-6 h-6 text-purple-500" />
+                <h3 className="text-sm font-medium text-gray-400">USER PROMPTS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.usage.totalQueries.toLocaleString()}</p>
+              <p className="text-sm text-gray-400">last 7 days</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Lock className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-sm font-medium text-gray-400">API CALLS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.apiKeys.reduce((sum, key) => sum + key.dailyUsage, 0)}</p>
+              <p className="text-sm text-gray-400">today via API</p>
+            </div>
+          </div>
+
+          {/* Pure Users Table (Non-Providers) */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">User Accounts (Non-Providers)</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">User Address</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Type</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Prompts Sent</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Points Earned</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Daily Usage</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Last Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {networkParticipants.users.map((user, index) => (
+                    <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50">
+                      <td className="py-3 px-4">
+                        <div className="font-mono text-sm text-white">{user.address}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          user.userType === 'developer' ? 'bg-blue-500/20 text-blue-400' :
+                          user.userType === 'authenticated' ? 'bg-green-500/20 text-green-400' :
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {user.userType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-blue-400">{user.totalQueries}</td>
+                      <td className="py-3 px-4 text-yellow-400">{user.points.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-white">{user.dailyUsage}</td>
+                      <td className="py-3 px-4 text-gray-400 text-sm">
+                        {user.lastActive ? new Date(user.lastActive).toLocaleDateString() : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* API Key Usage Details */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">API Key Activity</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Key ID</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Owner</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Type</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Daily Usage</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Daily Limit</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {networkParticipants.apiKeys.map((apiKey, index) => (
+                    <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50">
+                      <td className="py-3 px-4">
+                        <div className="font-mono text-sm text-white">{apiKey.keyId}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-mono text-sm text-gray-400">{apiKey.address}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          apiKey.keyType === 'developer' ? 'bg-blue-500/20 text-blue-400' :
+                          apiKey.keyType === 'agent' ? 'bg-purple-500/20 text-purple-400' :
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {apiKey.keyType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-blue-400">{apiKey.dailyUsage}</td>
+                      <td className="py-3 px-4 text-gray-300">{apiKey.dailyLimit}</td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          apiKey.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {apiKey.isActive ? 'Active' : 'Limit Reached'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

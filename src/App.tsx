@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from "sonner";
 import { useAccount } from 'wagmi';
 import { Menu, X } from 'lucide-react';
@@ -12,23 +13,63 @@ import { AdminDashboardPage } from './components/AdminDashboard';
 import { WalletConnectButton } from './components/WalletConnectButton';
 import { Logo } from './components/Logo';
 
+// Main App component with React Router for URL-based navigation
+// Routes: /, /chat, /models, /providers, /dashboard, /developers, /admin
+
 // Admin address from environment variable (fallback to original for backward compatibility)
 const ADMIN_ADDRESS = import.meta.env.VITE_ADMIN_ADDRESS || "0xC07481520d98c32987cA83B30EAABdA673cDbe8c";
 
-// Updated: Individual model pages with dynamic Venice.ai integration
-export default function App() {
+// Admin guard component to protect admin routes
+function AdminGuard({ children }: { children: React.ReactNode }) {
   const { address, isConnected } = useAccount();
-  const [currentPage, setCurrentPage] = useState<
-    'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'models' | 'admin'
-  >('home');
+  const navigate = useNavigate();
+  const isAdmin = isConnected && address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
+  
+  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers') => {
+    const path = page === 'home' ? '/' : `/${page}`;
+    navigate(path);
+  };
+  
+  if (!isAdmin) {
+    return (
+      <main className="pt-16">
+        <HomePage onNavigate={navigateTo} />
+      </main>
+    );
+  }
+  
+  return <>{children}</>;
+}
+
+export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { address, isConnected } = useAccount();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Check if current wallet is admin
   const isAdmin = isConnected && address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
 
+  // Get current page from URL path
+  const getCurrentPage = () => {
+    const path = location.pathname;
+    switch (path) {
+      case '/chat': return 'chat';
+      case '/models': return 'models';
+      case '/providers': return 'providers';
+      case '/dashboard': return 'dashboard';
+      case '/developers': return 'developers';
+      case '/admin': return 'admin';
+      default: return 'home';
+    }
+  };
+
+  const currentPage = getCurrentPage();
+
   // Close mobile menu when navigating
-  const navigateTo = (page: typeof currentPage) => {
-    setCurrentPage(page);
+  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'models' | 'admin') => {
+    const path = page === 'home' ? '/' : `/${page}`;
+    navigate(path);
     setIsMobileMenuOpen(false);
   };
 
@@ -180,38 +221,52 @@ export default function App() {
         )}
       </header>
       
-      {/* All pages now have top padding for header */}
-      {currentPage === 'chat' ? (
-        <div className="pt-16">
-          <ChatInterface />
-        </div>
-      ) : currentPage === 'admin' && isAdmin ? (
-        <AdminDashboardPage />
-      ) : (
-        <main className="pt-16">
-          {currentPage === 'home' && <HomePage onNavigate={navigateTo} />}
-          {currentPage === 'providers' && (
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <ProvidersPage setCurrentPage={navigateTo} />
-            </div>
-          )}
-          {currentPage === 'dashboard' && (
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <DashboardPage />
-            </div>
-          )}
-          {currentPage === 'developers' && (
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <DevelopersPage />
-            </div>
-          )}
-          {currentPage === 'models' && (
+      {/* Routes */}
+      <Routes>
+        <Route path="/" element={
+          <main className="pt-16">
+            <HomePage onNavigate={navigateTo} />
+          </main>
+        } />
+        <Route path="/chat" element={
+          <div className="pt-16">
+            <ChatInterface />
+          </div>
+        } />
+        <Route path="/models" element={
+          <main className="pt-16">
             <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
               <ModelsPage />
             </div>
-          )}
-        </main>
-      )}
+          </main>
+        } />
+        <Route path="/providers" element={
+          <main className="pt-16">
+            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+              <ProvidersPage />
+            </div>
+          </main>
+        } />
+        <Route path="/dashboard" element={
+          <main className="pt-16">
+            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+              <DashboardPage />
+            </div>
+          </main>
+        } />
+        <Route path="/developers" element={
+          <main className="pt-16">
+            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+              <DevelopersPage />
+            </div>
+          </main>
+        } />
+        <Route path="/admin" element={
+          <AdminGuard>
+            <AdminDashboardPage />
+          </AdminGuard>
+        } />
+      </Routes>
     </div>
   );
 }

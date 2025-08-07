@@ -6,6 +6,12 @@
     "NODE_ENV": "production",
     "VITE_CONVEX_URL": "https://judicious-hornet-148.convex.cloud"
   },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

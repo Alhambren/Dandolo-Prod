@@ -374,17 +374,55 @@ def call_dandolo(messages, api_key):
     ).json()
 ```
 
+## Web Interface & Routing
+
+Dandolo provides a modern web interface with direct URL navigation for all features:
+
+### Available Routes
+
+- **[/](https://dandolo.ai/)** - Home page with network stats and overview
+- **[/chat](https://dandolo.ai/chat)** - Interactive chat interface  
+- **[/models](https://dandolo.ai/models)** - Browse available Venice.ai models
+- **[/providers](https://dandolo.ai/providers)** - View provider network status
+- **[/dashboard](https://dandolo.ai/dashboard)** - Usage tracking and analytics
+- **[/developers](https://dandolo.ai/developers)** - API keys and documentation
+- **[/admin](https://dandolo.ai/admin)** - Admin panel (authorized wallets only)
+
+### Agent-Friendly Navigation
+
+All routes are directly accessible via URL, making Dandolo fully compatible with:
+- **Autonomous agents** that need to navigate to specific endpoints
+- **Browser automation** and testing frameworks
+- **Deep linking** for embedding in other applications
+- **Bookmarking** specific pages and functionality
+
+### URL Routing Features
+
+- **Direct Access** - Navigate to any page without login barriers
+- **Browser History** - Back/forward buttons work correctly
+- **Bookmarkable** - Save links to specific functionality
+- **Shareable** - Send direct links to chat, models, or dashboard
+- **SEO Friendly** - Each route has its own URL for discoverability
+
 ## Getting Started
 
-1. **Visit** [dandolo.ai](https://dandolo.ai)
-2. **Connect** your Ethereum wallet (for API key generation)
-3. **Generate** an API key (`dk_` for dev, `ak_` for production)
-4. **Start building** with the examples above
+### Web Interface
+1. **Visit** [dandolo.ai](https://dandolo.ai) for the home page
+2. **Navigate** to [dandolo.ai/chat](https://dandolo.ai/chat) to start chatting
+3. **Browse models** at [dandolo.ai/models](https://dandolo.ai/models)
+4. **Get API keys** at [dandolo.ai/developers](https://dandolo.ai/developers)
+
+### API Integration
+1. **Connect** your Ethereum wallet (for API key generation)
+2. **Generate** an API key (`dk_` for dev, `ak_` for production)
+3. **Start building** with the examples above
 
 ## Links
 
 - **Platform**: [dandolo.ai](https://dandolo.ai)
-- **Documentation**: [dandolo.ai](https://dandolo.ai)
+- **Chat Interface**: [dandolo.ai/chat](https://dandolo.ai/chat)
+- **API Documentation**: [dandolo.ai/developers](https://dandolo.ai/developers)
+- **Network Status**: [dandolo.ai/providers](https://dandolo.ai/providers)
 - **GitHub Issues**: Report bugs and feature requests here
 
 ---

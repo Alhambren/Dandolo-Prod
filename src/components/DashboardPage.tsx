@@ -148,14 +148,14 @@ const DashboardPage: React.FC = () => {
       } else if (detectedUSDBalance > 0) {
         toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). Balance detected: $${detectedUSDBalance.toFixed(2)}`);
       } else {
-        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). No balance detected - you can add VCU to your Venice account.`);
+        toast.success(`✅ Validated! Venice.ai API key works (${validation.models || 0} models available). No balance detected - you can add Diem to your Venice account.`);
       }
 
       const providerId = await registerProviderWithBalance({
         address: address,
         name: providerName || `Provider ${address.substring(0, 8)}`,
         veniceApiKey: veniceApiKey.trim(),
-        vcuBalance: detectedUSDBalance, // Now storing VCU balance directly from validation
+        vcuBalance: detectedUSDBalance, // Now storing Diem balance directly from validation
       });
 
       setProviderName("");
@@ -249,7 +249,7 @@ const DashboardPage: React.FC = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div className="text-center">
                       <div className="text-xl font-bold text-yellow-400">{addressPoints.breakdown.vcuProviding.toLocaleString()}</div>
-                      <div className="text-xs text-gray-400">Balance Providing</div>
+                      <div className="text-xs text-gray-400">Diem Providing</div>
                     </div>
                     <div className="text-center">
                       <div className="text-xl font-bold text-blue-400">{addressPoints.breakdown.promptService.toLocaleString()}</div>
@@ -447,7 +447,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="mt-4 p-4 bg-gold/10 border border-gold/30 rounded-lg">
             <p className="text-sm text-gold">
-              🎉 Your Venice.ai balance will be automatically detected from your inference API key and added to the shared network pool. You'll earn 10 points per dollar per day, plus additional points for serving requests. Balances update automatically every hour.
+              🎉 Your Venice.ai Diem balance will be automatically detected from your inference API key and added to the shared network pool. You'll earn 10 points per dollar per day, plus additional points for serving requests. Balances update automatically every hour.
             </p>
           </div>
         </GlassCard>

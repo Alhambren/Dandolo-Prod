@@ -231,22 +231,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <p className="text-white/60 mb-6">
               Create an account to get started. You can set up an org for your team later.
             </p>
-            <div className="flex items-center gap-3 text-white/40">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-sm">👤</span>
-              </div>
-              <div className="flex-1 h-0.5 bg-white/10"></div>
-            </div>
-            <div className="flex items-center gap-2 mt-3 text-sm">
-              <div className="w-6 h-6 rounded bg-orange-500/20 flex items-center justify-center">
-                <span>🎯</span>
-              </div>
-              <div className="w-6 h-6 rounded bg-gray-700/50"></div>
-              <div className="w-6 h-6 rounded bg-orange-600/20 flex items-center justify-center">
-                <span>🦊</span>
-              </div>
-              <div className="w-6 h-6 rounded bg-gray-700/50"></div>
-            </div>
           </div>
 
           {/* Step 2: Choose Your Access Level */}
