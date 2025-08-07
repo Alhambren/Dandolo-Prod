@@ -26,10 +26,10 @@ export function DeveloperDocs({ onModelSelect }: DeveloperDocsProps) {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 px-1 capitalize transition-colors ${
+            className={`pb-3 px-1 capitalize transition-colors cursor-pointer ${
               activeTab === tab 
-                ? 'border-b-2 border-blue-500 text-blue-500' 
-                : 'text-gray-400 hover:text-white'
+                ? 'border-b-2 border-blue-500 text-blue-500 font-medium' 
+                : 'text-gray-400 hover:text-white hover:text-blue-300'
             }`}
           >
             {tab === 'agents' ? 'AI Agents' : tab}
