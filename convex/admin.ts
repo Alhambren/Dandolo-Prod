@@ -462,6 +462,460 @@ export const getGovernanceConfig = query({
 });
 
 /**
+ * Get comprehensive user analytics for admin dashboard
+ */
+export const getUserAnalytics = query({
+  args: {
+    adminAddress: v.string(),
+    timeRange: v.optional(v.union(v.literal("24h"), v.literal("7d"), v.literal("30d"))),
+  },
+  returns: v.object({
+    totalUsers: v.number(),
+    activeUsers: v.number(),
+    anonymousUsers: v.number(),
+    authenticatedUsers: v.number(),
+    topUsers: v.array(v.object({
+      address: v.string(),
+      totalQueries: v.number(),
+      totalPoints: v.number(),
+      lastActive: v.optional(v.number()),
+      userType: v.string(),
+    })),
+    userGrowth: v.array(v.object({
+      date: v.number(),
+      newUsers: v.number(),
+      totalUsers: v.number(),
+    })),
+    usage: v.object({
+      totalQueries: v.number(),
+      averageQueriesPerUser: v.number(),
+      queriesPerHour: v.array(v.object({
+        hour: v.number(),
+        count: v.number(),
+      })),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Unauthorized: Admin access required");
+    }
+
+    const timeRange = args.timeRange || "24h";
+    const now = Date.now();
+    const cutoff = timeRange === "24h" ? now - (24 * 60 * 60 * 1000) :
+                   timeRange === "7d" ? now - (7 * 24 * 60 * 60 * 1000) :
+                   now - (30 * 24 * 60 * 60 * 1000);
+
+    // Get all user points (which includes user activity)
+    const allUserPoints = await ctx.db.query("userPoints").collect();
+    const recentInferences = await ctx.db.query("inferences")
+      .filter((q) => q.gte(q.field("timestamp"), cutoff))
+      .collect();
+
+    // Get API keys for user type identification
+    const allApiKeys = await ctx.db.query("apiKeys").collect();
+
+    // Calculate user metrics
+    const activeUserAddresses = new Set([
+      ...recentInferences.map(inf => inf.userAddress).filter(addr => addr),
+      ...recentInferences.map(inf => inf.sessionId?.includes('session-') ? 
+        inf.sessionId.replace('session-', '') : null).filter(Boolean)
+    ]);
+
+    const totalUsers = allUserPoints.length + activeUserAddresses.size;
+    const activeUsers = activeUserAddresses.size;
+
+    // Count anonymous vs authenticated users from recent activity
+    let anonymousUsers = 0;
+    let authenticatedUsers = 0;
+
+    recentInferences.forEach(inf => {
+      if (inf.isAnonymous) {
+        anonymousUsers++;
+      } else if (inf.userAddress) {
+        authenticatedUsers++;
+      }
+    });
+
+    // Get top users by activity
+    const userActivity = new Map<string, { queries: number; points: number; lastActive?: number; type: string }>();
+    
+    recentInferences.forEach(inf => {
+      const address = inf.userAddress || inf.sessionId || 'anonymous';
+      if (!userActivity.has(address)) {
+        userActivity.set(address, { queries: 0, points: 0, type: 'anonymous' });
+      }
+      const user = userActivity.get(address)!;
+      user.queries++;
+      user.lastActive = Math.max(user.lastActive || 0, inf.timestamp);
+      
+      // Determine user type
+      if (inf.apiKey) {
+        const apiKey = allApiKeys.find(k => k.key === inf.apiKey);
+        if (apiKey) {
+          user.type = apiKey.keyType || 'developer';
+        }
+      } else if (inf.userAddress) {
+        user.type = 'authenticated';
+      }
+    });
+
+    // Add points data
+    allUserPoints.forEach(up => {
+      if (userActivity.has(up.address)) {
+        userActivity.get(up.address)!.points = up.points || 0;
+      } else {
+        userActivity.set(up.address, {
+          queries: 0,
+          points: up.points || 0,
+          lastActive: up.lastEarned,
+          type: 'authenticated'
+        });
+      }
+    });
+
+    const topUsers = Array.from(userActivity.entries())
+      .map(([address, data]) => ({
+        address: address.length > 42 ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}` : address,
+        totalQueries: data.queries,
+        totalPoints: data.points,
+        lastActive: data.lastActive,
+        userType: data.type,
+      }))
+      .sort((a, b) => (b.totalQueries + b.totalPoints) - (a.totalQueries + a.totalPoints))
+      .slice(0, 20);
+
+    // Mock user growth data (would be implemented with historical tracking)
+    const userGrowth = [];
+    for (let i = 7; i >= 0; i--) {
+      const date = now - (i * 24 * 60 * 60 * 1000);
+      userGrowth.push({
+        date,
+        newUsers: Math.floor(Math.random() * 5) + 1, // Mock data
+        totalUsers: totalUsers - (i * 2), // Mock growth
+      });
+    }
+
+    // Queries per hour for last 24 hours
+    const queriesPerHour = [];
+    for (let i = 23; i >= 0; i--) {
+      const hourStart = now - (i * 60 * 60 * 1000);
+      const hourEnd = hourStart + (60 * 60 * 1000);
+      const count = recentInferences.filter(inf => 
+        inf.timestamp >= hourStart && inf.timestamp < hourEnd
+      ).length;
+      
+      queriesPerHour.push({
+        hour: Math.floor(hourStart / (60 * 60 * 1000)),
+        count,
+      });
+    }
+
+    return {
+      totalUsers,
+      activeUsers,
+      anonymousUsers: Math.floor(anonymousUsers / 10), // Rough estimate of unique anonymous users
+      authenticatedUsers: authenticatedUsers,
+      topUsers,
+      userGrowth,
+      usage: {
+        totalQueries: recentInferences.length,
+        averageQueriesPerUser: activeUsers > 0 ? Math.round(recentInferences.length / activeUsers) : 0,
+        queriesPerHour,
+      },
+    };
+  },
+});
+
+/**
+ * Get comprehensive query analytics for admin dashboard
+ */
+export const getQueryAnalytics = query({
+  args: {
+    adminAddress: v.string(),
+    timeRange: v.optional(v.union(v.literal("24h"), v.literal("7d"), v.literal("30d"))),
+  },
+  returns: v.object({
+    totalQueries: v.number(),
+    successRate: v.number(),
+    averageResponseTime: v.number(),
+    totalTokensProcessed: v.number(),
+    costMetrics: v.object({
+      totalCostUSD: v.number(),
+      costPerQuery: v.number(),
+      costPerToken: v.number(),
+    }),
+    queryTypes: v.record(v.string(), v.number()),
+    modelUsage: v.record(v.string(), v.number()),
+    providerDistribution: v.record(v.string(), v.number()),
+    timeDistribution: v.array(v.object({
+      hour: v.number(),
+      queries: v.number(),
+      avgResponseTime: v.number(),
+    })),
+    errorAnalysis: v.object({
+      totalErrors: v.number(),
+      errorTypes: v.record(v.string(), v.number()),
+      errorRate: v.number(),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Unauthorized: Admin access required");
+    }
+
+    const timeRange = args.timeRange || "24h";
+    const now = Date.now();
+    const cutoff = timeRange === "24h" ? now - (24 * 60 * 60 * 1000) :
+                   timeRange === "7d" ? now - (7 * 24 * 60 * 60 * 1000) :
+                   now - (30 * 24 * 60 * 60 * 1000);
+
+    const inferences = await ctx.db.query("inferences")
+      .filter((q) => q.gte(q.field("timestamp"), cutoff))
+      .collect();
+
+    const providers = await ctx.db.query("providers").collect();
+    const providerMap = new Map(providers.map(p => [p._id, p.name]));
+
+    const totalQueries = inferences.length;
+    const successfulQueries = inferences.filter(inf => !inf.error).length;
+    const successRate = totalQueries > 0 ? (successfulQueries / totalQueries) * 100 : 0;
+
+    // Calculate response times (mock data for now since we don't track this yet)
+    const averageResponseTime = 1250; // ms
+
+    // Token and cost calculations
+    const totalTokensProcessed = inferences.reduce((sum, inf) => sum + (inf.tokensUsed || 0), 0);
+    const totalVCUCost = inferences.reduce((sum, inf) => sum + (inf.vcuCost || 0), 0);
+    const totalCostUSD = totalVCUCost * 0.10; // Convert VCU to USD
+    const costPerQuery = totalQueries > 0 ? totalCostUSD / totalQueries : 0;
+    const costPerToken = totalTokensProcessed > 0 ? totalCostUSD / totalTokensProcessed : 0;
+
+    // Query type distribution
+    const queryTypes: Record<string, number> = {};
+    inferences.forEach(inf => {
+      queryTypes[inf.intent] = (queryTypes[inf.intent] || 0) + 1;
+    });
+
+    // Model usage distribution
+    const modelUsage: Record<string, number> = {};
+    inferences.forEach(inf => {
+      modelUsage[inf.model] = (modelUsage[inf.model] || 0) + 1;
+    });
+
+    // Provider distribution
+    const providerDistribution: Record<string, number> = {};
+    inferences.forEach(inf => {
+      const providerName = providerMap.get(inf.providerId) || 'Unknown';
+      providerDistribution[providerName] = (providerDistribution[providerName] || 0) + 1;
+    });
+
+    // Time distribution (hourly breakdown)
+    const timeDistribution = [];
+    for (let i = 23; i >= 0; i--) {
+      const hourStart = now - (i * 60 * 60 * 1000);
+      const hourEnd = hourStart + (60 * 60 * 1000);
+      const hourQueries = inferences.filter(inf => 
+        inf.timestamp >= hourStart && inf.timestamp < hourEnd
+      );
+      
+      timeDistribution.push({
+        hour: Math.floor(hourStart / (60 * 60 * 1000)),
+        queries: hourQueries.length,
+        avgResponseTime: averageResponseTime, // Mock data
+      });
+    }
+
+    // Error analysis
+    const errorInferences = inferences.filter(inf => inf.error);
+    const errorTypes: Record<string, number> = {};
+    errorInferences.forEach(inf => {
+      const errorType = inf.error?.includes('timeout') ? 'Timeout' :
+                       inf.error?.includes('rate limit') ? 'Rate Limited' :
+                       inf.error?.includes('balance') ? 'Insufficient Balance' :
+                       'Other';
+      errorTypes[errorType] = (errorTypes[errorType] || 0) + 1;
+    });
+
+    return {
+      totalQueries,
+      successRate: Math.round(successRate * 100) / 100,
+      averageResponseTime,
+      totalTokensProcessed,
+      costMetrics: {
+        totalCostUSD: Math.round(totalCostUSD * 100) / 100,
+        costPerQuery: Math.round(costPerQuery * 10000) / 10000,
+        costPerToken: Math.round(costPerToken * 100000) / 100000,
+      },
+      queryTypes,
+      modelUsage,
+      providerDistribution,
+      timeDistribution,
+      errorAnalysis: {
+        totalErrors: errorInferences.length,
+        errorTypes,
+        errorRate: totalQueries > 0 ? (errorInferences.length / totalQueries) * 100 : 0,
+      },
+    };
+  },
+});
+
+/**
+ * Get all network participants for admin dashboard  
+ */
+export const getAllNetworkParticipants = query({
+  args: {
+    adminAddress: v.string(),
+    limit: v.optional(v.number()),
+  },
+  returns: v.object({
+    providers: v.array(v.object({
+      id: v.id("providers"),
+      name: v.string(),
+      address: v.string(),
+      isActive: v.boolean(),
+      vcuBalance: v.number(),
+      totalPrompts: v.number(),
+      points: v.number(),
+      uptime: v.number(),
+      registrationDate: v.optional(v.number()),
+      verificationStatus: v.optional(v.string()),
+    })),
+    users: v.array(v.object({
+      address: v.string(),
+      points: v.number(),
+      totalQueries: v.number(),
+      dailyUsage: v.number(),
+      lastActive: v.optional(v.number()),
+      userType: v.string(),
+    })),
+    apiKeys: v.array(v.object({
+      keyId: v.string(),
+      address: v.string(),
+      keyType: v.string(),
+      dailyUsage: v.number(),
+      dailyLimit: v.number(),
+      isActive: v.boolean(),
+    })),
+    summary: v.object({
+      totalProviders: v.number(),
+      activeProviders: v.number(),
+      totalUsers: v.number(),
+      totalApiKeys: v.number(),
+      networkHealth: v.number(),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    if (!verifyAdminAccess(args.adminAddress)) {
+      throw new Error("Unauthorized: Admin access required");
+    }
+
+    const limit = args.limit || 100;
+
+    // Get all providers with their points
+    const allProviders = await ctx.db.query("providers").collect();
+    const allProviderPoints = await ctx.db.query("providerPoints").collect();
+    const providerHealths = await ctx.db.query("providerHealth").collect();
+
+    // Get all user data
+    const allUserPoints = await ctx.db.query("userPoints").collect();
+    const allApiKeys = await ctx.db.query("apiKeys").collect();
+    const recentInferences = await ctx.db.query("inferences")
+      .filter((q) => q.gte(q.field("timestamp"), Date.now() - (7 * 24 * 60 * 60 * 1000)))
+      .collect();
+
+    // Process provider data
+    const providers = allProviders.slice(0, limit).map(provider => {
+      const points = allProviderPoints.find(pp => pp.providerId === provider._id);
+      const healthChecks = providerHealths.filter(h => h.providerId === provider._id);
+      const uptime = healthChecks.length > 0 ? 
+        (healthChecks.filter(h => h.status).length / healthChecks.length) * 100 : 0;
+
+      return {
+        id: provider._id,
+        name: provider.name,
+        address: provider.address,
+        isActive: provider.isActive,
+        vcuBalance: provider.vcuBalance || 0,
+        totalPrompts: provider.totalPrompts || 0,
+        points: points?.totalPoints || 0,
+        uptime: Math.round(uptime * 10) / 10,
+        registrationDate: provider.registrationDate,
+        verificationStatus: provider.verificationStatus,
+      };
+    });
+
+    // Process user data
+    const userActivity = new Map<string, { queries: number; lastActive?: number; userType: string }>();
+    
+    recentInferences.forEach(inf => {
+      const address = inf.userAddress || 'anonymous';
+      if (!userActivity.has(address)) {
+        userActivity.set(address, { queries: 0, userType: 'anonymous' });
+      }
+      const user = userActivity.get(address)!;
+      user.queries++;
+      user.lastActive = Math.max(user.lastActive || 0, inf.timestamp);
+      
+      if (inf.apiKey) {
+        const apiKey = allApiKeys.find(k => k.key === inf.apiKey);
+        if (apiKey) {
+          user.userType = apiKey.keyType || 'developer';
+        }
+      } else if (inf.userAddress) {
+        user.userType = 'authenticated';
+      }
+    });
+
+    const users = allUserPoints.slice(0, limit).map(userPoint => {
+      const activity = userActivity.get(userPoint.address) || { queries: 0, userType: 'authenticated' };
+      return {
+        address: `${userPoint.address.substring(0, 8)}...${userPoint.address.substring(userPoint.address.length - 6)}`,
+        points: userPoint.points || 0,
+        totalQueries: activity.queries,
+        dailyUsage: userPoint.promptsToday || 0,
+        lastActive: userPoint.lastEarned,
+        userType: activity.userType,
+      };
+    });
+
+    // Process API keys
+    const apiKeys = allApiKeys.slice(0, limit).map(apiKey => ({
+      keyId: `${apiKey.key.substring(0, 8)}...`,
+      address: apiKey.address ? `${apiKey.address.substring(0, 8)}...${apiKey.address.substring(apiKey.address.length - 6)}` : 'system',
+      keyType: apiKey.keyType || 'standard',
+      dailyUsage: apiKey.dailyUsage || 0,
+      dailyLimit: apiKey.dailyLimit || 50,
+      isActive: (apiKey.dailyUsage || 0) < (apiKey.dailyLimit || 50),
+    }));
+
+    // Calculate network health
+    const activeProviders = allProviders.filter(p => p.isActive).length;
+    const totalBalance = allProviders.reduce((sum, p) => sum + (p.vcuBalance || 0), 0);
+    const recentActivity = recentInferences.length;
+    
+    const networkHealth = Math.round(
+      ((activeProviders / Math.max(allProviders.length, 1)) * 0.4 +
+       (Math.min(totalBalance / 1000, 1)) * 0.3 + // Normalize to $100 USD
+       (Math.min(recentActivity / 100, 1)) * 0.3) * 100
+    );
+
+    return {
+      providers,
+      users,
+      apiKeys,
+      summary: {
+        totalProviders: allProviders.length,
+        activeProviders,
+        totalUsers: allUserPoints.length + userActivity.size,
+        totalApiKeys: allApiKeys.length,
+        networkHealth,
+      },
+    };
+  },
+});
+
+/**
  * Get financial metrics for admin dashboard
  */
 export const getFinancialMetrics = query({

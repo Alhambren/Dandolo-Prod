@@ -364,13 +364,456 @@ const SystemOverview: React.FC = () => {
   );
 };
 
-// Placeholder components for other tabs
-const InferenceAnalytics: React.FC = () => (
-  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-    <h2 className="text-xl font-bold text-white mb-4">Inference Analytics</h2>
-    <p className="text-gray-400">Analytics dashboard coming soon...</p>
-  </div>
-);
+const InferenceAnalytics: React.FC = () => {
+  const { address } = useAccount();
+  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [activeTab, setActiveTab] = useState<'queries' | 'users' | 'participants'>('queries');
+  
+  const queryAnalytics = useQuery(
+    api.admin.getQueryAnalytics,
+    address ? { adminAddress: address, timeRange } : 'skip'
+  );
+  const userAnalytics = useQuery(
+    api.admin.getUserAnalytics,
+    address ? { adminAddress: address, timeRange } : 'skip'
+  );
+  const networkParticipants = useQuery(
+    api.admin.getAllNetworkParticipants,
+    address ? { adminAddress: address } : 'skip'
+  );
+
+  const timeRangeTabs = [
+    { id: '24h', name: '24h' },
+    { id: '7d', name: '7d' },
+    { id: '30d', name: '30d' },
+  ];
+
+  const analyticsTabs = [
+    { id: 'queries', name: 'Query Analytics', icon: Activity },
+    { id: 'users', name: 'User Analytics', icon: Users },
+    { id: 'participants', name: 'All Participants', icon: Server },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Sub Navigation */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex space-x-1">
+          {analyticsTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.name}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex space-x-1">
+          {timeRangeTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setTimeRange(tab.id as any)}
+              className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+                timeRange === tab.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              {tab.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Query Analytics Tab */}
+      {activeTab === 'queries' && queryAnalytics && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-white">Query Analytics ({timeRange})</h2>
+          
+          {/* Query Performance Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Zap className="w-6 h-6 text-blue-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOTAL QUERIES</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{queryAnalytics.totalQueries.toLocaleString()}</p>
+              <p className="text-sm text-gray-400">in last {timeRange}</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <CheckCircle className={`w-6 h-6 ${queryAnalytics.successRate >= 95 ? 'text-green-500' : queryAnalytics.successRate >= 90 ? 'text-yellow-500' : 'text-red-500'}`} />
+                <h3 className="text-sm font-medium text-gray-400">SUCCESS RATE</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{queryAnalytics.successRate.toFixed(1)}%</p>
+              <p className="text-sm text-gray-400">completion rate</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Clock className={`w-6 h-6 ${queryAnalytics.averageResponseTime < 1500 ? 'text-green-500' : queryAnalytics.averageResponseTime < 3000 ? 'text-yellow-500' : 'text-red-500'}`} />
+                <h3 className="text-sm font-medium text-gray-400">AVG RESPONSE</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{queryAnalytics.averageResponseTime}ms</p>
+              <p className="text-sm text-gray-400">response time</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Database className="w-6 h-6 text-purple-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOKENS PROCESSED</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{queryAnalytics.totalTokensProcessed.toLocaleString()}</p>
+              <p className="text-sm text-gray-400">total tokens</p>
+            </div>
+          </div>
+
+          {/* Cost Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <DollarSign className="w-6 h-6 text-red-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOTAL COST</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">${queryAnalytics.costMetrics.totalCostUSD}</p>
+              <p className="text-sm text-gray-400">USD spent</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <TrendingUp className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-sm font-medium text-gray-400">COST/QUERY</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">${queryAnalytics.costMetrics.costPerQuery.toFixed(4)}</p>
+              <p className="text-sm text-gray-400">average cost</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Activity className="w-6 h-6 text-green-500" />
+                <h3 className="text-sm font-medium text-gray-400">COST/TOKEN</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">${queryAnalytics.costMetrics.costPerToken.toFixed(6)}</p>
+              <p className="text-sm text-gray-400">per token</p>
+            </div>
+          </div>
+
+          {/* Distribution Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Query Types */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Query Type Distribution</h3>
+              <div className="space-y-3">
+                {Object.entries(queryAnalytics.queryTypes)
+                  .sort(([,a], [,b]) => (b as number) - (a as number))
+                  .map(([type, count]) => (
+                  <div key={type} className="flex justify-between items-center">
+                    <span className="text-gray-300 capitalize">{type}</span>
+                    <span className="text-white font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Model Usage */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Top Models Used</h3>
+              <div className="space-y-3">
+                {Object.entries(queryAnalytics.modelUsage)
+                  .sort(([,a], [,b]) => (b as number) - (a as number))
+                  .slice(0, 8)
+                  .map(([model, count]) => (
+                  <div key={model} className="flex justify-between items-center">
+                    <span className="text-gray-300 text-sm">{model}</span>
+                    <span className="text-white font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Provider Distribution */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Provider Distribution</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(queryAnalytics.providerDistribution)
+                .sort(([,a], [,b]) => (b as number) - (a as number))
+                .map(([provider, count]) => (
+                <div key={provider} className="flex justify-between items-center p-3 bg-gray-800 rounded">
+                  <span className="text-gray-300">{provider}</span>
+                  <span className="text-white font-semibold">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Error Analysis */}
+          {queryAnalytics.errorAnalysis.totalErrors > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4">Error Analysis</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                <div className="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+                  <div className="text-2xl font-bold text-red-400">{queryAnalytics.errorAnalysis.totalErrors}</div>
+                  <div className="text-sm text-gray-400">Total Errors</div>
+                </div>
+                <div className="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/20">
+                  <div className="text-2xl font-bold text-red-400">{queryAnalytics.errorAnalysis.errorRate.toFixed(2)}%</div>
+                  <div className="text-sm text-gray-400">Error Rate</div>
+                </div>
+                <div className="text-center p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+                  <div className="text-2xl font-bold text-yellow-400">{Object.keys(queryAnalytics.errorAnalysis.errorTypes).length}</div>
+                  <div className="text-sm text-gray-400">Error Types</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {Object.entries(queryAnalytics.errorAnalysis.errorTypes).map(([type, count]) => (
+                  <div key={type} className="flex justify-between items-center p-2 bg-gray-800 rounded">
+                    <span className="text-gray-300">{type}</span>
+                    <span className="text-red-400 font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* User Analytics Tab */}
+      {activeTab === 'users' && userAnalytics && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-white">User Analytics ({timeRange})</h2>
+          
+          {/* User Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Users className="w-6 h-6 text-blue-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOTAL USERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.totalUsers}</p>
+              <p className="text-sm text-gray-400">all time</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Activity className="w-6 h-6 text-green-500" />
+                <h3 className="text-sm font-medium text-gray-400">ACTIVE USERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.activeUsers}</p>
+              <p className="text-sm text-gray-400">last {timeRange}</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <UserX className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-sm font-medium text-gray-400">ANONYMOUS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.anonymousUsers}</p>
+              <p className="text-sm text-gray-400">estimated unique</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Shield className="w-6 h-6 text-purple-500" />
+                <h3 className="text-sm font-medium text-gray-400">AUTHENTICATED</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.authenticatedUsers}</p>
+              <p className="text-sm text-gray-400">with wallet/keys</p>
+            </div>
+          </div>
+
+          {/* Usage Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Zap className="w-6 h-6 text-blue-500" />
+                <h3 className="text-sm font-medium text-gray-400">TOTAL QUERIES</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.usage.totalQueries}</p>
+              <p className="text-sm text-gray-400">in last {timeRange}</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <TrendingUp className="w-6 h-6 text-green-500" />
+                <h3 className="text-sm font-medium text-gray-400">AVG/USER</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{userAnalytics.usage.averageQueriesPerUser}</p>
+              <p className="text-sm text-gray-400">queries per user</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Clock className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-sm font-medium text-gray-400">PEAK HOUR</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{Math.max(...userAnalytics.usage.queriesPerHour.map(h => h.count))}</p>
+              <p className="text-sm text-gray-400">queries/hour</p>
+            </div>
+          </div>
+
+          {/* Top Users Table */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Top Active Users</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">User</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Type</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Queries</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Points</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Last Active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userAnalytics.topUsers.slice(0, 15).map((user, index) => (
+                    <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50">
+                      <td className="py-3 px-4">
+                        <div className="font-mono text-sm text-white">{user.address}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          user.userType === 'developer' ? 'bg-blue-500/20 text-blue-400' :
+                          user.userType === 'authenticated' ? 'bg-green-500/20 text-green-400' :
+                          'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {user.userType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-white">{user.totalQueries}</td>
+                      <td className="py-3 px-4 text-yellow-400">{user.totalPoints.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-gray-400 text-sm">
+                        {user.lastActive ? new Date(user.lastActive).toLocaleDateString() : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Network Participants Tab */}
+      {activeTab === 'participants' && networkParticipants && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-white">All Network Participants</h2>
+          
+          {/* Network Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Server className="w-6 h-6 text-blue-500" />
+                <h3 className="text-sm font-medium text-gray-400">PROVIDERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.summary.totalProviders}</p>
+              <p className="text-sm text-gray-400">{networkParticipants.summary.activeProviders} active</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Users className="w-6 h-6 text-green-500" />
+                <h3 className="text-sm font-medium text-gray-400">USERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.summary.totalUsers}</p>
+              <p className="text-sm text-gray-400">registered</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Lock className="w-6 h-6 text-yellow-500" />
+                <h3 className="text-sm font-medium text-gray-400">API KEYS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.summary.totalApiKeys}</p>
+              <p className="text-sm text-gray-400">issued</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <Activity className={`w-6 h-6 ${networkParticipants.summary.networkHealth >= 90 ? 'text-green-500' : networkParticipants.summary.networkHealth >= 70 ? 'text-yellow-500' : 'text-red-500'}`} />
+                <h3 className="text-sm font-medium text-gray-400">NETWORK HEALTH</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.summary.networkHealth}%</p>
+              <p className="text-sm text-gray-400">overall</p>
+            </div>
+            
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <CheckCircle className="w-6 h-6 text-purple-500" />
+                <h3 className="text-sm font-medium text-gray-400">ACTIVE PROVIDERS</h3>
+              </div>
+              <p className="text-3xl font-bold text-white">{networkParticipants.summary.activeProviders}</p>
+              <p className="text-sm text-gray-400">serving requests</p>
+            </div>
+          </div>
+
+          {/* Complete Providers Table */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">All Providers ({networkParticipants.providers.length})</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Provider</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">VCU Balance</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Prompts</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Points</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Uptime</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Registration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {networkParticipants.providers.map((provider, index) => (
+                    <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50">
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-white">{provider.name}</div>
+                        <div className="text-gray-400 text-xs font-mono">{`${provider.address.substring(0, 8)}...${provider.address.substring(provider.address.length - 6)}`}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          provider.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {provider.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-green-400">{provider.vcuBalance.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-white">{provider.totalPrompts.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-yellow-400">{provider.points.toLocaleString()}</td>
+                      <td className="py-3 px-4">
+                        <span className={`${
+                          provider.uptime >= 99 ? 'text-green-400' :
+                          provider.uptime >= 95 ? 'text-yellow-400' : 'text-red-400'
+                        }`}>
+                          {provider.uptime.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-400 text-sm">
+                        {provider.registrationDate ? new Date(provider.registrationDate).toLocaleDateString() : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const NetworkTopology: React.FC = () => {
   const { address } = useAccount();
