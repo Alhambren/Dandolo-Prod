@@ -616,7 +616,7 @@ export const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-gray-950 relative">
+    <div className="flex h-[calc(100vh-4rem)] bg-gray-950 relative overflow-hidden">
       {/* Mobile overlay */}
       {isSidebarExpanded && (
         <div 
@@ -812,29 +812,29 @@ export const ChatInterface: React.FC = () => {
       
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Slim top bar with integrated controls */}
-        <div className="flex items-center gap-4 px-4 md:px-6 py-3 border-b border-gray-800 bg-gray-900/50">
+        {/* Mobile-Optimized Top Bar */}
+        <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 border-b border-gray-800 bg-gray-900/50 min-h-[60px]">
           {/* Mobile Menu Toggle */}
           <button
             onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-            className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
+            className="md:hidden p-1.5 text-gray-400 hover:text-white transition-colors flex-shrink-0"
           >
             <Folder className="w-5 h-5" />
           </button>
           
-          {/* Model Selector */}
-          <div className="relative">
+          {/* Model Selector - Responsive */}
+          <div className="relative flex-shrink-0">
             <button
               onClick={() => setShowModelSelector(!showModelSelector)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors text-sm"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors text-xs sm:text-sm"
             >
-              <span className="text-gray-400">Model:</span>
-              <span className="text-white">{selectedModel}</span>
-              <ChevronDown className="w-4 h-4" />
+              <span className="text-gray-400 hidden sm:inline">Model:</span>
+              <span className="text-white truncate max-w-[80px] sm:max-w-none">{selectedModel}</span>
+              <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
             </button>
             
             {showModelSelector && (
-              <div className="absolute top-full left-0 mt-2 bg-gray-800 rounded-lg shadow-xl p-2 min-w-[300px] z-50 max-h-96 overflow-y-auto">
+              <div className="absolute top-full left-0 mt-2 bg-gray-800 rounded-lg shadow-xl p-2 w-[280px] sm:min-w-[300px] z-50 max-h-96 overflow-y-auto">
                 {modelsToShow.map(model => {
                   const modelData = availableModels?.find(m => m.id === model);
                   return (
@@ -848,7 +848,7 @@ export const ChatInterface: React.FC = () => {
                         selectedModel === model ? 'bg-gray-700 text-yellow-500' : 'text-white'
                       }`}
                     >
-                      <div className="font-medium">{model}</div>
+                      <div className="font-medium text-sm">{model}</div>
                       {modelData?.type && (
                         <div className="text-xs text-gray-400 capitalize">{modelData.type}</div>
                       )}
@@ -859,40 +859,40 @@ export const ChatInterface: React.FC = () => {
             )}
           </div>
           
-          {/* Task Type - Icon Pills */}
-          <div className="flex items-center gap-1 md:gap-2">
+          {/* Task Type - Responsive Icon Pills */}
+          <div className="flex items-center gap-1">
             {TASK_TYPES.map(({ type, icon: Icon, title }) => (
               <button
                 key={type}
                 onClick={() => setTaskType(type)}
-                className={`p-1.5 rounded-lg transition-colors ${
+                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                   taskType === type ? 'bg-yellow-400 text-black font-semibold' : 'bg-gray-800 text-gray-400'
                 }`}
                 title={title}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
               </button>
             ))}
           </div>
           
           {/* Spacer */}
-          <div className="flex-1" />
+          <div className="flex-1 min-w-0" />
           
           {/* Adult content toggle - hidden on mobile */}
-          <label className="hidden md:flex items-center gap-2 text-xs text-gray-500">
+          <label className="hidden md:flex items-center gap-2 text-xs text-gray-500 flex-shrink-0">
             <input 
               type="checkbox" 
               checked={allowAdultContent}
               onChange={(e) => setAllowAdultContent(e.target.checked)}
               className="rounded" 
             />
-            <span>Allow adult content</span>
+            <span className="whitespace-nowrap">Allow adult content</span>
           </label>
         </div>
         
-        {/* Chat Messages Area */}
+        {/* Chat Messages Area - Mobile Optimized */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-12">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-12">
             {currentChat ? (
               <div className="space-y-6">
                 {currentChat.messages.map((msg) => (
@@ -900,7 +900,7 @@ export const ChatInterface: React.FC = () => {
                     key={msg.id}
                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`max-w-3xl px-6 py-4 rounded-2xl ${
+                    <div className={`max-w-3xl px-3 sm:px-6 py-3 sm:py-4 rounded-2xl ${
                       msg.role === 'user' 
                         ? 'bg-yellow-400 text-black font-semibold' 
                         : 'bg-gray-800 text-white'
@@ -956,8 +956,8 @@ export const ChatInterface: React.FC = () => {
           </div>
         </div>
         
-        {/* Input Area - Floating */}
-        <div className="px-4 md:px-6 py-4 bg-gray-900/50 backdrop-blur">
+        {/* Input Area - Mobile Optimized */}
+        <div className="p-3 sm:px-4 md:px-6 sm:py-4 bg-gray-900/50 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="relative">
               <textarea
@@ -965,7 +965,7 @@ export const ChatInterface: React.FC = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={getTaskTypePromptPlaceholder()}
-                className="w-full px-4 py-3 pr-12 bg-gray-800 border border-gray-700 rounded-xl resize-none focus:outline-none focus:border-gray-600 text-white placeholder-gray-400 text-sm md:text-base"
+                className="w-full pl-3 pr-12 py-3 sm:px-4 sm:pr-12 bg-gray-800 border border-gray-700 rounded-xl resize-none focus:outline-none focus:border-gray-600 text-white placeholder-gray-400 text-sm sm:text-base min-h-[44px]"
                 rows={1}
                 disabled={isLoading}
                 onKeyDown={(e) => {
@@ -974,11 +974,15 @@ export const ChatInterface: React.FC = () => {
                     handleSubmit(e);
                   }
                 }}
+                style={{ 
+                  minHeight: '44px', // Ensure minimum touch target size
+                  maxHeight: '120px' // Prevent excessive height on mobile
+                }}
               />
               <button 
                 type="submit"
                 disabled={isLoading || !message.trim()}
-                className="absolute right-2 bottom-2 p-2 bg-yellow-400 text-black font-semibold rounded-lg hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-1 bottom-1 sm:right-2 sm:bottom-2 p-2 bg-yellow-400 text-black font-semibold rounded-lg hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[40px] min-h-[40px] flex items-center justify-center"
               >
                 {isLoading ? (
                   <div className="animate-spin w-4 h-4 border-2 border-black border-t-transparent rounded-full"></div>
@@ -987,8 +991,20 @@ export const ChatInterface: React.FC = () => {
                 )}
               </button>
             </form>
-            <div className="mt-2 text-xs text-gray-500 text-center">
-              🔒 Private & secure - conversations stored locally only
+            <div className="mt-2 text-xs text-gray-500 text-center px-2 space-y-1">
+              <div>🔒 Private & secure - conversations stored locally only</div>
+              {/* Mobile Adult Content Toggle */}
+              <div className="md:hidden">
+                <label className="flex items-center justify-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    checked={allowAdultContent}
+                    onChange={(e) => setAllowAdultContent(e.target.checked)}
+                    className="rounded text-xs" 
+                  />
+                  <span>Allow adult content</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
