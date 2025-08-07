@@ -260,6 +260,27 @@ export const ChatInterface: React.FC = () => {
     }
   }, [modelsToShow, selectedModel]);
 
+  // Load anonymous usage tracking whenever address changes
+  useEffect(() => {
+    if (!address) {
+      const today = new Date().toDateString();
+      const savedUsage = localStorage.getItem('dandolo_anonymous_usage');
+      const savedDate = localStorage.getItem('dandolo_anonymous_usage_date');
+      
+      if (savedUsage && savedDate === today) {
+        setAnonymousUsageCount(parseInt(savedUsage, 10));
+      } else {
+        // Reset counter for new day
+        setAnonymousUsageCount(0);
+        localStorage.setItem('dandolo_anonymous_usage', '0');
+        localStorage.setItem('dandolo_anonymous_usage_date', today);
+      }
+    } else {
+      // Reset anonymous counter when user connects wallet
+      setAnonymousUsageCount(0);
+    }
+  }, [address]);
+
   // Load chats and folders from localStorage
   useEffect(() => {
     const savedChats = localStorage.getItem('dandolo_chats');
@@ -278,22 +299,6 @@ export const ChatInterface: React.FC = () => {
     
     if (savedAdultContent) {
       setAllowAdultContent(JSON.parse(savedAdultContent));
-    }
-
-    // Load anonymous usage tracking
-    if (!address) {
-      const today = new Date().toDateString();
-      const savedUsage = localStorage.getItem('dandolo_anonymous_usage');
-      const savedDate = localStorage.getItem('dandolo_anonymous_usage_date');
-      
-      if (savedUsage && savedDate === today) {
-        setAnonymousUsageCount(parseInt(savedUsage, 10));
-      } else {
-        // Reset counter for new day
-        setAnonymousUsageCount(0);
-        localStorage.setItem('dandolo_anonymous_usage', '0');
-        localStorage.setItem('dandolo_anonymous_usage_date', today);
-      }
     }
     
     // Always create a new chat when platform loads - equivalent to clicking "New Chat"
@@ -609,8 +614,11 @@ export const ChatInterface: React.FC = () => {
       // Increment anonymous usage counter
       if (!address) {
         const newCount = anonymousUsageCount + 1;
+        const today = new Date().toDateString();
+        console.log(`Anonymous usage: ${newCount}/15 chats used today`);
         setAnonymousUsageCount(newCount);
         localStorage.setItem('dandolo_anonymous_usage', newCount.toString());
+        localStorage.setItem('dandolo_anonymous_usage_date', today);
       }
     } catch (error) {
       const errorMessage: Message = {
@@ -829,23 +837,39 @@ export const ChatInterface: React.FC = () => {
         <div className="p-3 border-t border-gray-800">
           <div className="text-center">
             <div className="text-2xl font-bold text-white">{usageCount}</div>
-            <div className={`text-xs text-gray-500 ${isSidebarExpanded ? 'block' : 'hidden'}`}>
+            <div className="text-xs text-gray-500">
               / {dailyLimit} {isAuthenticated ? 'daily' : 'free daily'}
             </div>
-            {isSidebarExpanded && (
+            {(isSidebarExpanded || !isAuthenticated) && (
               <>
                 <div className="w-full bg-gray-800 rounded-full h-1 mt-2">
                   <div 
                     className={`h-1 rounded-full transition-all ${
-                      usageCount >= dailyLimit ? 'bg-red-500' : 'bg-yellow-500'
+                      usageCount >= dailyLimit ? 'bg-red-500' : 
+                      usageCount >= dailyLimit * 0.8 ? 'bg-orange-500' : 'bg-yellow-500'
                     }`}
                     style={{ width: `${Math.min((usageCount / dailyLimit) * 100, 100)}%` }}
                   />
                 </div>
-                {!isAuthenticated && usageCount >= 12 && (
-                  <div className="text-xs text-orange-400 mt-1">
-                    {remaining} chats left
+                {!isAuthenticated && (
+                  <div className={`text-xs mt-1 ${
+                    usageCount >= dailyLimit ? 'text-red-400' :
+                    usageCount >= 12 ? 'text-orange-400' :
+                    usageCount >= 10 ? 'text-yellow-400' : 'text-gray-500'
+                  }`}>
+                    {usageCount >= dailyLimit ? 
+                      'Connect wallet for more' : 
+                      `${remaining} chats left`
+                    }
                   </div>
+                )}
+                {!isAuthenticated && isSidebarExpanded && (
+                  <button
+                    onClick={() => document.dispatchEvent(new CustomEvent('connectWallet'))}
+                    className="w-full text-xs text-yellow-400 hover:text-yellow-300 mt-1 underline"
+                  >
+                    Connect for 100 daily
+                  </button>
                 )}
               </>
             )}
@@ -855,6 +879,23 @@ export const ChatInterface: React.FC = () => {
       
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
+        {/* Anonymous User Notification Banner */}
+        {!isAuthenticated && (
+          <div className="bg-yellow-400/10 border-b border-yellow-400/20 px-4 py-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-yellow-400">
+                Anonymous mode: {usageCount}/15 free chats used today
+              </span>
+              <button
+                onClick={() => document.dispatchEvent(new CustomEvent('connectWallet'))}
+                className="text-yellow-400 hover:text-yellow-300 underline text-xs"
+              >
+                Connect wallet for 100 daily
+              </button>
+            </div>
+          </div>
+        )}
+        
         {/* Mobile-Optimized Top Bar */}
         <div className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 border-b border-gray-800 bg-gray-900/50 min-h-[60px]">
           {/* Mobile Menu Toggle */}
