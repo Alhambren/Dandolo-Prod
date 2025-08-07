@@ -8,7 +8,6 @@ import { ChatInterface } from './components/ChatInterface';
 import ProvidersPage from './components/ProvidersPage';
 import DevelopersPage from './components/DevelopersPage';
 import DashboardPage from './components/DashboardPage';
-import ModelsPage from './components/ModelsPage';
 import { AdminDashboardPage } from './components/AdminDashboard';
 import { WalletConnectButton } from './components/WalletConnectButton';
 import { Logo } from './components/Logo';
@@ -53,9 +52,15 @@ export default function App() {
   // Get current page from URL path
   const getCurrentPage = () => {
     const path = location.pathname;
+    const hash = location.hash;
+    
+    // Special case: highlight Models when on developers#docs
+    if (path === '/developers' && hash === '#docs') {
+      return 'models'; // This will highlight the Models tab
+    }
+    
     switch (path) {
       case '/chat': return 'chat';
-      case '/models': return 'models';
       case '/providers': return 'providers';
       case '/dashboard': return 'dashboard';
       case '/developers': return 'developers';
@@ -67,7 +72,7 @@ export default function App() {
   const currentPage = getCurrentPage();
 
   // Close mobile menu when navigating
-  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'models' | 'admin') => {
+  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'admin') => {
     const path = page === 'home' ? '/' : `/${page}`;
     navigate(path);
     setIsMobileMenuOpen(false);
@@ -98,8 +103,15 @@ export default function App() {
                 Chat
               </button>
               <button
-                onClick={() => navigateTo('models')}
-                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'models' ? 'text-white font-medium' : ''}`}
+                onClick={() => {
+                  navigate('/developers#docs');
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`text-white/70 hover:text-white transition-colors ${
+                  location.pathname === '/developers' && location.hash === '#docs'
+                    ? 'text-white font-medium'
+                    : ''
+                }`}
               >
                 Models
               </button>
@@ -164,10 +176,13 @@ export default function App() {
                 Chat
               </button>
               <button
-                onClick={() => navigateTo('models')}
+                onClick={() => {
+                  navigate('/developers#docs');
+                  setIsMobileMenuOpen(false);
+                }}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  currentPage === 'models' 
-                    ? 'bg-white/10 text-white font-medium' 
+                  location.pathname === '/developers' && location.hash === '#docs'
+                    ? 'bg-white/10 text-white font-medium'
                     : 'text-white/70 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -232,13 +247,6 @@ export default function App() {
           <div className="pt-16">
             <ChatInterface />
           </div>
-        } />
-        <Route path="/models" element={
-          <main className="pt-16">
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <ModelsPage />
-            </div>
-          </main>
         } />
         <Route path="/providers" element={
           <main className="pt-16">
