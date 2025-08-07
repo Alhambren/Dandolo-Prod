@@ -143,6 +143,217 @@ function hasStrongInternalFilters(modelId: string, modelInfo?: any): boolean {
 }
 
 /**
+ * Estimate token count for text content
+ * Rough approximation: ~4 characters per token for English text
+ */
+function estimateTokenCount(text: string): number {
+  if (!text) return 0;
+  // More accurate estimation considering different character types
+  const avgCharsPerToken = 3.5; // Slightly more conservative than 4
+  return Math.ceil(text.length / avgCharsPerToken);
+}
+
+/**
+ * Calculate total tokens in a conversation
+ */
+function calculateConversationTokens(messages: VeniceMessage[]): number {
+  let totalTokens = 0;
+  
+  for (const message of messages) {
+    // Add tokens for role (system/user/assistant = ~1-2 tokens each)
+    totalTokens += 2;
+    
+    // Add tokens for content
+    if (typeof message.content === 'string') {
+      totalTokens += estimateTokenCount(message.content);
+    } else if (Array.isArray(message.content)) {
+      // Handle multimodal content
+      for (const item of message.content) {
+        if (item.type === 'text' && item.text) {
+          totalTokens += estimateTokenCount(item.text);
+        }
+        // Images typically cost ~85 tokens regardless of size
+        if (item.type === 'image_url') {
+          totalTokens += 85;
+        }
+      }
+    }
+  }
+  
+  // Add overhead for conversation formatting
+  totalTokens += messages.length * 3;
+  
+  return totalTokens;
+}
+
+/**
+ * Truncate conversation to fit within token limits
+ * Keeps system message (if any) and most recent messages
+ */
+function truncateConversation(
+  messages: VeniceMessage[], 
+  maxTokens: number = 60000 // Conservative limit, leave room for response
+): VeniceMessage[] {
+  if (messages.length === 0) return messages;
+  
+  const currentTokens = calculateConversationTokens(messages);
+  
+  // If already within limits, return as-is
+  if (currentTokens <= maxTokens) {
+    return messages;
+  }
+  
+  console.log(`[CONTEXT_MANAGEMENT] Truncating conversation: ${currentTokens} -> ${maxTokens} tokens`);
+  
+  // Separate system message from conversation
+  let systemMessage: VeniceMessage | null = null;
+  let conversationMessages = messages;
+  
+  if (messages[0]?.role === 'system') {
+    systemMessage = messages[0];
+    conversationMessages = messages.slice(1);
+  }
+  
+  // Start with most recent messages and work backwards
+  const truncatedMessages: VeniceMessage[] = [];
+  let runningTokens = systemMessage ? calculateConversationTokens([systemMessage]) : 0;
+  
+  // Add messages from most recent backwards until we hit the limit
+  for (let i = conversationMessages.length - 1; i >= 0; i--) {
+    const message = conversationMessages[i];
+    const messageTokens = calculateConversationTokens([message]);
+    
+    if (runningTokens + messageTokens <= maxTokens) {
+      truncatedMessages.unshift(message);
+      runningTokens += messageTokens;
+    } else {
+      // If we can't fit this message, stop here
+      break;
+    }
+  }
+  
+  // Combine system message (if any) with truncated conversation
+  const result = systemMessage 
+    ? [systemMessage, ...truncatedMessages]
+    : truncatedMessages;
+    
+  const finalTokens = calculateConversationTokens(result);
+  console.log(`[CONTEXT_MANAGEMENT] Final conversation: ${result.length} messages, ~${finalTokens} tokens`);
+  
+  return result;
+}
+
+/**
+ * Calculate request body size in bytes
+ */
+function calculateRequestSize(requestBody: object): number {
+  return new TextEncoder().encode(JSON.stringify(requestBody)).length;
+}
+
+/**
+ * Validate request against Venice.ai limits
+ */
+function validateRequest(messages: VeniceMessage[], requestBody: object): {
+  isValid: boolean;
+  error?: string;
+  truncatedMessages?: VeniceMessage[];
+} {
+  // Check token count (with buffer for response)
+  const tokenCount = calculateConversationTokens(messages);
+  const maxInputTokens = 60000; // Conservative limit
+  
+  if (tokenCount > maxInputTokens) {
+    const truncatedMessages = truncateConversation(messages, maxInputTokens);
+    return {
+      isValid: false,
+      error: `Input too long (${tokenCount} tokens > ${maxInputTokens} limit). Auto-truncating to fit.`,
+      truncatedMessages
+    };
+  }
+  
+  // Check request body size
+  const bodySize = calculateRequestSize(requestBody);
+  const maxBodySize = 500000; // 500KB, conservative limit
+  
+  if (bodySize > maxBodySize) {
+    return {
+      isValid: false,
+      error: `Request too large (${bodySize} bytes > ${maxBodySize} limit). Try shortening your conversation.`
+    };
+  }
+  
+  return { isValid: true };
+}
+
+/**
+ * Parse and provide user-friendly Venice.ai error messages
+ */
+function handleVeniceError(statusCode: number, errorResponse: string): Error {
+  try {
+    const error = JSON.parse(errorResponse);
+    
+    // Handle specific Venice.ai error patterns
+    if (error.details?.includes('too large for this model')) {
+      const match = error.details.match(/less than (\d+) bytes/);
+      const limit = match ? Math.round(parseInt(match[1]) / 1024) : 500;
+      return new Error(`Your conversation is too long for this model (>${limit}KB limit). Please start a new conversation or try a different model.`);
+    }
+    
+    if (error.details?.includes('longer than the model\'s context length')) {
+      const tokenMatch = error.details.match(/(\d+) tokens.*longer.*\((\d+) tokens\)/);
+      if (tokenMatch) {
+        const inputTokens = parseInt(tokenMatch[1]);
+        const maxTokens = parseInt(tokenMatch[2]);
+        return new Error(`Your conversation is too long (${inputTokens.toLocaleString()} tokens). This model supports up to ${maxTokens.toLocaleString()} tokens. Please start a new conversation.`);
+      }
+      return new Error(`Your conversation exceeds the model's context length. Please start a new conversation.`);
+    }
+    
+    if (error.details?.includes('rate limit') || statusCode === 429) {
+      return new Error(`Rate limit exceeded. Please wait a moment before trying again.`);
+    }
+    
+    if (error.details?.includes('insufficient credits') || error.details?.includes('quota exceeded')) {
+      return new Error(`Insufficient credits or quota exceeded. Please check your Venice.ai account.`);
+    }
+    
+    if (error.details?.includes('invalid model') || statusCode === 404) {
+      return new Error(`Model not available. Please try a different model.`);
+    }
+    
+    // Return the Venice.ai error message if it's user-friendly
+    if (error.error && typeof error.error === 'string' && error.error.length < 200) {
+      return new Error(error.error);
+    }
+    
+    if (error.details && typeof error.details === 'string' && error.details.length < 200) {
+      return new Error(error.details);
+    }
+    
+  } catch (e) {
+    // Error response wasn't JSON, fall through to generic handling
+  }
+  
+  // Generic error messages based on status code
+  switch (statusCode) {
+    case 400:
+      return new Error(`Invalid request. Please check your input and try again.`);
+    case 401:
+      return new Error(`Authentication failed. Please check your API configuration.`);
+    case 403:
+      return new Error(`Access denied. Please check your permissions.`);
+    case 429:
+      return new Error(`Rate limit exceeded. Please wait a moment before trying again.`);
+    case 500:
+    case 502:
+    case 503:
+      return new Error(`AI service temporarily unavailable. Please try again in a moment.`);
+    default:
+      return new Error(`AI service error (${statusCode}). Please try again or contact support if the issue persists.`);
+  }
+}
+
+/**
  * Fetch available models from live Venice.ai API (same as frontend)
  */
 async function fetchAvailableModelsFromAPI(ctx: any): Promise<any[]> {
@@ -582,7 +793,31 @@ async function* callVeniceAIStreaming(
       finalMessages = [systemMessage, ...messages];
     }
 
-    console.log(`[VENICE_STREAMING] Sending request to Venice.ai with ${finalMessages.length} messages`);
+    // Validate and truncate conversation if needed
+    const initialRequestBody = {
+      model: model || selectedModel,
+      messages: finalMessages,
+      temperature: intentType === "code" ? 0.3 : 0.7,
+      max_tokens: 2000,
+      stream: true, // Enable streaming
+      stream_options: {
+        include_usage: true // Include token usage in stream
+      },
+      ...(venice_parameters || {}),
+    };
+    
+    const validation = validateRequest(finalMessages, initialRequestBody);
+    
+    if (!validation.isValid && validation.truncatedMessages) {
+      // Auto-truncate and proceed
+      console.log(`[CONTEXT_MANAGEMENT] ${validation.error}`);
+      finalMessages = validation.truncatedMessages;
+    } else if (!validation.isValid && !validation.truncatedMessages) {
+      // Hard limit exceeded, return error
+      throw new Error(`Request validation failed: ${validation.error}`);
+    }
+    
+    console.log(`[VENICE_STREAMING] Sending request to Venice.ai with ${finalMessages.length} messages (~${calculateConversationTokens(finalMessages)} tokens)`);
     
     const streamRequestBody = {
       model: model || selectedModel,
@@ -621,7 +856,7 @@ async function* callVeniceAIStreaming(
     if (!response.ok) {
       const error = await response.text();
       console.error(`[VENICE_STREAMING] API error: ${response.status} - ${error}`);
-      throw new Error(`Venice API error: ${response.status} - ${error}`);
+      throw handleVeniceError(response.status, error);
     }
 
     console.log(`[VENICE_STREAMING] Response received, starting to read stream`);
@@ -941,6 +1176,29 @@ async function callVeniceAI(
       finalMessages = [systemMessage, ...messages];
     }
 
+    // Validate and truncate conversation if needed
+    const initialRequestBody = {
+      model: model || selectedModel,
+      messages: finalMessages,
+      temperature: intentType === "code" ? 0.3 : 0.7,
+      max_tokens: 2000,
+      stream: false,
+      ...(venice_parameters || {}),
+    };
+    
+    const validation = validateRequest(finalMessages, initialRequestBody);
+    
+    if (!validation.isValid && validation.truncatedMessages) {
+      // Auto-truncate and proceed
+      console.log(`[CONTEXT_MANAGEMENT] ${validation.error}`);
+      finalMessages = validation.truncatedMessages;
+    } else if (!validation.isValid && !validation.truncatedMessages) {
+      // Hard limit exceeded, return error
+      throw new Error(`Request validation failed: ${validation.error}`);
+    }
+    
+    console.log(`[VENICE_API] Sending request with ${finalMessages.length} messages (~${calculateConversationTokens(finalMessages)} tokens)`);
+    
     const requestBody = {
       model: model || selectedModel,
       messages: finalMessages,
@@ -974,7 +1232,8 @@ async function callVeniceAI(
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Venice API error: ${response.status} - ${error}`);
+      console.error(`[VENICE_API] API error: ${response.status} - ${error}`);
+      throw handleVeniceError(response.status, error);
     }
 
     const data = (await response.json()) as VeniceTextResponse;
