@@ -9,7 +9,7 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
-  const overallStats = useQuery(api.inference.getStats);
+  const monthlyStats = useQuery(api.inference.getMonthlyStats);
   const availableModels = useQuery(api.models.getAvailableModels);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPaused, setIsVideoPaused] = React.useState(false);
@@ -156,16 +156,16 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           <div>
             <div className="text-5xl font-bold text-white mb-2">
-              {overallStats?.totalTokens ? 
-                overallStats.totalTokens >= 1000000000000 ? 
-                  (overallStats.totalTokens / 1000000000000).toFixed(1) + 'T' :
-                overallStats.totalTokens >= 1000000000 ? 
-                  (overallStats.totalTokens / 1000000000).toFixed(1) + 'B' :
-                overallStats.totalTokens >= 1000000 ? 
-                  (overallStats.totalTokens / 1000000).toFixed(1) + 'M' :
-                overallStats.totalTokens >= 1000 ? 
-                  (overallStats.totalTokens / 1000).toFixed(1) + 'K' : 
-                  overallStats.totalTokens.toString()
+              {monthlyStats?.monthlyTokens !== undefined ? 
+                monthlyStats.monthlyTokens >= 1000000000000 ? 
+                  (monthlyStats.monthlyTokens / 1000000000000).toFixed(1) + 'T' :
+                monthlyStats.monthlyTokens >= 1000000000 ? 
+                  (monthlyStats.monthlyTokens / 1000000000).toFixed(1) + 'B' :
+                monthlyStats.monthlyTokens >= 1000000 ? 
+                  (monthlyStats.monthlyTokens / 1000000).toFixed(1) + 'M' :
+                monthlyStats.monthlyTokens >= 1000 ? 
+                  (monthlyStats.monthlyTokens / 1000).toFixed(1) + 'K' : 
+                  monthlyStats.monthlyTokens.toString()
                 : (
                   <div className="w-20 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
                 )}
