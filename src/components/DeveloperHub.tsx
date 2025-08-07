@@ -6,8 +6,24 @@ import { ModelDetailPage } from './ModelDetailPage';
 type ViewType = 'portal' | 'docs' | 'model-detail';
 
 export function DeveloperHub() {
-  const [activeView, setActiveView] = useState<ViewType>('portal');
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  // Initialize with proper hash detection
+  const getInitialView = (): ViewType => {
+    const hash = window.location.hash;
+    if (hash === '#docs') return 'docs';
+    if (hash.startsWith('#model/')) return 'model-detail';
+    return 'portal'; // default
+  };
+  
+  const getInitialModelId = (): string | null => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#model/')) {
+      return hash.replace('#model/', '');
+    }
+    return null;
+  };
+  
+  const [activeView, setActiveView] = useState<ViewType>(getInitialView());
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(getInitialModelId());
   
   // Handle hash-based navigation including model details
   useEffect(() => {
