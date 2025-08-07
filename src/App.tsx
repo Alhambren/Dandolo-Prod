@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { Menu, X } from 'lucide-react';
 import HomePage from './components/HomePage';
 import { ChatInterface } from './components/ChatInterface';
+import ModelsPage from './components/ModelsPage';
 import ProvidersPage from './components/ProvidersPage';
 import DevelopersPage from './components/DevelopersPage';
 import DashboardPage from './components/DashboardPage';
@@ -24,7 +25,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const isAdmin = isConnected && address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
   
-  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers') => {
+  const navigateTo = (page: 'home' | 'chat' | 'models' | 'providers' | 'dashboard' | 'developers') => {
     const path = page === 'home' ? '/' : `/${page}`;
     navigate(path);
   };
@@ -52,15 +53,10 @@ export default function App() {
   // Get current page from URL path
   const getCurrentPage = () => {
     const path = location.pathname;
-    const hash = location.hash;
-    
-    // Special case: highlight Models when on developers#docs
-    if (path === '/developers' && hash === '#docs') {
-      return 'models'; // This will highlight the Models tab
-    }
     
     switch (path) {
       case '/chat': return 'chat';
+      case '/models': return 'models';
       case '/providers': return 'providers';
       case '/dashboard': return 'dashboard';
       case '/developers': return 'developers';
@@ -72,7 +68,7 @@ export default function App() {
   const currentPage = getCurrentPage();
 
   // Close mobile menu when navigating
-  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'admin') => {
+  const navigateTo = (page: 'home' | 'chat' | 'models' | 'providers' | 'dashboard' | 'developers' | 'admin') => {
     const path = page === 'home' ? '/' : `/${page}`;
     navigate(path);
     setIsMobileMenuOpen(false);
@@ -103,15 +99,8 @@ export default function App() {
                 Chat
               </button>
               <button
-                onClick={() => {
-                  navigate('/developers#docs');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`text-white/70 hover:text-white transition-colors ${
-                  location.pathname === '/developers' && location.hash === '#docs'
-                    ? 'text-white font-medium'
-                    : ''
-                }`}
+                onClick={() => navigateTo('models')}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'models' ? 'text-white font-medium' : ''}`}
               >
                 Models
               </button>
@@ -176,13 +165,10 @@ export default function App() {
                 Chat
               </button>
               <button
-                onClick={() => {
-                  navigate('/developers#docs');
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={() => navigateTo('models')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  location.pathname === '/developers' && location.hash === '#docs'
-                    ? 'bg-white/10 text-white font-medium'
+                  currentPage === 'models' 
+                    ? 'bg-white/10 text-white font-medium' 
                     : 'text-white/70 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -247,6 +233,13 @@ export default function App() {
           <div className="pt-16">
             <ChatInterface />
           </div>
+        } />
+        <Route path="/models" element={
+          <main className="pt-16">
+            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+              <ModelsPage />
+            </div>
+          </main>
         } />
         <Route path="/providers" element={
           <main className="pt-16">
