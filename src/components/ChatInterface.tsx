@@ -969,7 +969,7 @@ export const ChatInterface: React.FC = () => {
               </span>
               <button
                 onClick={() => document.dispatchEvent(new CustomEvent('connectWallet'))}
-                className="text-yellow-400 hover:text-yellow-300 underline"
+                className="text-yellow-400 hover:text-yellow-300 underline text-sm"
               >
                 Connect wallet for 100 daily queries
               </button>
