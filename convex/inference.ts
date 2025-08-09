@@ -761,11 +761,16 @@ async function* callVeniceAIStreaming(
         
         const imageDataUrl = `data:image/webp;base64,${base64Image}`;
         
+        // Calculate tokens for image generation based on prompt complexity and base image cost
+        const promptTokens = estimateTokenCount(promptText);
+        const baseImageTokens = 200; // Base cost for image generation
+        const totalImageTokens = promptTokens + baseImageTokens;
+        
         yield {
-          content: `![Generated Image](${imageDataUrl})\n\n*"${promptText}"*\n\n*Debug: Model=${imageRequestBody.model}, Base64Length=${base64Image.length}*`,
+          content: `![Generated Image](${imageDataUrl})\n\n*"${promptText}"*`,
           done: true,
           model: imageModel || "unknown-image-model",
-          tokens: 100
+          tokens: totalImageTokens
         };
         return;
       } else {
@@ -936,11 +941,13 @@ async function* callVeniceAIStreaming(
     }
 
     // If we reach here without proper completion, send a final done signal
+    // Calculate fallback tokens based on conversation context if no streaming tokens received
+    const fallbackTokens = totalTokens > 0 ? totalTokens : calculateConversationTokens(finalMessages) + 50;
     yield {
       content: '',
       done: true,
       model: selectedModel,
-      tokens: totalTokens || 100 // Fallback token count
+      tokens: fallbackTokens
     };
 
   } catch (error) {
@@ -1146,12 +1153,16 @@ async function callVeniceAI(
         console.log(`🎨 [IMAGE_DEBUG_HTTP] Base64 preview:`, base64Image.substring(0, 100) + "...");
         
         const imageDataUrl = `data:image/webp;base64,${base64Image}`;
-        const vcuCost = calculateDiemCost(100, imageModel || "image-model");
+        // Calculate tokens for image generation based on prompt complexity and base image cost
+        const promptTokens = estimateTokenCount(promptText);
+        const baseImageTokens = 200; // Base cost for image generation
+        const totalImageTokens = promptTokens + baseImageTokens;
+        const vcuCost = calculateDiemCost(totalImageTokens, imageModel || "image-model");
         
         return {
-          response: `![Generated Image](${imageDataUrl})\n\n*\"${promptText}\"*\n\n*Debug: Model=${imageRequestBody.model}, Base64Length=${base64Image.length}*`,
+          response: `![Generated Image](${imageDataUrl})\n\n*\"${promptText}\"*`,
           model: imageModel || "unknown-image-model",
-          tokens: 100,
+          tokens: totalImageTokens,
           cost: vcuCost,
           responseTime: Date.now() - startTime,
         };

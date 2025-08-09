@@ -5,13 +5,18 @@ import { ModelDetailPage } from './ModelDetailPage';
 
 type ViewType = 'portal' | 'docs' | 'model-detail';
 
-export function DeveloperHub() {
-  // Initialize with proper hash detection
+interface DeveloperHubProps {
+  defaultTab?: 'quickstart' | 'models';
+}
+
+export function DeveloperHub({ defaultTab }: DeveloperHubProps) {
+  // Initialize based on defaultTab or hash detection
   const getInitialView = (): ViewType => {
     const hash = window.location.hash;
-    if (hash === '#docs') return 'docs';
     if (hash.startsWith('#model/')) return 'model-detail';
-    return 'portal'; // default
+    if (defaultTab === 'models' || defaultTab === 'quickstart') return 'docs';
+    if (hash === '#portal') return 'portal';
+    return 'docs'; // default to docs instead of portal
   };
   
   const getInitialModelId = (): string | null => {
@@ -25,27 +30,25 @@ export function DeveloperHub() {
   const [activeView, setActiveView] = useState<ViewType>(getInitialView());
   const [selectedModelId, setSelectedModelId] = useState<string | null>(getInitialModelId());
   
-  // Handle hash-based navigation including model details
+  // Handle hash-based navigation for model details only
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
       if (hash === '#portal') {
         setActiveView('portal');
         setSelectedModelId(null);
-      } else if (hash === '#docs') {
-        setActiveView('docs');
-        setSelectedModelId(null);
       } else if (hash.startsWith('#model/')) {
         const modelId = hash.replace('#model/', '');
         setSelectedModelId(modelId);
         setActiveView('model-detail');
+      } else {
+        // For any other hash or no hash, show docs
+        setActiveView('docs');
+        setSelectedModelId(null);
       }
     };
     
-    // Check initial hash
-    handleHashChange();
-    
-    // Listen for hash changes
+    // Only listen for hash changes, don't call initially since we set state based on defaultTab
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -102,7 +105,7 @@ export function DeveloperHub() {
         
         {/* Content */}
         {activeView === 'portal' && <DeveloperPortal />}
-        {activeView === 'docs' && <DeveloperDocs onModelSelect={navigateToModel} />}
+        {activeView === 'docs' && <DeveloperDocs onModelSelect={navigateToModel} defaultTab={defaultTab} />}
         {activeView === 'model-detail' && selectedModelId && (
           <ModelDetailPage 
             modelId={selectedModelId} 

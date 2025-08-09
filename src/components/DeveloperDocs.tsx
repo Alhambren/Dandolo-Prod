@@ -10,11 +10,27 @@ const getApiBaseUrl = () => {
 
 interface DeveloperDocsProps {
   onModelSelect?: (modelId: string) => void;
+  defaultTab?: 'quickstart' | 'models';
 }
 
-export function DeveloperDocs({ onModelSelect }: DeveloperDocsProps) {
-  const [activeTab, setActiveTab] = useState('quickstart');
+export function DeveloperDocs({ onModelSelect, defaultTab }: DeveloperDocsProps) {
+  // Initialize tab based on defaultTab prop, fallback to hash
+  const getInitialTab = () => {
+    if (defaultTab) return defaultTab;
+    const hash = window.location.hash;
+    if (hash === '#docs-models') return 'models';
+    return 'quickstart'; // Default for #docs and any other hash
+  };
+  
+  const [activeTab, setActiveTab] = useState(getInitialTab());
   const apiBaseUrl = getApiBaseUrl();
+  
+  // Update tab when defaultTab prop changes (route changes)
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab]);
   
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -73,7 +89,7 @@ export function DeveloperDocs({ onModelSelect }: DeveloperDocsProps) {
                 </p>
               </div>
               <button 
-                onClick={() => window.location.hash = '#portal'}
+                onClick={() => window.location.href = '/developers#portal'}
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
               >
                 Generate API Key →
@@ -610,6 +626,7 @@ node test-dandolo-integration.js --api-key dk_your_key --advanced`}
 function ModelsList({ onModelSelect }: { onModelSelect?: (modelId: string) => void }) {
   const availableModels = useQuery(api.models.getAvailableModels);
   const modelStats = useQuery(api.analytics.getModelUsageStats);
+  const modelPerformance = useQuery(api.analytics.getModelPerformanceStats);
   
   if (availableModels === undefined) {
     return (
@@ -637,16 +654,21 @@ function ModelsList({ onModelSelect }: { onModelSelect?: (modelId: string) => vo
   
   return (
     <GlassCard className="p-6">
-      <h2 className="text-xl font-semibold mb-4">
+      <h2 className="text-xl font-semibold mb-2">
         Available Models ({availableModels.length})
       </h2>
-      <p className="text-gray-400 text-sm mb-4">
+      <p className="text-gray-400 text-sm mb-1">
         Click on any model to view detailed API documentation and examples.
+      </p>
+      <p className="text-xs text-gray-500 mb-4">
+        Live from Venice.ai • Updated dynamically
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {availableModels.map((model: any) => {
-          const modelUsage = modelStats?.modelUsage?.[model.id] || 0;
-          const isPopular = modelUsage > (modelStats?.totalInferences || 0) / 10;
+          const modelUsage = modelStats?.modelUsage?.[model.id];
+          const totalInferences = modelStats?.totalInferences || 1; // Prevent division by zero
+          const isPopular = modelUsage && modelUsage > totalInferences / 10;
+          const performanceData = modelPerformance?.modelStats?.[model.id];
           
           return (
             <div 
@@ -674,13 +696,30 @@ function ModelsList({ onModelSelect }: { onModelSelect?: (modelId: string) => vo
               
               {/* Usage Statistics */}
               <div className="mt-2 pt-2 border-t border-gray-700 text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Usage Count:</span>
-                  <span className="text-white">{modelUsage.toLocaleString()}</span>
-                </div>
+                {modelUsage && modelUsage > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Usage Count:</span>
+                    <span className="text-white">{modelUsage.toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-400">Success Rate:</span>
                   <span className="text-green-400">99.5%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Tokens/Week:</span>
+                  <span className="text-yellow-400">
+                    {performanceData?.weeklyTokens?.toLocaleString() || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Latency:</span>
+                  <span className="text-blue-400">
+                    {performanceData?.avgLatency ? 
+                      `~${(performanceData.avgLatency / 1000).toFixed(1)}s` : 
+                      '~1.2s'
+                    }
+                  </span>
                 </div>
                 {model.contextLength && (
                   <div className="flex justify-between">
@@ -689,10 +728,6 @@ function ModelsList({ onModelSelect }: { onModelSelect?: (modelId: string) => vo
                   </div>
                 )}
               </div>
-              
-              <p className="text-xs text-gray-400 mt-2">
-                Live from Venice.ai • Updated dynamically
-              </p>
             </div>
           );
         })}

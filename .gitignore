@@ -51,3 +51,8 @@ WORKING_STATES.md
 CLAUDE.md
 *-DEPLOYMENT.md
 venice-api-docs.txt
+
+# Development and benchmarking code (not for production)
+benchmarks/
+examples/
+dandolo-python-sdk/

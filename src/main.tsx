@@ -9,7 +9,7 @@ import "./index.css";
 import App from "./App.tsx";
 
 if (!import.meta.env.VITE_CONVEX_URL) {
-  alert(
+  console.error(
     "VITE_CONVEX_URL is not set at build time. " +
       "Check your Vercel environment variables."
   );

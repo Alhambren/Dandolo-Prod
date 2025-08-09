@@ -31,8 +31,8 @@ export default async (req, res) => {
     const apiKey = authHeader.substring(7);
     const body = req.body;
     
-    // Debug logging for character connections
-    if (body.venice_parameters?.character_slug) {
+    // Debug logging for character connections (development only)
+    if (process.env.NODE_ENV === 'development' && body.venice_parameters?.character_slug) {
       console.log(`[API_DEBUG] Character request received:`, {
         character_slug: body.venice_parameters.character_slug,
         apiKeyPrefix: apiKey.substring(0, 20) + "...",
@@ -90,7 +90,7 @@ export default async (req, res) => {
       address: validation.address,
       model: modelName,
       apiKey: apiKey,
-      allowAdultContent: false,
+      allowAdultContent: body.allowAdultContent || false,
       ...(body.venice_parameters && { venice_parameters: body.venice_parameters })
     });
 

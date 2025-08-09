@@ -1,19 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Toaster } from "sonner";
 import { useAccount } from 'wagmi';
 import { Menu, X } from 'lucide-react';
-import HomePage from './components/HomePage';
-import { ChatInterface } from './components/ChatInterface';
-import ProvidersPage from './components/ProvidersPage';
-import DevelopersPage from './components/DevelopersPage';
-import DashboardPage from './components/DashboardPage';
-import { AdminDashboardPage } from './components/AdminDashboard';
 import { WalletConnectButton } from './components/WalletConnectButton';
 import { Logo } from './components/Logo';
 
+// Route-level code splitting with React.lazy
+const HomePage = React.lazy(() => import('./components/HomePage'));
+const ChatInterface = React.lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
+const ProvidersPage = React.lazy(() => import('./components/ProvidersPage'));
+const DevelopersPage = React.lazy(() => import('./components/DevelopersPage'));
+const DashboardPage = React.lazy(() => import('./components/DashboardPage'));
+const RankingsPage = React.lazy(() => import('./components/RankingsPage'));
+const AdminDashboardPage = React.lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboardPage })));
+
 // Main App component with React Router for URL-based navigation
-// Routes: /, /chat, /models, /providers, /dashboard, /developers, /admin
+// Routes: /, /chat, /models, /providers, /dashboard, /developers, /rankings, /admin
 
 // Admin address from environment variable (fallback to original for backward compatibility)
 const ADMIN_ADDRESS = import.meta.env.VITE_ADMIN_ADDRESS || "0xC07481520d98c32987cA83B30EAABdA673cDbe8c";
@@ -24,7 +27,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const isAdmin = isConnected && address?.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
   
-  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers') => {
+  const navigateTo = (page: 'home' | 'chat' | 'models' | 'providers' | 'dashboard' | 'developers' | 'rankings' | 'admin') => {
     const path = page === 'home' ? '/' : `/${page}`;
     navigate(path);
   };
@@ -52,15 +55,10 @@ export default function App() {
   // Get current page from URL path
   const getCurrentPage = () => {
     const path = location.pathname;
-    const hash = location.hash;
-    
-    // Special case: highlight Models when on developers#docs
-    if (path === '/developers' && hash === '#docs') {
-      return 'models'; // This will highlight the Models tab
-    }
     
     switch (path) {
       case '/chat': return 'chat';
+      case '/models': return 'models';
       case '/providers': return 'providers';
       case '/dashboard': return 'dashboard';
       case '/developers': return 'developers';
@@ -72,7 +70,7 @@ export default function App() {
   const currentPage = getCurrentPage();
 
   // Close mobile menu when navigating
-  const navigateTo = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers' | 'admin') => {
+  const navigateTo = (page: 'home' | 'chat' | 'models' | 'providers' | 'dashboard' | 'developers' | 'admin') => {
     const path = page === 'home' ? '/' : `/${page}`;
     navigate(path);
     setIsMobileMenuOpen(false);
@@ -95,7 +93,7 @@ export default function App() {
             </button>
             
             {/* Desktop Navigation - Hidden on mobile */}
-            <nav className="hidden md:flex items-center space-x-8 flex-1">
+            <nav className="hidden md:flex items-center space-x-8 ml-auto mr-4">
               <button
                 onClick={() => navigateTo('chat')}
                 className={`text-white/70 hover:text-white transition-colors ${currentPage === 'chat' ? 'text-white font-medium' : ''}`}
@@ -103,15 +101,8 @@ export default function App() {
                 Chat
               </button>
               <button
-                onClick={() => {
-                  navigate('/developers#docs');
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`text-white/70 hover:text-white transition-colors ${
-                  location.pathname === '/developers' && location.hash === '#docs'
-                    ? 'text-white font-medium'
-                    : ''
-                }`}
+                onClick={() => navigateTo('models')}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'models' ? 'text-white font-medium' : ''}`}
               >
                 Models
               </button>
@@ -133,6 +124,12 @@ export default function App() {
               >
                 Developers
               </button>
+              <button
+                onClick={() => navigateTo('rankings')}
+                className={`text-white/70 hover:text-white transition-colors ${currentPage === 'rankings' ? 'text-white font-medium' : ''}`}
+              >
+                Rankings
+              </button>
               {/* Admin tab only visible to authorized admin wallet */}
               {isAdmin && (
                 <button
@@ -145,7 +142,7 @@ export default function App() {
             </nav>
             
             {/* Right side - Mobile menu button and wallet */}
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2">
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -176,13 +173,10 @@ export default function App() {
                 Chat
               </button>
               <button
-                onClick={() => {
-                  navigate('/developers#docs');
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={() => navigateTo('models')}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  location.pathname === '/developers' && location.hash === '#docs'
-                    ? 'bg-white/10 text-white font-medium'
+                  currentPage === 'models' 
+                    ? 'bg-white/10 text-white font-medium' 
                     : 'text-white/70 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -218,6 +212,16 @@ export default function App() {
               >
                 Developers
               </button>
+              <button
+                onClick={() => navigateTo('rankings')}
+                className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+                  currentPage === 'rankings' 
+                    ? 'bg-white/10 text-white font-medium' 
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                Rankings
+              </button>
               {/* Admin tab only visible to authorized admin wallet */}
               {isAdmin && (
                 <button
@@ -236,45 +240,63 @@ export default function App() {
         )}
       </header>
       
-      {/* Routes */}
-      <Routes>
-        <Route path="/" element={
-          <main className="pt-16">
-            <HomePage onNavigate={navigateTo} />
-          </main>
-        } />
-        <Route path="/chat" element={
-          <div className="pt-16">
-            <ChatInterface />
-          </div>
-        } />
-        <Route path="/providers" element={
-          <main className="pt-16">
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <ProvidersPage />
+      {/* Routes with Suspense for code splitting */}
+      <Suspense fallback={
+        <div className="pt-16 min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={
+            <main className="pt-16">
+              <HomePage onNavigate={navigateTo} />
+            </main>
+          } />
+          <Route path="/chat" element={
+            <div className="pt-16">
+              <ChatInterface />
             </div>
-          </main>
-        } />
-        <Route path="/dashboard" element={
-          <main className="pt-16">
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <DashboardPage />
-            </div>
-          </main>
-        } />
-        <Route path="/developers" element={
-          <main className="pt-16">
-            <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
-              <DevelopersPage />
-            </div>
-          </main>
-        } />
-        <Route path="/admin" element={
-          <AdminGuard>
-            <AdminDashboardPage />
-          </AdminGuard>
-        } />
-      </Routes>
+          } />
+          <Route path="/providers" element={
+            <main className="pt-16">
+              <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+                <ProvidersPage />
+              </div>
+            </main>
+          } />
+          <Route path="/dashboard" element={
+            <main className="pt-16">
+              <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+                <DashboardPage />
+              </div>
+            </main>
+          } />
+          <Route path="/developers" element={
+            <main className="pt-16">
+              <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+                <DevelopersPage defaultTab="quickstart" />
+              </div>
+            </main>
+          } />
+          <Route path="/models" element={
+            <main className="pt-16">
+              <div className="container mx-auto px-4 md:px-6 py-4 md:py-8">
+                <DevelopersPage defaultTab="models" />
+              </div>
+            </main>
+          } />
+          <Route path="/rankings" element={
+            <main className="pt-16">
+              <RankingsPage />
+            </main>
+          } />
+          <Route path="/admin" element={
+            <AdminGuard>
+              <AdminDashboardPage />
+            </AdminGuard>
+          } />
+        </Routes>
+      </Suspense>
     </div>
   );
 }

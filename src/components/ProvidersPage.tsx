@@ -62,7 +62,7 @@ const ProviderCard: React.FC<{ provider: any; rank: number }> = ({ provider, ran
           </div>
           
           <div className="text-center">
-            <div className="text-xs text-gray-400 mb-1">Speed</div>
+            <div className="text-xs text-gray-400 mb-1">Avg Response</div>
             <div className="text-sm font-semibold">
               {provider.avgResponseTime ? (
                 <span className={
@@ -311,7 +311,7 @@ const ProvidersPage: React.FC = () => {
               >
                 <option value="points">🏆 Sort by Points</option>
                 <option value="responses">📊 Sort by Responses</option>
-                <option value="speed">⚡ Sort by Speed</option>
+                <option value="speed">⚡ Sort by Avg Response</option>
                 <option value="name">📝 Sort by Name</option>
               </select>
             </div>
@@ -362,7 +362,7 @@ const ProvidersPage: React.FC = () => {
                       Points
                     </th>
                     <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Speed
+                      Avg Response
                     </th>
                   </tr>
                 </thead>

@@ -126,6 +126,50 @@ const MessageContent: React.FC<{ msg: Message; role: 'user' | 'assistant' }> = (
   if (msg.intentType === 'image' && msg.imageUrl) {
     const isBase64 = msg.imageUrl.startsWith('data:');
     
+    const downloadImage = () => {
+      if (isBase64) {
+        try {
+          const byteCharacters = atob(msg.imageUrl.split(',')[1]);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'image/webp' });
+          const url = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `dandolo-generated-image-${Date.now()}.webp`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Clean up the URL
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (error) {
+          console.error('Failed to download base64 image:', error);
+        }
+      } else {
+        // For URL images, fetch and download
+        fetch(msg.imageUrl)
+          .then(response => response.blob())
+          .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `dandolo-generated-image-${Date.now()}.webp`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          })
+          .catch(error => {
+            console.error('Failed to download image:', error);
+          });
+      }
+    };
+    
     return (
       <div className="space-y-4">
         <div className="relative group overflow-hidden rounded-xl max-w-md">
@@ -161,11 +205,20 @@ const MessageContent: React.FC<{ msg: Message; role: 'user' | 'assistant' }> = (
             }}
           />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 rounded-xl"></div>
-          {isBase64 && (
-            <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-              Base64 Image
-            </div>
-          )}
+          
+          {/* Download button - appears on hover */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadImage();
+            }}
+            className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            title="Download image"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </button>
         </div>
         {msg.content && !msg.content.includes(msg.imageUrl || '') && (
           <p className={`leading-relaxed ${role === 'user' ? 'text-black font-semibold' : 'text-gray-200 font-medium'}`}>
@@ -641,7 +694,9 @@ export const ChatInterface: React.FC = () => {
       if (!address) {
         const newCount = anonymousUsageCount + 1;
         const today = new Date().toDateString();
-        console.log(`Anonymous usage: ${newCount}/15 chats used today`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Anonymous usage: ${newCount}/15 chats used today`);
+        }
         setAnonymousUsageCount(newCount);
         localStorage.setItem('dandolo_anonymous_usage', newCount.toString());
         localStorage.setItem('dandolo_anonymous_usage_date', today);

@@ -839,10 +839,13 @@ export const awardProviderPoints = mutation({
     // Calculate new rolling average response time if provided
     let updatedAvgResponseTime = provider.avgResponseTime;
     if (args.responseTime && args.responseTime > 0) {
-      // Using exponential moving average: new_avg = old_avg * 0.9 + new_value * 0.1
+      // Cap response times at 30 seconds (30000ms) to prevent outliers
+      const cappedResponseTime = Math.min(args.responseTime, 30000);
+      
+      // Using exponential moving average with more responsive weight: new_avg = old_avg * 0.7 + new_value * 0.3
       updatedAvgResponseTime = provider.avgResponseTime && provider.avgResponseTime > 0
-        ? (provider.avgResponseTime * 0.9) + (args.responseTime * 0.1)
-        : args.responseTime;
+        ? (provider.avgResponseTime * 0.7) + (cappedResponseTime * 0.3)
+        : cappedResponseTime;
     }
 
     // Update provider stats
@@ -950,8 +953,8 @@ export const updateProviderHealth = mutation({
     }
 
     const newAvgResponseTime = provider.avgResponseTime && args.responseTime
-      ? (provider.avgResponseTime * 0.9) + (args.responseTime * 0.1)
-      : args.responseTime || provider.avgResponseTime || 0;
+      ? (provider.avgResponseTime * 0.7) + (Math.min(args.responseTime, 30000) * 0.3)
+      : Math.min(args.responseTime || provider.avgResponseTime || 0, 30000);
 
     await ctx.db.patch(args.providerId, {
       isActive: args.isHealthy,
