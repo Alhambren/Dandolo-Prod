@@ -40,10 +40,9 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     try {
       const requestParams = {
         messages: [{ role: 'user' as const, content: 'Hello! Can you tell me about Dandolo AI in one sentence?' }],
-        intent: 'chat' as const,
+        address: apiKey.trim() || 'anonymous', // Use API key as address or 'anonymous'
         sessionId: `playground-${Date.now()}`,
-        isAnonymous: !apiKey.trim(),
-        ...(apiKey.trim() && { apiKey: apiKey.trim() }),
+        intentType: 'chat' as const, // Correct parameter name
         model: 'llama-3.3-70b',
         allowAdultContent: false
       };
@@ -52,22 +51,22 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       
       const result = await routeInference(requestParams);
       
-      if (result && result.content) {
-        setResponse(result.content);
-      } else if (result && result.error) {
-        throw new Error(result.error);
+      if (result && result.response) {
+        setResponse(result.response);
       } else {
         setResponse('✓ API connection successful! The model responded with a test message.');
       }
     } catch (err) {
       console.error('API test error:', err);
       if (err instanceof Error) {
-        if (err.message.includes('Rate limit exceeded')) {
+        if (err.message.includes('Rate limit exceeded') || err.message.includes('rate limit')) {
           setError('Rate limit reached. Try with an API key for higher limits.');
-        } else if (err.message.includes('Invalid API key')) {
+        } else if (err.message.includes('Invalid API key') || err.message.includes('invalid key')) {
           setError('Invalid API key. Please check your key or leave empty for anonymous.');
+        } else if (err.message.includes('Server Error')) {
+          setError('Dandolo AI is temporarily unavailable. Please try again in a moment.');
         } else {
-          setError(err.message);
+          setError(`Error: ${err.message}`);
         }
       } else {
         setError('Failed to connect to API');
