@@ -15,10 +15,84 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const availableModels = useQuery(api.models.getAvailableModels);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPaused, setIsVideoPaused] = React.useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [response, setResponse] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleNavigation = (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers') => {
     if (onNavigate) {
       onNavigate(page);
+    }
+  };
+
+  const handleApiTest = async () => {
+    setIsLoading(true);
+    setError(null);
+    setResponse(null);
+
+    try {
+      const requestBody = {
+        messages: [{ role: 'user', content: 'Hello! Can you tell me about Dandolo AI in one sentence?' }],
+        intent: 'chat',
+        sessionId: `playground-${Date.now()}`,
+        isAnonymous: !apiKey.trim(),
+        ...(apiKey.trim() && { apiKey: apiKey.trim() }),
+        model: 'llama-3.3-70b',
+        allowAdultContent: false
+      };
+
+      const response = await fetch('/api/inference/route', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`API Error: ${response.status} - ${errorData}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response stream available');
+      }
+
+      let fullResponse = '';
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullResponse += data.content;
+                setResponse(fullResponse);
+              }
+            } catch (e) {
+              // Skip invalid JSON chunks
+            }
+          }
+        }
+      }
+
+      if (!fullResponse) {
+        setResponse('✓ API connection successful! The model responded with a test message.');
+      }
+    } catch (err) {
+      console.error('API test error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to connect to API');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -68,18 +142,13 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left Column - Headlines and CTAs */}
             <div className="text-left">
-              <div className="inline-flex items-center px-4 py-2 rounded-full bg-glass border border-glass-border mb-6">
-                <div className="w-2 h-2 bg-brand-primary rounded-full mr-2 animate-pulse"></div>
-                <span className="text-sm text-white/80 font-medium">Decentralized AI Routing in 30 seconds</span>
-              </div>
-
               <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
-                <span className="bg-gradient-to-r from-white to-white/90 bg-clip-text text-transparent">
-                  The Stripe
+                <span className="bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
+                  Decentralized AI Routing
                 </span>
                 <br />
-                <span className="bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
-                  for AI Routing
+                <span className="bg-gradient-to-r from-white to-white/90 bg-clip-text text-transparent">
+                  in 30 seconds
                 </span>
               </h1>
               
@@ -133,11 +202,11 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            {/* Right Column - Live Code Playground */}
+            {/* Right Column - Interactive API Demo */}
             <div className="relative">
               <GlassCard padding="lg" className="relative overflow-hidden">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-white">Live API Playground</h3>
+                  <h3 className="text-lg font-semibold text-white">Try the API Now</h3>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-system-red rounded-full"></div>
                     <div className="w-3 h-3 bg-system-yellow rounded-full"></div>
@@ -145,45 +214,107 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                   </div>
                 </div>
                 
-                <div className="bg-bg-tertiary rounded-lg p-4 font-mono text-sm overflow-x-auto">
-                  <div className="text-system-green mb-2"># Python</div>
-                  <pre className="text-white/80 whitespace-pre-wrap">
-<span className="text-brand-secondary">import</span> <span className="text-white">requests</span>
+                {/* API Key Input */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-white/80 mb-2">
+                    Your API Key (optional - uses anonymous if empty)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="dk_your_api_key_here or leave empty"
+                      className="w-full bg-bg-tertiary border border-glass-border rounded-lg px-3 py-2 text-sm font-mono text-white/80 placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary/30"
+                      disabled={isLoading}
+                    />
+                    <div className="absolute right-2 top-2 text-xs text-white/40">
+                      🔒 Secure
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs text-white/50">
+                    {apiKey.trim() ? 'Using your API key' : 'Anonymous mode: 15 requests/day'}
+                  </div>
+                </div>
 
-<span className="text-brand-secondary">response</span> <span className="text-white">=</span> <span className="text-white">requests.post</span><span className="text-white/60">(</span>
-    <span className="text-system-orange">"https://api.dandolo.ai/v1/chat/completions"</span><span className="text-white/60">,</span>
-    <span className="text-brand-secondary">headers</span><span className="text-white">=</span><span className="text-white/60">{`{`}</span>
-        <span className="text-system-orange">"Authorization"</span><span className="text-white">:</span> <span className="text-system-orange">"Bearer dk_..."</span><span className="text-white/60">,</span>
-    <span className="text-white/60">{`}`}</span><span className="text-white/60">,</span>
-    <span className="text-brand-secondary">json</span><span className="text-white">=</span><span className="text-white/60">{`{`}</span>
-        <span className="text-system-orange">"model"</span><span className="text-white">:</span> <span className="text-system-orange">"llama-3.3-70b"</span><span className="text-white/60">,</span>
-        <span className="text-system-orange">"messages"</span><span className="text-white">:</span> <span className="text-white/60">[{`{`}</span><span className="text-system-orange">"role"</span><span className="text-white">:</span> <span className="text-system-orange">"user"</span><span className="text-white/60">, </span>
-                           <span className="text-system-orange">"content"</span><span className="text-white">:</span> <span className="text-system-orange">"Hello world!"</span><span className="text-white/60">{`}`}]</span>
-    <span className="text-white/60">{`}`}</span>
-<span className="text-white/60">)</span>
+                <div className="bg-bg-tertiary rounded-lg p-4 font-mono text-sm overflow-x-auto mb-4">
+                  <div className="text-system-green mb-2"># Live API Test</div>
+                  <pre className="text-white/80 whitespace-pre-wrap text-xs">
+<span className="text-brand-secondary">curl</span> <span className="text-system-orange">https://api.dandolo.ai/v1/chat/completions</span> <span className="text-white/60">\</span>
+  <span className="text-brand-secondary">-H</span> <span className="text-system-orange">"Content-Type: application/json"</span> <span className="text-white/60">\</span>
+  <span className="text-brand-secondary">-H</span> <span className="text-system-orange">"Authorization: Bearer [YOUR_KEY]"</span> <span className="text-white/60">\</span>
+  <span className="text-brand-secondary">-d</span> <span className="text-white/60">'</span><span className="text-white/60">{`{`}</span>
+    <span className="text-system-orange">"model"</span><span className="text-white">:</span> <span className="text-system-orange">"llama-3.3-70b"</span><span className="text-white/60">,</span>
+    <span className="text-system-orange">"messages"</span><span className="text-white">:</span> <span className="text-white/60">[{`{`}</span><span className="text-system-orange">"role"</span><span className="text-white">:</span><span className="text-system-orange">"user"</span><span className="text-white/60">,</span> <span className="text-system-orange">"content"</span><span className="text-white">:</span><span className="text-system-orange">"Hello!"</span><span className="text-white/60">{`}`}]</span>
+  <span className="text-white/60">{`}`}</span><span className="text-white/60">'</span>
                   </pre>
                 </div>
                 
-                <Button 
-                  variant="primary" 
-                  size="sm" 
-                  className="mt-4"
-                  leftIcon={
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                    </svg>
-                  }
-                >
-                  Run Example
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    loading={isLoading}
+                    onClick={handleApiTest}
+                    leftIcon={
+                      !isLoading ? (
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                        </svg>
+                      ) : undefined
+                    }
+                  >
+                    {isLoading ? 'Sending...' : 'Send Request'}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleNavigation('developers')}
+                    disabled={isLoading}
+                  >
+                    Get API Key →
+                  </Button>
+                </div>
               </GlassCard>
               
-              {/* Response Simulation */}
-              <GlassCard className="mt-4" padding="md">
-                <div className="text-xs text-system-green mb-2 font-mono">✓ 200 OK (847ms)</div>
-                <div className="text-sm text-white/80 font-mono">
-                  "Hello! I'm ready to help you with..."
-                </div>
+              {/* Response Area */}
+              <GlassCard className="mt-4" padding="md" variant={error ? 'error' : response ? 'success' : 'default'}>
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-brand-primary">
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-sm font-mono">Connecting to Dandolo AI...</span>
+                  </div>
+                ) : error ? (
+                  <div>
+                    <div className="text-xs text-system-red mb-2 font-mono">✗ Request Failed</div>
+                    <div className="text-sm text-white/80 bg-bg-tertiary rounded p-2 font-mono">
+                      {error}
+                    </div>
+                  </div>
+                ) : response ? (
+                  <div>
+                    <div className="text-xs text-system-green mb-2 font-mono flex items-center gap-2">
+                      <div className="w-2 h-2 bg-system-green rounded-full"></div>
+                      ✓ Response received
+                    </div>
+                    <div className="text-sm text-white/90 bg-bg-tertiary rounded p-3 font-mono leading-relaxed">
+                      {response}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-xs text-brand-primary mb-2 font-mono flex items-center gap-2">
+                      <div className="w-2 h-2 bg-brand-primary rounded-full animate-pulse"></div>
+                      Ready to test • {apiKey.trim() ? 'Using your API key' : 'Anonymous: 15 free requests'}
+                    </div>
+                    <div className="text-sm text-white/60 italic">
+                      Click "Send Request" to see live response from Dandolo AI
+                    </div>
+                  </div>
+                )}
               </GlassCard>
             </div>
           </div>
