@@ -724,6 +724,7 @@ async function* callVeniceAIStreaming(
       safe_mode: allowAdultContent ? false : true,
       format: "webp", // Explicitly set format to match Venice.ai docs
       seed: Math.floor(Math.random() * 1000000000), // Add random seed to prevent caching
+      hide_watermark: true, // Disable Venice watermarks on generated images
     };
     
     console.log(`🎨 [IMAGE_DEBUG] Generating image with model: ${imageRequestBody.model}`);
@@ -1122,6 +1123,7 @@ async function callVeniceAI(
       safe_mode: allowAdultContent ? false : true,
       format: "webp", // Explicitly set format to match Venice.ai docs
       seed: Math.floor(Math.random() * 1000000000), // Add random seed to prevent caching
+      hide_watermark: true, // Disable Venice watermarks on generated images
     };
     
     console.log(`🎨 [IMAGE_DEBUG_HTTP] Generating image via HTTP with model: ${imageRequestBody.model}`);
