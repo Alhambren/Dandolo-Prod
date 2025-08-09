@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useQuery } from 'convex/react';
+import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Logo } from './Logo';
 import GlassCard from './GlassCard';
@@ -13,6 +13,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const networkStats = useQuery(api.stats.getNetworkStats);
   const monthlyStats = useQuery(api.inference.getMonthlyStats);
   const availableModels = useQuery(api.models.getAvailableModels);
+  const routeInference = useAction(api.inference.routeSimple);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoPaused, setIsVideoPaused] = React.useState(false);
   const [apiKey, setApiKey] = useState('');
@@ -27,14 +28,19 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   };
 
   const handleApiTest = async () => {
+    if (!routeInference) {
+      setError('API not available');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setResponse(null);
 
     try {
-      const requestBody = {
-        messages: [{ role: 'user', content: 'Hello! Can you tell me about Dandolo AI in one sentence?' }],
-        intent: 'chat',
+      const requestParams = {
+        messages: [{ role: 'user' as const, content: 'Hello! Can you tell me about Dandolo AI in one sentence?' }],
+        intent: 'chat' as const,
         sessionId: `playground-${Date.now()}`,
         isAnonymous: !apiKey.trim(),
         ...(apiKey.trim() && { apiKey: apiKey.trim() }),
@@ -42,55 +48,30 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         allowAdultContent: false
       };
 
-      const response = await fetch('/api/inference/route', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`API Error: ${response.status} - ${errorData}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response stream available');
-      }
-
-      let fullResponse = '';
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                fullResponse += data.content;
-                setResponse(fullResponse);
-              }
-            } catch (e) {
-              // Skip invalid JSON chunks
-            }
-          }
-        }
-      }
-
-      if (!fullResponse) {
+      console.log('Making Convex API call with params:', requestParams);
+      
+      const result = await routeInference(requestParams);
+      
+      if (result && result.content) {
+        setResponse(result.content);
+      } else if (result && result.error) {
+        throw new Error(result.error);
+      } else {
         setResponse('✓ API connection successful! The model responded with a test message.');
       }
     } catch (err) {
       console.error('API test error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to connect to API');
+      if (err instanceof Error) {
+        if (err.message.includes('Rate limit exceeded')) {
+          setError('Rate limit reached. Try with an API key for higher limits.');
+        } else if (err.message.includes('Invalid API key')) {
+          setError('Invalid API key. Please check your key or leave empty for anonymous.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('Failed to connect to API');
+      }
     } finally {
       setIsLoading(false);
     }
