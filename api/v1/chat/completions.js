@@ -2,10 +2,17 @@
 import { ConvexHttpClient } from "convex/browser";
 
 export default async (req, res) => {
+  // Add monitoring headers
+  const startTime = Date.now();
+  
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Add monitoring headers
+  res.setHeader('X-Dandolo-Version', '1.0.0');
+  res.setHeader('X-Dandolo-Endpoint', 'api.dandolo.ai');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -71,7 +78,7 @@ export default async (req, res) => {
     let intent = "chat";
     if (body.model && body.model.includes("code")) {
       intent = "code";
-    } else if (body.model && body.model.includes("image")) {
+    } else if (body.model && (body.model.includes("image") || body.model.includes("flux"))) {
       intent = "image";
     }
 
@@ -126,14 +133,16 @@ export default async (req, res) => {
     res.setHeader('X-RateLimit-Remaining', Math.max(0, remainingRequests).toString());
     res.setHeader('X-RateLimit-Reset', resetTime.toString());
     res.setHeader('X-RateLimit-Type', validation.keyType || 'unknown');
+    res.setHeader('X-Response-Time', Date.now() - startTime);
 
     return res.status(200).json(openAIResponse);
 
   } catch (error) {
     console.error("Chat completions error:", error);
+    res.setHeader('X-Response-Time', Date.now() - startTime);
     return res.status(500).json({ 
       error: {
-        message: "Internal server error",
+        message: error.message || "Internal server error",
         type: "server_error",
         code: "internal_error"
       }

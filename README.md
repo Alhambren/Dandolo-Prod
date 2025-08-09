@@ -8,6 +8,19 @@
 
 Dandolo.ai is a decentralized AI inference platform that provides anonymous access to Venice.ai's uncensored model network. Built for developers who value privacy, reliability, and openness.
 
+## 📢 New API Endpoint
+
+**All API requests should now use:**
+```
+https://api.dandolo.ai/v1/chat/completions
+```
+
+The new endpoint provides:
+- ✅ Professional API structure
+- ✅ Better reliability and performance  
+- ✅ Cleaner separation between web and API
+- ✅ Industry-standard subdomain pattern
+
 ## 🚀 What Dandolo Provides
 
 Dandolo serves as a decentralized access layer for Venice.ai's model network, providing:
@@ -62,7 +75,7 @@ The Dandolo API is compatible with standard chat completions format. No special 
 import requests
 
 response = requests.post(
-    "https://dandolo.ai/api/v1/chat/completions",
+    "https://api.dandolo.ai/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={
         "messages": [{"role": "user", "content": "Hello, world!"}],
@@ -74,7 +87,7 @@ print(response.json()["choices"][0]["message"]["content"])
 
 ```javascript
 // JavaScript/Node.js
-const response = await fetch('https://dandolo.ai/api/v1/chat/completions', {
+const response = await fetch('https://api.dandolo.ai/v1/chat/completions', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ak_your_key',
@@ -91,7 +104,7 @@ console.log(data.choices[0].message.content);
 
 ```bash
 # curl - works everywhere
-curl -X POST https://dandolo.ai/api/v1/chat/completions \
+curl -X POST https://api.dandolo.ai/v1/chat/completions \
   -H "Authorization: Bearer ak_your_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -105,7 +118,7 @@ curl -X POST https://dandolo.ai/api/v1/chat/completions \
 ```python
 # Connect to specialized Venice.ai characters
 response = requests.post(
-    "https://dandolo.ai/api/v1/chat/completions",
+    "https://api.dandolo.ai/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={
         "messages": [{"role": "user", "content": "Hello! Can you give me advice about horses?"}],
@@ -120,7 +133,7 @@ print(response.json()["choices"][0]["message"]["content"])
 
 ```bash
 # Character connection via curl
-curl -X POST https://dandolo.ai/api/v1/chat/completions \
+curl -X POST https://api.dandolo.ai/v1/chat/completions \
   -H "Authorization: Bearer ak_your_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -155,7 +168,7 @@ response = requests.post(
 import requests
 # Simplified with automatic routing and failover
 response = requests.post(
-    "https://dandolo.ai/api/v1/chat/completions",
+    "https://api.dandolo.ai/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={"messages": [...], "model": "auto"}
 )
@@ -180,7 +193,7 @@ response = openai.ChatCompletion.create(
 import requests
 # Transparent access to Venice.ai models
 response = requests.post(
-    "https://dandolo.ai/api/v1/chat/completions",
+    "https://api.dandolo.ai/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={"messages": [...], "model": "auto"}
 )
@@ -203,7 +216,7 @@ response = openai.ChatCompletion.create(
 import requests
 # Access uncensored Venice.ai models
 response = requests.post(
-    "https://dandolo.ai/api/v1/chat/completions",
+    "https://api.dandolo.ai/v1/chat/completions",
     headers={"Authorization": "Bearer ak_your_key"},
     json={"messages": [...], "model": "auto"}
 )
@@ -220,7 +233,7 @@ class DandoloLLM:
     def __init__(self, api_key, model="auto-select"):
         self.api_key = api_key
         self.model = model
-        self.base_url = "https://dandolo.ai/api"
+        self.base_url = "https://api.dandolo.ai"
     
     def __call__(self, prompt):
         response = requests.post(
@@ -251,7 +264,7 @@ import requests
 def dandolo_llm_config(api_key, model="auto-select"):
     def llm_call(messages, **kwargs):
         response = requests.post(
-            "https://dandolo.ai/api/v1/chat/completions",
+            "https://api.dandolo.ai/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
             json={"messages": messages, "model": model}
         )
@@ -276,7 +289,7 @@ class DandoloLLM(LLM):
     
     def _call(self, prompt: str, stop=None, **kwargs):
         response = requests.post(
-            "https://dandolo.ai/api/v1/chat/completions",
+            "https://api.dandolo.ai/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "messages": [{"role": "user", "content": prompt}],
@@ -368,7 +381,7 @@ import requests
 
 def call_dandolo(messages, api_key):
     return requests.post(
-        "https://dandolo.ai/api/v1/chat/completions",
+        "https://api.dandolo.ai/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={"messages": messages, "model": "auto"}
     ).json()

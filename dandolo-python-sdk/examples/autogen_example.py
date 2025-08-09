@@ -57,7 +57,7 @@ def create_dandolo_config(api_key: str) -> List[Dict[str, Any]]:
     return [{
         "model": "dandolo-auto-select",
         "api_key": api_key,
-        "base_url": "https://dandolo.ai/api/v1",
+        "base_url": "https://api.dandolo.ai/v1",
         "api_type": "dandolo"
     }]
 

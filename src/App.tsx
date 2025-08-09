@@ -6,14 +6,15 @@ import { Menu, X } from 'lucide-react';
 import { WalletConnectButton } from './components/WalletConnectButton';
 import { Logo } from './components/Logo';
 
-// Route-level code splitting with React.lazy
-const HomePage = React.lazy(() => import('./components/HomePage'));
-const ChatInterface = React.lazy(() => import('./components/ChatInterface').then(module => ({ default: module.ChatInterface })));
-const ProvidersPage = React.lazy(() => import('./components/ProvidersPage'));
-const DevelopersPage = React.lazy(() => import('./components/DevelopersPage'));
-const DashboardPage = React.lazy(() => import('./components/DashboardPage'));
-const RankingsPage = React.lazy(() => import('./components/RankingsPage'));
-const AdminDashboardPage = React.lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboardPage })));
+// Temporarily reverting to direct imports to fix blackscreen issue
+// Will re-implement lazy loading properly after fixing
+import HomePage from './components/HomePage';
+import { ChatInterface } from './components/ChatInterface';
+import ProvidersPage from './components/ProvidersPage';
+import DevelopersPage from './components/DevelopersPage';
+import DashboardPage from './components/DashboardPage';
+import RankingsPage from './components/RankingsPage';
+import AdminDashboard from './components/AdminDashboard';
 
 // Main App component with React Router for URL-based navigation
 // Routes: /, /chat, /models, /providers, /dashboard, /developers, /rankings, /admin
@@ -240,13 +241,8 @@ export default function App() {
         )}
       </header>
       
-      {/* Routes with Suspense for code splitting */}
-      <Suspense fallback={
-        <div className="pt-16 min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        </div>
-      }>
-        <Routes>
+      {/* Routes */}
+      <Routes>
           <Route path="/" element={
             <main className="pt-16">
               <HomePage onNavigate={navigateTo} />
@@ -292,11 +288,10 @@ export default function App() {
           } />
           <Route path="/admin" element={
             <AdminGuard>
-              <AdminDashboardPage />
+              <AdminDashboard />
             </AdminGuard>
           } />
         </Routes>
-      </Suspense>
     </div>
   );
 }
