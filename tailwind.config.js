@@ -7,11 +7,38 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        'sans': ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-        'mono': ['SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'monospace'],
+        'sans': ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        'mono': ['JetBrains Mono', 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'monospace'],
       },
       colors: {
-        // Apple-inspired neutral palette
+        // New dark theme primary colors
+        bg: {
+          primary: '#0A0A0B',
+          secondary: '#141416', 
+          tertiary: '#1C1C1F',
+        },
+        glass: {
+          DEFAULT: 'rgba(255, 255, 255, 0.05)',
+          border: 'rgba(255, 255, 255, 0.1)',
+          hover: 'rgba(255, 255, 255, 0.08)',
+          'border-hover': 'rgba(255, 255, 255, 0.15)',
+        },
+        // Updated brand colors for new direction
+        brand: {
+          primary: '#00D4FF',   // Cyan
+          secondary: '#7B3FF2', // Purple
+          50: '#fffdf7',
+          100: '#fffaed',
+          200: '#fff2d4',
+          300: '#ffe4b3',
+          400: '#ffd680',
+          500: '#00D4FF', // Updated primary
+          600: '#f4b942',
+          700: '#e6a73c',
+          800: '#d89536',
+          900: '#b8752a',
+        },
+        // Apple-inspired neutral palette (preserved)
         neutral: {
           50: '#fafafa',
           100: '#f5f5f5',
@@ -24,19 +51,6 @@ export default {
           800: '#262626',
           900: '#171717',
           950: '#0a0a0a',
-        },
-        // Refined brand colors
-        brand: {
-          50: '#fffdf7',
-          100: '#fffaed',
-          200: '#fff2d4',
-          300: '#ffe4b3',
-          400: '#ffd680',
-          500: '#ffc947', // Primary brand gold
-          600: '#f4b942',
-          700: '#e6a73c',
-          800: '#d89536',
-          900: '#b8752a',
         },
         // Apple system colors
         system: {
@@ -85,6 +99,15 @@ export default {
         'fade-in': 'fadeIn 0.5s ease-in-out',
         'slide-up': 'slideUp 0.3s ease-out',
         'scale-in': 'scaleIn 0.2s ease-out',
+        'glass-hover': 'glassHover 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      transitionDuration: {
+        '150': '150ms',
+        '250': '250ms', 
+        '500': '500ms',
+      },
+      transitionTimingFunction: {
+        'default': 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
       keyframes: {
         fadeIn: {
@@ -98,6 +121,18 @@ export default {
         scaleIn: {
           '0%': { transform: 'scale(0.95)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        glassHover: {
+          '0%': { 
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            transform: 'translateY(0)'
+          },
+          '100%': { 
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            borderColor: 'rgba(255, 255, 255, 0.15)',
+            transform: 'translateY(-2px)'
+          },
         },
       },
     },

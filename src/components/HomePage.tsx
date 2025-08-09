@@ -1,7 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Logo } from './Logo';
+import GlassCard from './GlassCard';
+import Button from './ui/Button';
 
 interface HomePageProps {
   onNavigate?: (page: 'home' | 'chat' | 'providers' | 'dashboard' | 'developers') => void;
@@ -53,109 +55,151 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-dark-1 text-white" data-testid="main-page">
-      {/* Hero Section with Video */}
-      <div className="relative overflow-hidden min-h-[80vh] flex items-center">
-        {/* Video Background */}
-        <div className="absolute inset-0">
-          <video 
-            ref={videoRef}
-            autoPlay 
-            muted 
-            loop 
-            playsInline
-            className="w-full h-full object-cover transition-opacity duration-1000"
-            style={{ filter: 'brightness(0.6)', opacity: '0.3' }}
-          >
-            <source src="/logos/hero-video.mp4" type="video/mp4" />
-            {/* Fallback for browsers that don't support video */}
-            <div className="w-full h-full bg-gradient-to-br from-brand-500/20 to-dark-1"></div>
-          </video>
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-dark-1/70 via-dark-1/30 to-dark-1/50"></div>
-          <div className="absolute inset-0 bg-gradient-radial from-brand-500/15 via-transparent to-transparent"></div>
+    <div className="min-h-screen bg-bg-primary text-white" data-testid="main-page">
+      {/* New Developer-Focused Hero Section */}
+      <div className="relative overflow-hidden min-h-[90vh] flex items-center">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 bg-gradient-to-br from-bg-primary via-bg-secondary to-bg-tertiary">
+          <div className="absolute inset-0 opacity-40" style={{backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")"}}></div>
         </div>
         
         {/* Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
-          <div className="text-center flex flex-col items-center">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-center">
-              <span className="bg-gradient-to-r from-white to-white/90 bg-clip-text text-transparent drop-shadow-2xl">
-                The Anonymous Interface
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-brand-400 to-brand-500 bg-clip-text text-transparent drop-shadow-2xl">
-                For AI
-              </span>
-            </h1>
-            
-            <p className="text-lg sm:text-xl md:text-2xl text-white/80 mb-4 max-w-4xl leading-relaxed drop-shadow-lg font-medium text-center px-4">
-              Better uptime, no subscriptions, zero tracking
-            </p>
-            
-            <p className="text-base sm:text-lg md:text-xl text-white/60 mb-8 max-w-3xl leading-relaxed text-center px-4">
-              Connect to AI providers worldwide through our decentralized, 
-              privacy-first infrastructure
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <button 
-                onClick={() => handleNavigation('chat')}
-                className="btn-primary text-lg px-8 py-4 shadow-2xl shadow-brand-500/30 hover:shadow-brand-500/50 transition-shadow"
-              >
-                Start Chatting
-              </button>
-              <button 
-                onClick={() => handleNavigation('providers')}
-                className="btn-secondary text-lg px-8 py-4 backdrop-blur-sm bg-white/10 border-white/20 hover:bg-white/20"
-              >
-                Browse Providers
-              </button>
-            </div>
-            
-            
-            {/* Scroll Indicator */}
-            <div className="flex justify-center mt-16 animate-bounce">
-              <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center">
-                <div className="w-1 h-3 bg-white/50 rounded-full mt-2 animate-pulse"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left Column - Headlines and CTAs */}
+            <div className="text-left">
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-glass border border-glass-border mb-6">
+                <div className="w-2 h-2 bg-brand-primary rounded-full mr-2 animate-pulse"></div>
+                <span className="text-sm text-white/80 font-medium">Decentralized AI Routing in 30 seconds</span>
               </div>
+
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
+                <span className="bg-gradient-to-r from-white to-white/90 bg-clip-text text-transparent">
+                  The Stripe
+                </span>
+                <br />
+                <span className="bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
+                  for AI Routing
+                </span>
+              </h1>
+              
+              <p className="text-lg sm:text-xl text-white/70 mb-8 max-w-lg leading-relaxed">
+                Professional AI infrastructure with no vendor lock-in. 
+                Multiple providers, zero censorship, enterprise reliability.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-8">
+                <Button 
+                  variant="primary" 
+                  size="lg"
+                  onClick={() => handleNavigation('developers')}
+                  rightIcon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  }
+                >
+                  Get API Key
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  onClick={() => handleNavigation('chat')}
+                >
+                  Try Live Demo
+                </Button>
+              </div>
+
+              {/* Developer Trust Signals */}
+              <div className="flex items-center gap-6 text-sm text-white/60">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-brand-primary" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>Venice.ai Compatible</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-brand-primary" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>No Rate Limits</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-brand-primary" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>99.9% Uptime</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Live Code Playground */}
+            <div className="relative">
+              <GlassCard padding="lg" className="relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Live API Playground</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-system-red rounded-full"></div>
+                    <div className="w-3 h-3 bg-system-yellow rounded-full"></div>
+                    <div className="w-3 h-3 bg-system-green rounded-full"></div>
+                  </div>
+                </div>
+                
+                <div className="bg-bg-tertiary rounded-lg p-4 font-mono text-sm overflow-x-auto">
+                  <div className="text-system-green mb-2"># Python</div>
+                  <pre className="text-white/80 whitespace-pre-wrap">
+<span className="text-brand-secondary">import</span> <span className="text-white">requests</span>
+
+<span className="text-brand-secondary">response</span> <span className="text-white">=</span> <span className="text-white">requests.post</span><span className="text-white/60">(</span>
+    <span className="text-system-orange">"https://api.dandolo.ai/v1/chat/completions"</span><span className="text-white/60">,</span>
+    <span className="text-brand-secondary">headers</span><span className="text-white">=</span><span className="text-white/60">{`{`}</span>
+        <span className="text-system-orange">"Authorization"</span><span className="text-white">:</span> <span className="text-system-orange">"Bearer dk_..."</span><span className="text-white/60">,</span>
+    <span className="text-white/60">{`}`}</span><span className="text-white/60">,</span>
+    <span className="text-brand-secondary">json</span><span className="text-white">=</span><span className="text-white/60">{`{`}</span>
+        <span className="text-system-orange">"model"</span><span className="text-white">:</span> <span className="text-system-orange">"llama-3.3-70b"</span><span className="text-white/60">,</span>
+        <span className="text-system-orange">"messages"</span><span className="text-white">:</span> <span className="text-white/60">[{`{`}</span><span className="text-system-orange">"role"</span><span className="text-white">:</span> <span className="text-system-orange">"user"</span><span className="text-white/60">, </span>
+                           <span className="text-system-orange">"content"</span><span className="text-white">:</span> <span className="text-system-orange">"Hello world!"</span><span className="text-white/60">{`}`}]</span>
+    <span className="text-white/60">{`}`}</span>
+<span className="text-white/60">)</span>
+                  </pre>
+                </div>
+                
+                <Button 
+                  variant="primary" 
+                  size="sm" 
+                  className="mt-4"
+                  leftIcon={
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                    </svg>
+                  }
+                >
+                  Run Example
+                </Button>
+              </GlassCard>
+              
+              {/* Response Simulation */}
+              <GlassCard className="mt-4" padding="md">
+                <div className="text-xs text-system-green mb-2 font-mono">✓ 200 OK (847ms)</div>
+                <div className="text-sm text-white/80 font-mono">
+                  "Hello! I'm ready to help you with..."
+                </div>
+              </GlassCard>
             </div>
           </div>
         </div>
-        
-        {/* Video Controls */}
-        <button
-          onClick={() => {
-            if (videoRef.current) {
-              if (isVideoPaused) {
-                videoRef.current.play();
-                setIsVideoPaused(false);
-              } else {
-                videoRef.current.pause();
-                setIsVideoPaused(true);
-              }
-            }
-          }}
-          className="absolute top-6 right-6 bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white/70 hover:text-white p-3 rounded-full transition-all duration-200 z-20"
-          aria-label={isVideoPaused ? 'Play video' : 'Pause video'}
-        >
-          {isVideoPaused ? (
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-            </svg>
-          )}
-        </button>
       </div>
 
-      {/* OpenRouter-style Statistics */}
+      {/* Trust Metrics */}
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-          <div>
-            <div className="text-5xl font-bold text-white mb-2">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-4">Trusted by Developers Worldwide</h2>
+          <p className="text-white/60 text-lg">Real-time network statistics</p>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <GlassCard padding="md" className="text-center" hover>
+            <div className="text-4xl font-bold text-brand-primary mb-2">
               {monthlyStats?.monthlyTokens !== undefined ? 
                 monthlyStats.monthlyTokens >= 1000000000000 ? 
                   (monthlyStats.monthlyTokens / 1000000000000).toFixed(1) + 'T' :
@@ -167,14 +211,14 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                   (monthlyStats.monthlyTokens / 1000).toFixed(1) + 'K' : 
                   monthlyStats.monthlyTokens.toString()
                 : (
-                  <div className="w-20 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                  <div className="w-20 h-8 bg-glass rounded animate-pulse mx-auto"></div>
                 )}
             </div>
-            <div className="text-white/60 text-lg">Monthly Tokens</div>
-          </div>
+            <div className="text-white/60 text-sm font-medium">Monthly Tokens</div>
+          </GlassCard>
           
-          <div>
-            <div className="text-5xl font-bold text-white mb-2">
+          <GlassCard padding="md" className="text-center" hover>
+            <div className="text-4xl font-bold text-brand-primary mb-2">
               {networkStats?.activeUsers ? 
                 networkStats.activeUsers >= 1000000 ? 
                   (networkStats.activeUsers / 1000000).toFixed(1) + 'M+' :
@@ -182,33 +226,33 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                   (networkStats.activeUsers / 1000).toFixed(1) + 'K+' : 
                   networkStats.activeUsers + '+'
                 : (
-                  <div className="w-20 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                  <div className="w-20 h-8 bg-glass rounded animate-pulse mx-auto"></div>
                 )}
             </div>
-            <div className="text-white/60 text-lg">Global Users</div>
-          </div>
+            <div className="text-white/60 text-sm font-medium">Active Users</div>
+          </GlassCard>
           
-          <div>
-            <div className="text-5xl font-bold text-white mb-2">
+          <GlassCard padding="md" className="text-center" hover>
+            <div className="text-4xl font-bold text-brand-primary mb-2">
               {networkStats?.activeProviders ? 
                 networkStats.activeProviders + '+' 
                 : (
-                  <div className="w-16 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                  <div className="w-16 h-8 bg-glass rounded animate-pulse mx-auto"></div>
                 )}
             </div>
-            <div className="text-white/60 text-lg">Active Providers</div>
-          </div>
+            <div className="text-white/60 text-sm font-medium">Providers</div>
+          </GlassCard>
           
-          <div>
-            <div className="text-5xl font-bold text-brand-500 mb-2">
+          <GlassCard padding="md" className="text-center" hover>
+            <div className="text-4xl font-bold text-brand-primary mb-2">
               {availableModels && typeof availableModels === 'object' ? 
                 Object.values(availableModels).flat().length + '+' 
                 : (
-                  <div className="w-16 h-12 bg-gray-700 rounded animate-pulse mx-auto"></div>
+                  <div className="w-16 h-8 bg-glass rounded animate-pulse mx-auto"></div>
                 )}
             </div>
-            <div className="text-white/60 text-lg">Models</div>
-          </div>
+            <div className="text-white/60 text-sm font-medium">AI Models</div>
+          </GlassCard>
         </div>
       </div>
 
